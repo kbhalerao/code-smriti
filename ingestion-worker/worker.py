@@ -16,11 +16,11 @@ from loguru import logger
 import git
 from github import Github
 
-# Import custom modules (to be implemented)
+# Import custom modules
 from parsers.code_parser import CodeParser
 from parsers.document_parser import DocumentParser
 from embeddings.generator import EmbeddingGenerator
-# from storage.couchbase_client import CouchbaseClient
+from storage.couchbase_client import CouchbaseClient
 
 # Configuration
 from config import WorkerConfig
@@ -47,12 +47,14 @@ class IngestionWorker:
         # Initialize embedding generator
         self.embedding_generator = EmbeddingGenerator()
 
-        # TODO: Initialize Couchbase client
-        # self.db = CouchbaseClient()
+        # Initialize Couchbase client
+        self.db = CouchbaseClient()
 
         # Repository storage path
-        self.repos_path = Path("/repos")
-        self.repos_path.mkdir(exist_ok=True)
+        # Support both Docker (/repos) and native execution (configurable via REPOS_PATH)
+        repos_base = os.getenv("REPOS_PATH", "/repos")
+        self.repos_path = Path(repos_base).resolve()
+        self.repos_path.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Worker initialized. Repos path: {self.repos_path}")
 
@@ -155,9 +157,8 @@ class IngestionWorker:
 
             # Step 5: Store in Couchbase
             logger.info("Storing in database...")
-            # TODO: Batch upsert to Couchbase
-            # await self.db.batch_upsert(all_chunks)
-            logger.info(f"✓ Stored {len(all_chunks)} chunks")
+            result = await self.db.batch_upsert(all_chunks)
+            logger.info(f"✓ Stored {result['success']} chunks ({result['failed']} failed)")
 
             elapsed = time.time() - start_time
             logger.info(f"✓ Repository {repo_id} processed successfully in {elapsed:.2f}s")

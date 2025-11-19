@@ -22,12 +22,12 @@ class EmbeddingGenerator:
 
     def __init__(self):
         """Initialize the embedding model"""
-        logger.info(f"Loading embedding model: {config.embedding_model} (revision: {config.embedding_model_revision})")
+        logger.info(f"Loading embedding model: {config.embedding_model}")
 
         self.model = SentenceTransformer(
             config.embedding_model,
             trust_remote_code=True,
-            revision=config.embedding_model_revision
+            revision='7710840340a098cfb869c4f65e87cf2b1b70caca'
         )
 
         logger.info(f"✓ Embedding model loaded (dims: {config.embedding_dimensions})")
@@ -87,7 +87,7 @@ class EmbeddingGenerator:
     async def generate_embeddings(
         self,
         chunks: List[Union[CodeChunk, DocumentChunk]],
-        batch_size: int = 64  # Increased for systems with more RAM
+        batch_size: int = 8  # Conservative for Docker memory limits
     ) -> None:
         """
         Generate embeddings for a list of chunks in batches

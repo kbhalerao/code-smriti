@@ -18,8 +18,7 @@ class WorkerConfig(BaseSettings):
 
     # Embedding Configuration
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
-    # Pin to specific commit to avoid "new version downloaded" warnings
-    embedding_model_revision: str = os.getenv("EMBEDDING_MODEL_REVISION", "7710840340a098cfb869c4f65e87cf2b1b70caca")
+    # Model is cached locally after first download
     embedding_dimensions: int = 768
 
     # GitHub Configuration
