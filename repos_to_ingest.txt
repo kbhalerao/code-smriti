@@ -1,0 +1,111 @@
+# GitHub Repositories for Code-Smriti Ingestion
+# Ordered by most recent commit activity (as of 2025-11-19)
+# Total: 100 repositories
+#
+# Format: owner/repo-name
+# Lines starting with # are comments
+# Already ingested repos are marked with [DONE]
+
+# Currently ingesting (2025-11-19)
+kbhalerao/claude-idea      # [DONE] Idea capture tool using claude code and couchdb
+kbhalerao/code-smriti      # [DONE] The giant database of institutional knowledge hidden in your code
+kbhalerao/labcore          # [IN PROGRESS] Main labcore repository
+
+# Next batch - Most recently updated
+JessiePBhalerao/firstseedtests
+PeoplesCompany/farmworth_frontend
+JessiePBhalerao/firstpwa
+PeoplesCompany/farmworthdb
+kbhalerao/agkit.io-ui
+kbhalerao/agkit.io-backend
+kbhalerao/CropProfits
+kbhalerao/devanand
+ecinfo/Atlas-PMP_backend
+ecinfo/Atlas-PMP_frontend
+kbhalerao/evolvechiro
+kbhalerao/asktom-chatbot
+kbhalerao/evolvefrontend
+kbhalerao/landrecords.ai
+kbhalerao/landrecords-frontend
+PeoplesCompany/listings-map
+kbhalerao/slithytoves
+kbhalerao/ask-kev-2026
+JessiePBhalerao/django-seed-elastic
+kbhalerao/pinionfe
+kbhalerao/pinionbe
+kbhalerao/claudegram
+kbhalerao/basecamp-mcp
+kbhalerao/cropProfitApp
+PeoplesCompany/landrecords.ai
+kbhalerao/atlaspmp-backend-poc
+JessiePBhalerao/uilevents
+kbhalerao/cropProfit
+kbhalerao/soildxnanoservices
+ContinuumAgInc/topsoil2.0
+ContinuumAgInc/topsoil_frontend
+PeoplesCompany/public-farmworth
+PeoplesCompany/landgate
+kbhalerao/ai-utils
+kbhalerao/atlaspmp-mini
+PeoplesCompany/farmland_insights
+kbhalerao/yieldguide-kev
+kbhalerao/yieldguide-kev-durable-object
+kbhalerao/bookworm
+kbhalerao/uofi_labcore
+kbhalerao/BlueFeatherAD5933Driver
+kbhalerao/smartbarn2025
+kbhalerao/sdxweather
+kbhalerao/svelte-image-viewer
+kbhalerao/channels_decorators
+jayp-eci/pinionfe
+kbhalerao/feldspar
+kbhalerao/ironlifts
+kbhalerao/cdl_api
+kbhalerao/ssurgo
+kbhalerao/gmslab
+jayp-eci/landrecords-frontend
+kbhalerao/pdf-filler
+kbhalerao/fema_regen
+bmwyman/uilevents
+kbhalerao/customfield_svelte_components
+kbhalerao/adm_browser
+kbhalerao/devops_reference
+kbhalerao/agkit.io
+kbhalerao/topsoil
+kbhalerao/508hCoverCrop
+kbhalerao/farmdoc-insurance
+woodardjoshua/508hCoverCrop
+kbhalerao/flyingfingers
+kbhalerao/nass_quickstats
+kbhalerao/qrurl
+kbhalerao/gdal3.js
+kbhalerao/agkitui
+kbhalerao/leaflet_components
+policy-design-lab/farmdoc-service
+kbhalerao/svelte-command-palette
+jayp-eci/labcore
+kbhalerao/agwx
+jayp-eci/sdxweather
+kbhalerao/rma_adm
+jayp-eci/labcoredemo
+CHETANECINFOSOLUTIONS/farmlandinsights
+kbhalerao/errorlog
+JessiePBhalerao/pinion-nrcs
+kbhalerao/django-address
+CHETANECINFOSOLUTIONS/farmsoils
+kbhalerao/prismuserv
+kbhalerao/manobodh
+CHETANECINFOSOLUTIONS/global_error_handler
+ContinuumAgInc/rabo_topsoil
+kbhalerao/Social-Metabolomics
+kbhalerao/geolocate-cloudflare-worker
+PeoplesCompany/insights-state-map
+PeoplesCompany/insights-national-map
+kbhalerao/fertisavern
+CHETANECINFOSOLUTIONS/lsbdata
+kbhalerao/labcoredemo
+kbhalerao/fastapi-skeleton
+GMSLab/drawtools
+PeoplesCompany/farmworthdash
+kbhalerao/labcoreui
+kbhalerao/lcdraw

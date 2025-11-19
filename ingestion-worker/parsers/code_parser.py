@@ -4,7 +4,7 @@ Supports JavaScript, TypeScript, and Python
 Part of CodeSmriti - Smriti (स्मृति): memory/remembrance
 """
 
-import uuid
+import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -30,7 +30,24 @@ class CodeChunk:
         language: str,
         metadata: Dict
     ):
-        self.chunk_id = str(uuid.uuid4())
+        # Generate deterministic chunk ID based on git commit, location, and content
+        # This ensures uniqueness: same file + same code = same ID
+        # Different code in same file = different ID (via content hash)
+        commit_hash = metadata.get("commit_hash", "no_commit")
+
+        # Content fingerprint: first 16 chars of SHA256 hash of code
+        content_hash = hashlib.sha256(code_text.encode()).hexdigest()[:16]
+
+        # Chunk ID: hash(repo:file:commit:content_fingerprint)
+        # This guarantees uniqueness while supporting incremental updates at file level
+        chunk_key = f"{repo_id}:{file_path}:{commit_hash}:{content_hash}"
+        self.chunk_id = hashlib.sha256(chunk_key.encode()).hexdigest()
+
+        # Debug logging (sample for verification)
+        import random
+        if random.random() < 0.0002:  # Log ~0.02% of chunks
+            logger.debug(f"Chunk ID: {self.chunk_id[:16]}... from key: {chunk_key}")
+
         self.type = "code_chunk"
         self.repo_id = repo_id
         self.file_path = file_path
@@ -42,7 +59,14 @@ class CodeChunk:
         self.created_at = datetime.utcnow().isoformat()
 
     def to_dict(self) -> Dict:
-        """Convert to dictionary for storage"""
+        """Convert to dictionary for storage
+
+        Note: Removes commit_message from metadata before storage
+        (commit messages are stored in separate CommitChunk documents)
+        """
+        # Create a copy of metadata without commit_message
+        storage_metadata = {k: v for k, v in self.metadata.items() if k != "commit_message"}
+
         return {
             "chunk_id": self.chunk_id,
             "type": self.type,
@@ -51,7 +75,7 @@ class CodeChunk:
             "chunk_type": self.chunk_type,
             "code_text": self.code_text,
             "language": self.language,
-            "metadata": self.metadata,
+            "metadata": storage_metadata,  # Filtered metadata
             "embedding": self.embedding,
             "created_at": self.created_at
         }
@@ -98,13 +122,14 @@ class CodeParser:
     def get_git_metadata(self, repo_path: Path, file_path: str) -> Dict:
         """
         Extract git metadata for a file
+        Note: commit_message is stored separately in CommitChunk documents
 
         Args:
             repo_path: Path to the repository
             file_path: Relative path to the file
 
         Returns:
-            Dictionary with commit information
+            Dictionary with commit information (excluding message)
         """
         try:
             repo = git.Repo(repo_path)
@@ -118,6 +143,8 @@ class CodeParser:
                     "commit_hash": commit.hexsha,
                     "commit_date": commit.committed_datetime.isoformat(),
                     "author": commit.author.email,
+                    # Note: commit_message stored in separate CommitChunk for deduplication
+                    # Temporary: keep it for CommitParser extraction, will be removed from storage
                     "commit_message": commit.message.strip()
                 }
         except Exception as e:

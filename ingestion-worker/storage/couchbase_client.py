@@ -153,6 +153,99 @@ class CouchbaseClient:
             logger.error(f"Error retrieving chunk {chunk_id}: {e}")
             return None
 
+    def get_file_chunks(self, repo_id: str, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for a specific file in a repository
+
+        Args:
+            repo_id: Repository identifier
+            file_path: File path within repository
+
+        Returns:
+            List of chunk documents
+        """
+        try:
+            query = f"""
+                SELECT META().id as chunk_id, *
+                FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id AND file_path = $file_path
+            """
+
+            result = self.cluster.query(query, repo_id=repo_id, file_path=file_path)
+            return list(result)
+        except CouchbaseException as e:
+            logger.error(f"Error retrieving chunks for {repo_id}/{file_path}: {e}")
+            return []
+
+    def delete_file_chunks(self, repo_id: str, file_path: str) -> int:
+        """
+        Delete all chunks for a specific file
+        Used when file is updated to remove old chunks
+
+        Args:
+            repo_id: Repository identifier
+            file_path: File path within repository
+
+        Returns:
+            Number of chunks deleted
+        """
+        try:
+            # First count
+            count_query = f"""
+                SELECT COUNT(*) as count
+                FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id AND file_path = $file_path
+            """
+            count_result = self.cluster.query(count_query, repo_id=repo_id, file_path=file_path)
+            count_rows = list(count_result)
+            deleted_count = count_rows[0]['count'] if count_rows else 0
+
+            if deleted_count == 0:
+                return 0
+
+            # Delete
+            delete_query = f"""
+                DELETE FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id AND file_path = $file_path
+            """
+            self.cluster.query(delete_query, repo_id=repo_id, file_path=file_path)
+
+            logger.debug(f"Deleted {deleted_count} chunks for {repo_id}/{file_path}")
+            return deleted_count
+        except CouchbaseException as e:
+            logger.error(f"Error deleting chunks for {repo_id}/{file_path}: {e}")
+            return 0
+
+    def check_file_commit(self, repo_id: str, file_path: str) -> str:
+        """
+        Check the commit hash of the most recent chunk for a file
+        Used to determine if file has changed
+
+        Args:
+            repo_id: Repository identifier
+            file_path: File path within repository
+
+        Returns:
+            Commit hash or empty string if file not found
+        """
+        try:
+            query = f"""
+                SELECT metadata.commit_hash
+                FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id AND file_path = $file_path
+                LIMIT 1
+            """
+
+            result = self.cluster.query(query, repo_id=repo_id, file_path=file_path)
+            rows = list(result)
+
+            if rows and 'commit_hash' in rows[0]:
+                return rows[0]['commit_hash']
+            return ""
+        except CouchbaseException as e:
+            logger.error(f"Error checking commit for {repo_id}/{file_path}: {e}")
+            return ""
+
     def delete_repo_chunks(self, repo_id: str) -> int:
         """
         Delete all chunks for a repository
@@ -165,16 +258,26 @@ class CouchbaseClient:
             Number of chunks deleted
         """
         try:
-            # Use N1QL query to find and delete chunks
-            query = f"""
+            # First count how many chunks exist
+            count_query = f"""
+                SELECT COUNT(*) as count
+                FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id
+            """
+            count_result = self.cluster.query(count_query, repo_id=repo_id)
+            count_rows = list(count_result)
+            deleted_count = count_rows[0]['count'] if count_rows else 0
+
+            if deleted_count == 0:
+                logger.info(f"No chunks found for repo: {repo_id}")
+                return 0
+
+            # Delete the chunks
+            delete_query = f"""
                 DELETE FROM `{config.couchbase_bucket}`
                 WHERE repo_id = $repo_id
-                RETURNING COUNT(*) as deleted
             """
-
-            result = self.cluster.query(query, repo_id=repo_id)
-            rows = list(result)
-            deleted_count = rows[0]['deleted'] if rows else 0
+            self.cluster.query(delete_query, repo_id=repo_id)
 
             logger.info(f"Deleted {deleted_count} chunks for repo: {repo_id}")
             return deleted_count

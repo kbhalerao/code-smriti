@@ -17,9 +17,13 @@ class WorkerConfig(BaseSettings):
     couchbase_bucket: str = os.getenv("COUCHBASE_BUCKET", "code_memory")
 
     # Embedding Configuration
+    embedding_backend: str = os.getenv("EMBEDDING_BACKEND", "local")  # "local" or "ollama"
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
     # Model is cached locally after first download
     embedding_dimensions: int = 768
+
+    # Incremental Update Configuration
+    enable_incremental_updates: bool = os.getenv("ENABLE_INCREMENTAL_UPDATES", "false").lower() == "true"
 
     # GitHub Configuration
     github_token: str = os.getenv("GITHUB_TOKEN", "").strip()
@@ -37,3 +41,4 @@ class WorkerConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = 'ignore'  # Ignore extra env vars (e.g., MCP server configs)

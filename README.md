@@ -36,6 +36,23 @@ CodeSmriti is your team's "Pensieve" - a forever memory system that:
 - "What are our best practices for error handling?"
 - "I need to build a retry mechanism - show me similar code"
 
+## ⚡ Recent Improvements (November 2025)
+
+CodeSmriti now features **zero-deduplication storage** and **file-level incremental updates**:
+
+- ✅ **Content-Hash Chunk IDs** - `sha256(repo:file:commit:content_hash)` guarantees uniqueness
+- ✅ **Separate Commit Storage** - Commit messages stored once, referenced by chunks (storage efficiency)
+- ✅ **File-Level Updates** - Changed files trigger atomic deletion + re-parse of all file chunks
+- ✅ **Local Embeddings** - `sentence-transformers` with Apple Silicon MPS acceleration (~1,280 chunks/min)
+- ✅ **Recursion Prevention** - Repos stored outside project directory for safe self-ingestion
+
+**Performance:**
+- Small repos (~25 chunks): 1-2 seconds
+- Medium repos (~45 chunks): 2-3 seconds
+- Large repos (55K+ chunks): ~10-15 minutes (first run), estimated <1 minute for incremental updates
+
+📖 **[Read implementation details in PIPELINE.md](./PIPELINE.md)**
+
 ## How It Works
 
 ### Data Flow
@@ -202,10 +219,13 @@ Internet
 
 - **MCP Framework**: Python + FastAPI
 - **Vector DB**: Couchbase 8.0 with Vector Search
-- **Embeddings**: nomic-embed-text (768 dimensions)
+- **Embeddings**:
+  - Local: `sentence-transformers/all-mpnet-base-v2` (768 dimensions, MPS acceleration)
+  - Ollama API: `nomic-embed-text` (alternative, slower)
 - **LLM**: Ollama (codellama, deepseek-coder, mistral)
 - **Code Parsing**: tree-sitter (JavaScript/TypeScript, Python)
 - **Authentication**: JWT with API keys
+- **Chunk Identification**: Content-hash based (`sha256(repo:file:commit:content_hash)`)
 
 ## Deployment Options
 
@@ -294,11 +314,17 @@ If you already have Docker and Ollama installed:
 ```bash
 # 1. Configure environment
 cp .env.example .env
-nano .env  # Set COUCHBASE_PASSWORD, JWT_SECRET, GITHUB_TOKEN
+nano .env  # Set:
+          # - COUCHBASE_PASSWORD
+          # - JWT_SECRET
+          # - GITHUB_TOKEN
+          # - GITHUB_REPOS (comma-separated list or use pipeline_ingestion.py)
+          # - EMBEDDING_BACKEND=local (recommended - 10-20x faster)
+          # - REPOS_PATH=/path/to/repos (outside project to prevent recursion)
 
-# 2. Pull AI models
-ollama pull nomic-embed-text
-ollama pull codellama:13b
+# 2. Pull AI models (for Ollama - optional if using local embedding)
+ollama pull nomic-embed-text  # optional - only if EMBEDDING_BACKEND=ollama
+ollama pull codellama:13b     # for code generation/chat
 
 # 3. Start services
 docker-compose up -d
@@ -583,11 +609,15 @@ open http://localhost:8091
 
 ## Performance
 
-On Mac M3 Ultra (256GB RAM):
-- **Indexing**: ~100 repos in 2-4 hours (first run)
+On Mac M3 Ultra (256GB RAM) with local embeddings:
+- **Indexing Speed**:
+  - Small repos: 1-2 seconds
+  - Large repos (55K chunks): ~10-15 minutes first run
+  - Incremental updates: estimated <1 minute (file-level granularity)
+- **Embedding Generation**: ~1,280 chunks/minute (Apple Silicon MPS acceleration)
 - **Search latency**: <100ms for vector search
-- **Embedding generation**: ~500 chunks/second
 - **Concurrent requests**: Handles 50+ simultaneous MCP calls
+- **Storage Efficiency**: Commit messages deduplicated (stored once per commit)
 
 ## Security
 

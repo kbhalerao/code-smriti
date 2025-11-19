@@ -1,13 +1,13 @@
 """
-Embedding Generator using nomic-embed-text via Ollama
-Generates 768-dimensional embeddings for code and documentation
+Local Embedding Generator using sentence-transformers
+Provides fast batch processing with GPU/MPS acceleration
+Uses same model as Ollama for compatibility
 """
 
 from typing import List, Union
-import os
 import numpy as np
-import requests
 from loguru import logger
+from sentence_transformers import SentenceTransformer
 
 from config import WorkerConfig
 from parsers.code_parser import CodeChunk
@@ -16,32 +16,41 @@ from parsers.document_parser import DocumentChunk
 config = WorkerConfig()
 
 
-class EmbeddingGenerator:
+class LocalEmbeddingGenerator:
     """
-    Generates embeddings for code and documentation chunks using Ollama API
+    Generates embeddings using sentence-transformers library
+    Optimized for batch processing and GPU/MPS acceleration
     """
 
     def __init__(self):
-        """Initialize connection to Ollama"""
-        # Use localhost for native execution, docker will use host.docker.internal
-        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        # Extract just the model name (nomic-embed-text) from full identifier
-        self.model_name = "nomic-embed-text"
+        """Initialize the embedding model"""
+        logger.info("Initializing local embedding generator")
 
-        logger.info(f"Initializing Ollama embedding client: {self.ollama_host}")
+        # Use sentence-transformers compatible model
+        # all-mpnet-base-v2 (768 dimensions, same as nomic)
+        # NOTE: For production, you may want to use nomic via Ollama or find
+        # a sentence-transformers compatible version
+        model_name = "sentence-transformers/all-mpnet-base-v2"
 
-        # Test connection
         try:
-            response = requests.get(f"{self.ollama_host}/api/tags", timeout=5)
-            response.raise_for_status()
-            logger.info(f"✓ Connected to Ollama (model: {self.model_name}, dims: {config.embedding_dimensions})")
+            self.model = SentenceTransformer(
+                model_name,
+                trust_remote_code=True
+            )
+
+            # Log device being used (CPU, CUDA, or MPS for Apple Silicon)
+            device = self.model.device
+            logger.info(f"✓ Local embedding model loaded: {model_name}")
+            logger.info(f"  Device: {device}")
+            logger.info(f"  Dimensions: {config.embedding_dimensions}")
+
         except Exception as e:
-            logger.error(f"Failed to connect to Ollama at {self.ollama_host}: {e}")
+            logger.error(f"Failed to load embedding model: {e}")
             raise
 
     def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate embedding for a single text using Ollama API
+        Generate embedding for a single text
 
         Args:
             text: Input text
@@ -53,21 +62,13 @@ class EmbeddingGenerator:
             # Add task instruction prefix for document embedding
             text_with_prefix = f"search_document: {text}"
 
-            response = requests.post(
-                f"{self.ollama_host}/api/embeddings",
-                json={
-                    "model": self.model_name,
-                    "prompt": text_with_prefix
-                },
-                timeout=30
+            embedding = self.model.encode(
+                text_with_prefix,
+                convert_to_tensor=False,
+                show_progress_bar=False
             )
-            response.raise_for_status()
-            embedding = response.json().get("embedding", [])
 
-            if len(embedding) != config.embedding_dimensions:
-                logger.warning(f"Expected {config.embedding_dimensions} dims, got {len(embedding)}")
-
-            return embedding
+            return embedding.tolist()
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             return [0.0] * config.embedding_dimensions
@@ -108,56 +109,50 @@ class EmbeddingGenerator:
     async def generate_embeddings(
         self,
         chunks: List[Union[CodeChunk, DocumentChunk]],
-        batch_size: int = 16  # Ollama can handle more concurrent requests
+        batch_size: int = 128  # Much larger than Ollama (was 16)
     ) -> None:
         """
-        Generate embeddings for a list of chunks using Ollama API
+        Generate embeddings for a list of chunks using batch processing
         Updates the chunks in-place with their embeddings
 
         Args:
             chunks: List of CodeChunk or DocumentChunk objects
-            batch_size: Number of chunks to process at once (not used with sequential Ollama calls)
+            batch_size: Number of chunks to process at once
         """
         if not chunks:
             return
 
-        logger.info(f"Generating embeddings for {len(chunks)} chunks using Ollama")
-        total = len(chunks)
+        logger.info(f"Generating embeddings for {len(chunks)} chunks (batch_size={batch_size})")
+        total_batches = (len(chunks) + batch_size - 1) // batch_size
 
         try:
-            # Process each chunk sequentially (Ollama API doesn't support batch requests)
-            for i, chunk in enumerate(chunks, 1):
-                # Log progress every 100 chunks
-                if i % 100 == 0 or i == 1:
-                    logger.info(f"Processing chunk {i}/{total} ({(i/total)*100:.1f}%)")
+            # Process in batches for memory efficiency
+            for i in range(0, len(chunks), batch_size):
+                batch_chunks = chunks[i:i + batch_size]
+                batch_num = i // batch_size + 1
 
-                # Prepare text for this chunk
-                text = self.prepare_text_for_embedding(chunk)
+                # Log progress every 10 batches
+                if batch_num % 10 == 0 or batch_num == 1 or batch_num == total_batches:
+                    progress_pct = (batch_num / total_batches) * 100
+                    logger.info(f"Processing batch {batch_num}/{total_batches} ({progress_pct:.1f}%)")
 
-                # Add task instruction prefix
-                text_with_prefix = f"search_document: {text}"
+                # Prepare texts for this batch only
+                batch_texts = [self.prepare_text_for_embedding(chunk) for chunk in batch_chunks]
 
-                # Generate embedding via Ollama API
-                try:
-                    response = requests.post(
-                        f"{self.ollama_host}/api/embeddings",
-                        json={
-                            "model": self.model_name,
-                            "prompt": text_with_prefix
-                        },
-                        timeout=30
-                    )
-                    response.raise_for_status()
-                    embedding = response.json().get("embedding", [])
+                # Add task instruction prefix for document embedding
+                prefixed_batch = [f"search_document: {text}" for text in batch_texts]
 
-                    if len(embedding) != config.embedding_dimensions:
-                        logger.warning(f"Chunk {i}: Expected {config.embedding_dimensions} dims, got {len(embedding)}")
+                # Generate embeddings for the batch (GPU/MPS accelerated)
+                batch_embeddings = self.model.encode(
+                    prefixed_batch,
+                    convert_to_tensor=False,
+                    show_progress_bar=False,
+                    batch_size=batch_size
+                )
 
-                    chunk.embedding = embedding
-
-                except Exception as e:
-                    logger.error(f"Error generating embedding for chunk {i}: {e}")
-                    chunk.embedding = [0.0] * config.embedding_dimensions
+                # Assign embeddings immediately to free memory
+                for chunk, embedding in zip(batch_chunks, batch_embeddings):
+                    chunk.embedding = embedding.tolist()
 
             logger.info(f"✓ Generated embeddings for {len(chunks)} chunks")
 

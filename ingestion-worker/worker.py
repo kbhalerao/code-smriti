@@ -19,7 +19,9 @@ from github import Github
 # Import custom modules
 from parsers.code_parser import CodeParser
 from parsers.document_parser import DocumentParser
+from parsers.commit_parser import CommitParser
 from embeddings.generator import EmbeddingGenerator
+from embeddings.local_generator import LocalEmbeddingGenerator
 from storage.couchbase_client import CouchbaseClient
 
 # Configuration
@@ -43,9 +45,18 @@ class IngestionWorker:
         # Initialize parsers
         self.code_parser = CodeParser()
         self.doc_parser = DocumentParser()
+        self.commit_parser = CommitParser()
 
-        # Initialize embedding generator
-        self.embedding_generator = EmbeddingGenerator()
+        # Initialize embedding generator based on config
+        if config.embedding_backend == "local":
+            logger.info("Using local sentence-transformers for embeddings")
+            self.embedding_generator = LocalEmbeddingGenerator()
+        elif config.embedding_backend == "ollama":
+            logger.info("Using Ollama API for embeddings")
+            self.embedding_generator = EmbeddingGenerator()
+        else:
+            logger.error(f"Unknown embedding backend: {config.embedding_backend}")
+            raise ValueError(f"Invalid embedding_backend: {config.embedding_backend}. Use 'local' or 'ollama'")
 
         # Initialize Couchbase client
         self.db = CouchbaseClient()
@@ -125,9 +136,69 @@ class IngestionWorker:
                 logger.error("No GitHub token configured")
             raise
 
+    def filter_chunks_by_file_changes(self, chunks: List, repo_id: str, repo_path: Path) -> tuple:
+        """
+        Filter chunks to only include those from new or changed files
+        Returns (new_chunks, stats)
+
+        Args:
+            chunks: List of parsed chunks
+            repo_id: Repository identifier
+            repo_path: Path to repository
+
+        Returns:
+            Tuple of (filtered_chunks, stats_dict)
+        """
+        if not chunks:
+            return [], {"skipped": 0, "new": 0, "updated": 0, "deleted": 0}
+
+        files_to_process = set()
+        files_unchanged = set()
+        files_updated = set()
+        files_new = set()
+        deleted_chunks = 0
+
+        # Check each unique file in the chunks
+        file_paths = set(chunk.file_path for chunk in chunks)
+
+        for file_path in file_paths:
+            # Get current commit hash for this file
+            git_metadata = self.code_parser.get_git_metadata(repo_path, file_path)
+            current_commit = git_metadata.get("commit_hash", "")
+
+            # Check stored commit hash
+            stored_commit = self.db.check_file_commit(repo_id, file_path)
+
+            if not stored_commit:
+                # File is new
+                files_new.add(file_path)
+                files_to_process.add(file_path)
+            elif stored_commit != current_commit:
+                # File has changed - delete old chunks
+                deleted = self.db.delete_file_chunks(repo_id, file_path)
+                deleted_chunks += deleted
+                files_updated.add(file_path)
+                files_to_process.add(file_path)
+            else:
+                # File unchanged - skip
+                files_unchanged.add(file_path)
+
+        # Filter chunks to only include files that need processing
+        filtered_chunks = [c for c in chunks if c.file_path in files_to_process]
+
+        stats = {
+            "skipped": len(files_unchanged),
+            "new": len(files_new),
+            "updated": len(files_updated),
+            "deleted": deleted_chunks
+        }
+
+        return filtered_chunks, stats
+
     async def process_repository(self, repo_id: str):
         """
         Process a repository: clone, parse, embed, and store
+        Uses incremental updates to skip unchanged files
 
         Args:
             repo_id: Repository in owner/repo format
@@ -139,29 +210,78 @@ class IngestionWorker:
             # Step 1: Clone or update repository
             repo_path = await self.clone_or_update_repo(repo_id)
 
-            # Step 2: Parse code files
+            # Step 2: Parse all code files
             logger.info("Parsing code files...")
-            code_chunks = await self.code_parser.parse_repository(repo_path, repo_id)
-            logger.info(f"✓ Parsed {len(code_chunks)} code chunks")
+            all_code_chunks = await self.code_parser.parse_repository(repo_path, repo_id)
+            logger.info(f"Parsed {len(all_code_chunks)} total code chunks")
 
-            # Step 3: Parse documentation files
+            # Step 3: Parse all documentation files
             logger.info("Parsing documentation files...")
-            doc_chunks = await self.doc_parser.parse_repository(repo_path, repo_id)
-            logger.info(f"✓ Parsed {len(doc_chunks)} document chunks")
+            all_doc_chunks = await self.doc_parser.parse_repository(repo_path, repo_id)
+            logger.info(f"Parsed {len(all_doc_chunks)} total document chunks")
 
-            # Step 4: Generate embeddings
-            logger.info("Generating embeddings...")
-            all_chunks = code_chunks + doc_chunks
+            # Step 4: Filter chunks - only keep new or changed files (if enabled)
+            if config.enable_incremental_updates:
+                logger.info("Checking for file changes...")
+                code_chunks, code_stats = self.filter_chunks_by_file_changes(
+                    all_code_chunks, repo_id, repo_path
+                )
+                doc_chunks, doc_stats = self.filter_chunks_by_file_changes(
+                    all_doc_chunks, repo_id, repo_path
+                )
+
+                # Combine stats
+                total_skipped = code_stats["skipped"] + doc_stats["skipped"]
+                total_new = code_stats["new"] + doc_stats["new"]
+                total_updated = code_stats["updated"] + doc_stats["updated"]
+                total_deleted = code_stats["deleted"] + doc_stats["deleted"]
+
+                logger.info(
+                    f"Incremental update: {total_skipped} files skipped (unchanged), "
+                    f"{total_new} new, {total_updated} updated, {total_deleted} old chunks deleted"
+                )
+
+                # Step 5: Prepare chunks for processing
+                all_chunks = code_chunks + doc_chunks
+            else:
+                logger.info("Incremental updates disabled - processing all files")
+                all_chunks = all_code_chunks + all_doc_chunks
+
+            if not all_chunks:
+                logger.info("No new or updated files to process")
+                elapsed = time.time() - start_time
+                logger.info(f"✓ Repository {repo_id} processed in {elapsed:.2f}s (no changes)")
+                return
+
+            # Step 6: Extract unique commits for separate storage
+            logger.info("Extracting commit metadata...")
+            commit_chunks = self.commit_parser.extract_commits_from_chunks(all_chunks, repo_id)
+            logger.info(f"✓ Extracted {len(commit_chunks)} unique commits")
+
+            # Step 7: Generate embeddings (for code/doc chunks only, not commits)
+            logger.info(f"Generating embeddings for {len(all_chunks)} code/doc chunks...")
             await self.embedding_generator.generate_embeddings(all_chunks)
             logger.info(f"✓ Generated embeddings for {len(all_chunks)} chunks")
 
-            # Step 5: Store in Couchbase
+            # Step 8: Store in Couchbase (code/doc chunks + commit chunks)
             logger.info("Storing in database...")
-            result = await self.db.batch_upsert(all_chunks)
-            logger.info(f"✓ Stored {result['success']} chunks ({result['failed']} failed)")
+
+            # Store code and doc chunks with embeddings
+            code_doc_result = await self.db.batch_upsert(all_chunks)
+            logger.info(f"✓ Stored {code_doc_result['success']} code/doc chunks ({code_doc_result['failed']} failed)")
+
+            # Store commit chunks (no embeddings needed)
+            commit_result = {"success": 0, "failed": 0}
+            if commit_chunks:
+                commit_result = await self.db.batch_upsert(commit_chunks)
+                logger.info(f"✓ Stored {commit_result['success']} commit chunks ({commit_result['failed']} failed)")
+
+            total_stored = code_doc_result['success'] + commit_result['success']
+            total_failed = code_doc_result['failed'] + commit_result['failed']
 
             elapsed = time.time() - start_time
             logger.info(f"✓ Repository {repo_id} processed successfully in {elapsed:.2f}s")
+            logger.info(f"   Total: {total_stored} chunks stored, {total_failed} failed")
 
         except Exception as e:
             logger.error(f"Error processing repository {repo_id}: {e}")
