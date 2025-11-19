@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Create indexes for multitenancy buckets
+# - users: Email index for login
+# - ingestion_jobs: Status and user indexes for job queue
+# - code_kosha: user_id + repo_id composite index
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Load environment variables
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    source "$PROJECT_ROOT/.env"
+fi
+
+CB_HOST="${COUCHBASE_HOST:-localhost}"
+CB_PORT="${COUCHBASE_PORT:-8091}"
+CB_USER="${COUCHBASE_USER:-Administrator}"
+CB_PASSWORD="${COUCHBASE_PASSWORD:-password123}"
+
+echo "========================================"
+echo "Creating Database Indexes"
+echo "========================================"
+echo ""
+
+# Function to run N1QL query
+run_query() {
+    local query=$1
+    local bucket=$2
+
+    echo "  Running: $query"
+
+    docker exec -i codesmriti_couchbase \
+        cbq -u $CB_USER -p $CB_PASSWORD -e "http://$CB_HOST:8093" <<EOF
+$query;
+EOF
+
+    if [ $? -eq 0 ]; then
+        echo "  ✓ Index created"
+    else
+        echo "  ⚠ Index might already exist or query failed"
+    fi
+}
+
+echo "1. Creating indexes on 'users' bucket..."
+run_query "CREATE PRIMARY INDEX ON users" "users"
+run_query "CREATE INDEX idx_email ON users(email) WHERE type = 'user'" "users"
+
+echo ""
+echo "2. Creating indexes on 'ingestion_jobs' bucket..."
+run_query "CREATE PRIMARY INDEX ON ingestion_jobs" "ingestion_jobs"
+run_query "CREATE INDEX idx_user_jobs ON ingestion_jobs(user_id, created_at DESC) WHERE type = 'ingestion_job'" "ingestion_jobs"
+run_query "CREATE INDEX idx_queued_jobs ON ingestion_jobs(status, created_at ASC) WHERE type = 'ingestion_job'" "ingestion_jobs"
+
+echo ""
+echo "3. Creating composite index on 'code_kosha' bucket..."
+run_query "CREATE INDEX idx_user_repo ON code_kosha(user_id, repo_id, type)" "code_kosha"
+
+echo ""
+echo "========================================"
+echo "✓ Index creation complete"
+echo "========================================"
+echo ""
+echo "Note: The vector search index (code_vector_index) needs to be updated"
+echo "via Couchbase FTS UI to include user_id field."
+echo ""
+echo "Next steps:"
+echo "  1. Update vector index: See PRD.md Migration Steps"
+echo "  2. Run migration: ./migrate-add-user-id.js"
+echo ""

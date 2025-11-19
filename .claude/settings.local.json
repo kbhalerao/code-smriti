@@ -72,7 +72,13 @@
       "Bash(tmux send-keys:*)",
       "Bash(tree:*)",
       "Bash(npm create:*)",
-      "Bash(npx sv create . --template minimal --types ts --no-add-ons)"
+      "Bash(npx sv create . --template minimal --types ts --no-add-ons)",
+      "Bash(./create-user-buckets.sh:*)",
+      "Bash(./create-indexes.sh)",
+      "Bash(../lib/ingestion-worker/venv/bin/python3:*)",
+      "Bash(../lib/ingestion-worker/venv/bin/pip install:*)",
+      "Bash(PYTHONPATH=../lib/ingestion-worker/venv/lib/python3.11/site-packages:$PYTHONPATH python3:*)",
+      "Bash(/Users/kaustubh/Documents/code/code-smriti/lib/ingestion-worker/venv/bin/python3:*)"
     ],
     "deny": [],
     "ask": []
