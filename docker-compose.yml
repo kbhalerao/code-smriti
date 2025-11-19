@@ -70,7 +70,9 @@ services:
       context: ./ingestion-worker
       dockerfile: Dockerfile
     container_name: codesmriti_ingestion_worker
-    restart: unless-stopped
+    restart: "no"  # Run manually - don't auto-restart after completion
+    profiles:
+      - manual  # Don't start automatically, only when manually triggered
     environment:
       - COUCHBASE_HOST=couchbase
       - COUCHBASE_PORT=8091

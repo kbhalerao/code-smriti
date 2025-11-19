@@ -87,7 +87,7 @@ class EmbeddingGenerator:
     async def generate_embeddings(
         self,
         chunks: List[Union[CodeChunk, DocumentChunk]],
-        batch_size: int = 32
+        batch_size: int = 64  # Increased for systems with more RAM
     ) -> None:
         """
         Generate embeddings for a list of chunks in batches
@@ -101,18 +101,20 @@ class EmbeddingGenerator:
             return
 
         logger.info(f"Generating embeddings for {len(chunks)} chunks (batch_size={batch_size})")
+        total_batches = (len(chunks) + batch_size - 1) // batch_size
 
         try:
-            # Prepare all texts
-            texts = [self.prepare_text_for_embedding(chunk) for chunk in chunks]
+            # Process in batches to avoid preparing all texts at once (memory optimization)
+            for i in range(0, len(chunks), batch_size):
+                batch_chunks = chunks[i:i + batch_size]
+                batch_num = i // batch_size + 1
 
-            # Generate embeddings in batches
-            all_embeddings = []
+                # Log progress every 100 batches
+                if batch_num % 100 == 0 or batch_num == 1:
+                    logger.info(f"Processing batch {batch_num}/{total_batches} ({(batch_num/total_batches)*100:.1f}%)")
 
-            for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i + batch_size]
-
-                logger.debug(f"Processing batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
+                # Prepare texts for this batch only
+                batch_texts = [self.prepare_text_for_embedding(chunk) for chunk in batch_chunks]
 
                 # Add task instruction prefix for document embedding
                 prefixed_batch = [f"search_document: {text}" for text in batch_texts]
@@ -124,19 +126,18 @@ class EmbeddingGenerator:
                     show_progress_bar=False
                 )
 
-                all_embeddings.extend(batch_embeddings)
+                # Assign embeddings immediately to free memory
+                for chunk, embedding in zip(batch_chunks, batch_embeddings):
+                    chunk.embedding = embedding.tolist()
 
-            # Assign embeddings back to chunks
-            for chunk, embedding in zip(chunks, all_embeddings):
-                chunk.embedding = embedding.tolist()
-
-            logger.info(f"✓ Generated {len(all_embeddings)} embeddings")
+            logger.info(f"✓ Generated embeddings for {len(chunks)} chunks")
 
         except Exception as e:
-            logger.error(f"Error generating embeddings: {e}")
-            # Assign zero vectors as fallback
+            logger.error(f"Error generating embeddings: {e}", exc_info=True)
+            # Assign zero vectors as fallback for remaining chunks
             for chunk in chunks:
-                chunk.embedding = [0.0] * config.embedding_dimensions
+                if not hasattr(chunk, 'embedding') or chunk.embedding is None:
+                    chunk.embedding = [0.0] * config.embedding_dimensions
 
     def compute_similarity(
         self,
