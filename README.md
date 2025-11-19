@@ -184,19 +184,24 @@ Response:
 
 ### Fresh M3 Mac Installation (Automated)
 
-For a fresh Mac with just Git installed:
-
+**For local Mac with GUI access:**
 ```bash
 cd code-smriti
 ./quick-install.sh
 ```
 
-This automated script handles everything:
-- Installs Homebrew, Docker Desktop, and Ollama
-- Downloads AI models (~15GB)
-- Configures environment
-- Starts all services
-- Initializes database
+**For remote Mac via SSH (no GUI):**
+```bash
+cd code-smriti
+./quick-install-headless.sh    # Uses Colima instead of Docker Desktop
+```
+
+Both scripts handle everything automatically:
+- Install Homebrew, Docker/Colima, and Ollama
+- Download AI models (~15GB)
+- Configure environment
+- Start all services
+- Initialize database
 
 **Estimated time: 30-60 minutes**
 

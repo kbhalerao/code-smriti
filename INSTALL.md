@@ -10,7 +10,7 @@ Quick installation guide for setting up CodeSmriti on a fresh M3 Mac.
 
 ## Installation Methods
 
-### Option 1: Automated Installation (Recommended)
+### Option 1: Automated Installation with GUI (Recommended for local use)
 
 Run the quick install script that automates everything:
 
@@ -21,7 +21,7 @@ cd code-smriti
 
 This script will:
 1. Install Homebrew (if not present)
-2. Install Docker Desktop
+2. Install Docker Desktop (GUI)
 3. Install Ollama
 4. Download AI models (~15GB)
 5. Configure CodeSmriti
@@ -31,16 +31,39 @@ This script will:
 **Estimated time: 30-60 minutes** (depending on internet speed for model downloads)
 
 The script will pause and prompt you to:
-- Start Docker Desktop manually
+- Start Docker Desktop manually (GUI app)
 - Edit `.env` file with your credentials
 - Confirm when services are ready
 
-### Option 2: Manual Installation
+### Option 2: Headless Installation via SSH (No GUI required)
+
+For remote servers or SSH-only access:
+
+```bash
+cd code-smriti
+./quick-install-headless.sh
+```
+
+This uses **Colima** (CLI Docker runtime) instead of Docker Desktop:
+- No GUI required
+- Perfect for SSH access
+- Same functionality as Docker Desktop
+- Lightweight and fast
+
+**Commands for Colima:**
+```bash
+colima status    # Check if running
+colima stop      # Stop Docker
+colima start     # Start Docker
+```
+
+### Option 3: Manual Installation
 
 If you prefer to install components yourself:
 
 #### Step 1: Install Dependencies
 
+**Option A: With Docker Desktop (GUI)**
 ```bash
 # Install Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -50,6 +73,22 @@ brew install --cask docker
 
 # Start Docker Desktop from Applications
 # Wait for Docker to be running (whale icon in menu bar)
+
+# Install Ollama
+brew install ollama
+brew services start ollama
+```
+
+**Option B: With Colima (Headless/SSH)**
+```bash
+# Install Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Docker CLI and Colima
+brew install docker docker-compose colima
+
+# Start Colima with appropriate resources
+colima start --cpu 4 --memory 8 --disk 100 --arch aarch64
 
 # Install Ollama
 brew install ollama

@@ -10,13 +10,17 @@ Fresh M3 Mac Installation
 
 Prerequisites: Just git and this repo cloned.
 
-Run this ONE command:
+Local Mac with GUI:
 
     ./quick-install.sh
 
-What it does:
+Remote Mac via SSH (no GUI):
+
+    ./quick-install-headless.sh
+
+What both scripts do:
   ✓ Installs Homebrew (if needed)
-  ✓ Installs Docker Desktop
+  ✓ Installs Docker (Desktop or Colima)
   ✓ Installs Ollama
   ✓ Downloads AI models (~15GB)
   ✓ Configures CodeSmriti
@@ -25,8 +29,8 @@ What it does:
 
 Time: 30-60 minutes (mostly downloads)
 
-The script will pause and ask you to:
-  • Start Docker Desktop manually (GUI app)
+The scripts will pause for:
+  • Docker setup (GUI vs headless)
   • Edit .env file with your credentials
   • Confirm when ready to proceed
 
