@@ -36,6 +36,7 @@ env/
 *.swo
 *~
 .DS_Store
+.claude/settings.local.json
 
 # Logs
 *.log
@@ -55,6 +56,13 @@ repos/
 # Model cache
 .cache/
 model_cache/
+
+# SSL certificates and credentials
+api-gateway/ssl/
+api-gateway/certbot/
+*.pem
+*.key
+*.crt
 
 # Temporary files
 *.tmp

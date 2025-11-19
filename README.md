@@ -149,6 +149,8 @@ Response:
 
 ## Architecture
 
+### Internal Architecture
+
 ```
 ┌─────────────┐         ┌──────────────┐         ┌────────────────┐
 │   Ollama    │◄────────│  MCP Server  │◄────────│  API Gateway   │
@@ -164,12 +166,37 @@ Response:
                    └───────────┘   └───────────────┘
 ```
 
+### External Access (Production)
+
+```
+Internet
+   │
+   ▼
+┌──────────────────────────────────────────────┐
+│   External Nginx (SSL Termination)           │
+│   - Domain routing (codesmriti.domain.com)   │
+│   - Let's Encrypt SSL certificates           │
+│   - Cloudflare proxy (optional)              │
+└───────────────┬──────────────────────────────┘
+                │ HTTP (port 80)
+                ▼
+┌──────────────────────────────────────────────┐
+│   CodeSmriti Internal Nginx                  │
+│   - No SSL needed (behind external proxy)    │
+│   - Routes to MCP Server                     │
+└───────────────┬──────────────────────────────┘
+                │
+                ▼
+        MCP Server (port 8080)
+```
+
 **Components:**
 - **MCP Server**: FastAPI-based MCP server with HTTP/SSE transport
 - **Couchbase**: Unified document + vector storage
 - **Ollama**: Local LLM running natively on Mac M3 Ultra
 - **Ingestion Worker**: Background service for parsing and indexing repos
-- **Nginx**: API gateway for remote access
+- **Internal Nginx**: API gateway for routing (no SSL)
+- **External Nginx**: SSL termination and domain-based routing
 
 ## Technology Stack
 
@@ -179,6 +206,59 @@ Response:
 - **LLM**: Ollama (codellama, deepseek-coder, mistral)
 - **Code Parsing**: tree-sitter (JavaScript/TypeScript, Python)
 - **Authentication**: JWT with API keys
+
+## Deployment Options
+
+### Option 1: External Nginx Reverse Proxy (Recommended for Production)
+
+If you have a separate nginx gateway handling SSL and domain routing:
+
+**On your external nginx server**, add this upstream configuration:
+
+```nginx
+upstream codesmriti {
+    server internal-server-ip:80;  # CodeSmriti machine IP
+}
+
+server {
+    listen 443 ssl http2;
+    server_name codesmriti.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://codesmriti;
+        proxy_http_version 1.1;
+
+        # WebSocket/SSE support for MCP
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Long timeouts for MCP operations
+        proxy_connect_timeout 600s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+    }
+}
+```
+
+**On your CodeSmriti machine**, just run:
+
+```bash
+docker-compose up -d
+```
+
+No SSL configuration needed on CodeSmriti - the external nginx handles it.
+
+### Option 2: Direct Internet Access with SSL
+
+If CodeSmriti is directly exposed to the internet, see [SSL-SETUP.md](SSL-SETUP.md) for configuring SSL with Certbot and Cloudflare.
 
 ## Quick Start
 

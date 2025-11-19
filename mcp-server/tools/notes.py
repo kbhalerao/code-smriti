@@ -21,7 +21,11 @@ class NotesTools:
     def __init__(self):
         """Initialize notes tools"""
         logger.info("Initializing notes tools")
-        self.embedding_model = SentenceTransformer(settings.embedding_model, trust_remote_code=True)
+        self.embedding_model = SentenceTransformer(
+            settings.embedding_model,
+            trust_remote_code=True,
+            revision=settings.embedding_model_revision
+        )
         # TODO: Initialize Couchbase client
         # self.db = CouchbaseClient()
 

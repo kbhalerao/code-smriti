@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # Embedding Configuration
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+    embedding_model_revision: str = os.getenv("EMBEDDING_MODEL_REVISION", "main")
     embedding_dimensions: int = 768
 
     # JWT Authentication

@@ -21,8 +21,12 @@ class SearchTools:
 
     def __init__(self):
         """Initialize search tools with embedding model"""
-        logger.info(f"Loading embedding model: {settings.embedding_model}")
-        self.embedding_model = SentenceTransformer(settings.embedding_model, trust_remote_code=True)
+        logger.info(f"Loading embedding model: {settings.embedding_model} (revision: {settings.embedding_model_revision})")
+        self.embedding_model = SentenceTransformer(
+            settings.embedding_model,
+            trust_remote_code=True,
+            revision=settings.embedding_model_revision
+        )
         logger.info("Embedding model loaded successfully")
 
         # TODO: Initialize Couchbase client

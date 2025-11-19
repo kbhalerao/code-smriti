@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download embedding model and tree-sitter languages
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True)"
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, revision='main')"
 RUN python -c "from tree_sitter_languages import get_parser; get_parser('python'); get_parser('javascript'); get_parser('typescript')"
 
 # Copy application code

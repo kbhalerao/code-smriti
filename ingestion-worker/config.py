@@ -18,10 +18,11 @@ class WorkerConfig(BaseSettings):
 
     # Embedding Configuration
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+    embedding_model_revision: str = os.getenv("EMBEDDING_MODEL_REVISION", "main")
     embedding_dimensions: int = 768
 
     # GitHub Configuration
-    github_token: str = os.getenv("GITHUB_TOKEN", "")
+    github_token: str = os.getenv("GITHUB_TOKEN", "").strip()
     github_repos: str = os.getenv("GITHUB_REPOS", "")
 
     # Logging

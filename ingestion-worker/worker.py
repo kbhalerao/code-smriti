@@ -10,6 +10,7 @@ import time
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from loguru import logger
 import git
@@ -69,24 +70,57 @@ class IngestionWorker:
             repo_path = self.repos_path / repo_id.replace("/", "_")
 
             if repo_path.exists():
-                logger.info(f"Updating existing repo: {repo_id}")
-                repo = git.Repo(repo_path)
-                repo.remotes.origin.pull()
+                logger.info(f"Repository already exists: {repo_id}")
+                try:
+                    # Try to update, but don't fail if git credentials aren't configured
+                    repo = git.Repo(repo_path)
+                    logger.info(f"Pulling latest changes for {repo_id}...")
+                    repo.remotes.origin.pull()
+                    logger.info(f"✓ Repository updated: {repo_id}")
+                except Exception as e:
+                    logger.warning(f"Could not update repo (using existing version): {e}")
+                    # Continue with existing version of the repo
             else:
                 logger.info(f"Cloning new repo: {repo_id}")
-                clone_url = f"https://github.com/{repo_id}.git"
+
+                # Configure git environment to prevent interactive prompts
+                env = os.environ.copy()
+                env['GIT_TERMINAL_PROMPT'] = '0'  # Disable git credential prompts
+                env['GIT_ASKPASS'] = 'echo'  # Prevent password prompts
 
                 # Use token for authentication if available
                 if config.github_token:
-                    clone_url = f"https://{config.github_token}@github.com/{repo_id}.git"
+                    # Validate token format
+                    token = config.github_token.strip()
+                    if not token:
+                        raise ValueError("GITHUB_TOKEN is empty or whitespace")
 
-                git.Repo.clone_from(clone_url, repo_path)
+                    # GitHub tokens should start with ghp_, gho_, ghu_, ghs_, or ghr_ (or github_pat_ for fine-grained)
+                    if not any(token.startswith(prefix) for prefix in ['ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_']):
+                        logger.warning(f"GitHub token doesn't match expected format. Token starts with: {token[:8]}...")
+
+                    # URL encode the token to handle any special characters
+                    encoded_token = quote(token, safe='')
+
+                    # Use token as password with 'x-access-token' as username (recommended by GitHub)
+                    # This is the official GitHub HTTPS authentication method for tokens
+                    clone_url = f"https://x-access-token:{encoded_token}@github.com/{repo_id}.git"
+                    logger.debug(f"Using authenticated clone URL (token starts with {token[:8]}...)")
+                else:
+                    logger.warning("No GitHub token provided. Attempting anonymous clone (may fail for private repos)")
+                    clone_url = f"https://github.com/{repo_id}.git"
+
+                git.Repo.clone_from(clone_url, repo_path, env=env)
 
             logger.info(f"✓ Repository ready: {repo_path}")
             return repo_path
 
         except Exception as e:
             logger.error(f"Error cloning/updating {repo_id}: {e}")
+            if config.github_token:
+                logger.error(f"Token format check: starts with '{config.github_token[:4]}...', length: {len(config.github_token)}")
+            else:
+                logger.error("No GitHub token configured")
             raise
 
     async def process_repository(self, repo_id: str):

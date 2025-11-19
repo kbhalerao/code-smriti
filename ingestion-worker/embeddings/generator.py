@@ -22,9 +22,13 @@ class EmbeddingGenerator:
 
     def __init__(self):
         """Initialize the embedding model"""
-        logger.info(f"Loading embedding model: {config.embedding_model}")
+        logger.info(f"Loading embedding model: {config.embedding_model} (revision: {config.embedding_model_revision})")
 
-        self.model = SentenceTransformer(config.embedding_model, trust_remote_code=True)
+        self.model = SentenceTransformer(
+            config.embedding_model,
+            trust_remote_code=True,
+            revision=config.embedding_model_revision
+        )
 
         logger.info(f"✓ Embedding model loaded (dims: {config.embedding_dimensions})")
 
