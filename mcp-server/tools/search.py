@@ -4,9 +4,10 @@ Handles vector search and similarity search across code and documentation
 """
 
 import json
+import os
 from typing import Optional, List
 from loguru import logger
-from sentence_transformers import SentenceTransformer
+import httpx
 import numpy as np
 
 from config import settings
@@ -20,14 +21,12 @@ class SearchTools:
     """
 
     def __init__(self):
-        """Initialize search tools with embedding model"""
-        logger.info(f"Loading embedding model: {settings.embedding_model} (revision: {settings.embedding_model_revision})")
-        self.embedding_model = SentenceTransformer(
-            settings.embedding_model,
-            trust_remote_code=True,
-            revision=settings.embedding_model_revision
-        )
-        logger.info("Embedding model loaded successfully")
+        """Initialize search tools with Ollama API client"""
+        self.ollama_host = settings.ollama_host or os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+        self.model_name = "nomic-embed-text"
+
+        logger.info(f"Initializing search tools with Ollama at {self.ollama_host}")
+        logger.info(f"Using embedding model: {self.model_name}")
 
         # TODO: Initialize Couchbase client
         # self.db = CouchbaseClient()
@@ -56,10 +55,16 @@ class SearchTools:
         try:
             logger.info(f"Search request: query='{query}', repo={repo}, language={language}")
 
-            # Generate query embedding with task instruction prefix
+            # Generate query embedding with task instruction prefix via Ollama API
             query_with_prefix = f"search_query: {query}"
-            query_embedding = self.embedding_model.encode(query_with_prefix, convert_to_tensor=False)
-            query_vector = query_embedding.tolist()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/embeddings",
+                    json={"model": self.model_name, "prompt": query_with_prefix},
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                query_vector = response.json().get("embedding", [])
 
             # TODO: Perform vector search in Couchbase with filters
             # For now, return stub data
@@ -109,10 +114,16 @@ class SearchTools:
         try:
             logger.info(f"Finding similar code (language={language}, limit={limit})")
 
-            # Generate embedding for the code snippet with task instruction prefix
+            # Generate embedding for the code snippet with task instruction prefix via Ollama API
             snippet_with_prefix = f"search_query: {code_snippet}"
-            snippet_embedding = self.embedding_model.encode(snippet_with_prefix, convert_to_tensor=False)
-            snippet_vector = snippet_embedding.tolist()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/embeddings",
+                    json={"model": self.model_name, "prompt": snippet_with_prefix},
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                snippet_vector = response.json().get("embedding", [])
 
             # TODO: Vector search for similar code in Couchbase
             # For now, return stub data

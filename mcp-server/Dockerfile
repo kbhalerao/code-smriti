@@ -15,10 +15,6 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the embedding model to cache
-# Pin to specific commit to prevent version drift
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True, revision='7710840340a098cfb869c4f65e87cf2b1b70caca')"
-
 # Copy application code
 COPY . .
 

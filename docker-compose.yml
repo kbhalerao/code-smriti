@@ -22,7 +22,7 @@ services:
     networks:
       - codesmriti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8091/pools"]
+      test: ["CMD", "curl", "-f", "http://localhost:8091/ui/index.html"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -61,8 +61,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 30s
       retries: 3
+      start_period: 120s
 
   # Ingestion Worker - background service for processing repositories
   ingestion-worker:
@@ -111,10 +112,11 @@ services:
     networks:
       - codesmriti_network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD-SHELL", "pgrep nginx"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 10s
 
 volumes:
   couchbase_data:

@@ -4,11 +4,12 @@ Handles memory notes with hashtag organization
 """
 
 import json
+import os
 import uuid
 from typing import Optional, List
 from datetime import datetime
 from loguru import logger
-from sentence_transformers import SentenceTransformer
+import httpx
 
 from config import settings
 
@@ -19,13 +20,11 @@ class NotesTools:
     """
 
     def __init__(self):
-        """Initialize notes tools"""
+        """Initialize notes tools with Ollama API client"""
         logger.info("Initializing notes tools")
-        self.embedding_model = SentenceTransformer(
-            settings.embedding_model,
-            trust_remote_code=True,
-            revision=settings.embedding_model_revision
-        )
+        self.ollama_host = settings.ollama_host or os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+        self.model_name = "nomic-embed-text"
+        logger.info(f"Using Ollama at {self.ollama_host} for embeddings")
         # TODO: Initialize Couchbase client
         # self.db = CouchbaseClient()
 
@@ -52,10 +51,16 @@ class NotesTools:
             # Generate unique ID
             note_id = str(uuid.uuid4())
 
-            # Generate embedding for the note content with task instruction prefix
+            # Generate embedding for the note content with task instruction prefix via Ollama API
             content_with_prefix = f"search_document: {content}"
-            note_embedding = self.embedding_model.encode(content_with_prefix, convert_to_tensor=False)
-            embedding_vector = note_embedding.tolist()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/embeddings",
+                    json={"model": self.model_name, "prompt": content_with_prefix},
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                embedding_vector = response.json().get("embedding", [])
 
             # Create note document
             note_doc = {

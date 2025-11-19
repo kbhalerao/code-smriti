@@ -9,11 +9,6 @@ sse-starlette>=1.8.0
 # Couchbase SDK
 couchbase>=4.2.0
 
-# Embeddings
-sentence-transformers>=2.2.0
-torch>=2.1.0
-einops>=0.7.0
-
 # Authentication
 pyjwt>=2.8.0
 python-multipart>=0.0.6
