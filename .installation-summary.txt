@@ -1,0 +1,44 @@
+CodeSmriti Installation Files Created
+======================================
+
+New Files:
+----------
+1. quick-install.sh - Automated installation script for fresh M3 Mac
+   - Installs all dependencies (Homebrew, Docker, Ollama)
+   - Downloads AI models
+   - Configures environment
+   - Starts services
+   - Runs in 30-60 minutes
+
+2. INSTALL.md - Comprehensive installation guide
+   - Automated installation instructions
+   - Manual installation steps
+   - Troubleshooting guide
+   - System requirements
+   - Uninstallation instructions
+
+3. QUICKSTART.md - One-page quick reference
+   - Daily operations commands
+   - Common tasks
+   - MCP integration setup
+   - Troubleshooting quick fixes
+   - URLs and port reference
+
+Modified Files:
+--------------
+1. README.md - Updated Quick Start section
+   - Points to quick-install.sh for fresh installs
+   - Simplified manual setup instructions
+   - References INSTALL.md for details
+
+Usage:
+------
+For fresh M3 Mac with just Git:
+  cd code-smriti
+  ./quick-install.sh
+
+For users with dependencies already installed:
+  See QUICKSTART.md
+
+For detailed information:
+  See INSTALL.md and README.md

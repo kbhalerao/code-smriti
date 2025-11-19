@@ -182,78 +182,49 @@ Response:
 
 ## Quick Start
 
-### Prerequisites
+### Fresh M3 Mac Installation (Automated)
 
-- Mac Studio M3 Ultra (256GB RAM, 2TB storage)
-- Docker Desktop for Mac
-- Python 3.11+
-- Git
-
-### 1. Installation
+For a fresh Mac with just Git installed:
 
 ```bash
-# Clone or navigate to CodeSmriti directory
-cd TotalRecall  # or rename to CodeSmriti
+cd code-smriti
+./quick-install.sh
+```
 
-# Create environment file
+This automated script handles everything:
+- Installs Homebrew, Docker Desktop, and Ollama
+- Downloads AI models (~15GB)
+- Configures environment
+- Starts all services
+- Initializes database
+
+**Estimated time: 30-60 minutes**
+
+See **[INSTALL.md](INSTALL.md)** for detailed installation instructions and manual setup steps.
+
+### Quick Manual Setup (if dependencies already installed)
+
+If you already have Docker and Ollama installed:
+
+```bash
+# 1. Configure environment
 cp .env.example .env
+nano .env  # Set COUCHBASE_PASSWORD, JWT_SECRET, GITHUB_TOKEN
 
-# Edit .env and set:
-# - COUCHBASE_PASSWORD (secure password)
-# - JWT_SECRET (run: openssl rand -hex 32)
-# - GITHUB_TOKEN (GitHub personal access token)
-# - GITHUB_REPOS (comma-separated list of repos to index)
-nano .env
-```
+# 2. Pull AI models
+ollama pull nomic-embed-text
+ollama pull codellama:13b
 
-### 2. Setup Ollama (runs natively on Mac)
+# 3. Start services
+docker-compose up -d
 
-```bash
-# Install and setup Ollama
-./scripts/ollama-setup.sh
-
-# This will:
-# - Install Ollama if not present
-# - Pull codellama:13b, deepseek-coder:6.7b, mistral:7b
-# - Start Ollama server
-```
-
-### 3. Start CodeSmriti
-
-```bash
-# Start all Docker services
-./scripts/start.sh
-
-# This will:
-# - Check environment configuration
-# - Start Couchbase, MCP Server, Ingestion Worker, Nginx
-# - Verify service health
-```
-
-### 4. Initialize Couchbase (first time only)
-
-```bash
-# Run inside the Couchbase container
+# 4. Initialize database (first time only)
 docker exec -it codesmriti_couchbase /opt/init-couchbase.sh
 
-# This will:
-# - Create the 'code_memory' bucket
-# - Set up indexes for efficient querying
-# - Configure vector search
-```
-
-### 5. Trigger Initial Ingestion
-
-```bash
-# Generate an API key for yourself
-./scripts/generate-api-key.py
-
-# Trigger ingestion of all configured repos
+# 5. Generate API key and trigger ingestion
+python3 scripts/generate-api-key.py
 curl -X POST http://localhost/api/ingest/trigger \
   -H "Authorization: Bearer YOUR_API_KEY"
-
-# Monitor ingestion progress
-docker-compose logs -f ingestion-worker
 ```
 
 ## Usage
