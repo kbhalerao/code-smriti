@@ -1,0 +1,25 @@
+# FastAPI and ASGI server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.19
+
+# Database
+couchbase==4.3.3
+
+# HTTP client for Ollama
+httpx==0.28.1
+
+# Logging
+loguru==0.7.3
+
+# CORS
+python-dotenv==1.0.1
+
+# Future: PydanticAI integration
+# pydantic-ai==0.0.x (when ready)
