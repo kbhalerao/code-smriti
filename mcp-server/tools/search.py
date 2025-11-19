@@ -22,7 +22,7 @@ class SearchTools:
     def __init__(self):
         """Initialize search tools with embedding model"""
         logger.info(f"Loading embedding model: {settings.embedding_model}")
-        self.embedding_model = SentenceTransformer(settings.embedding_model)
+        self.embedding_model = SentenceTransformer(settings.embedding_model, trust_remote_code=True)
         logger.info("Embedding model loaded successfully")
 
         # TODO: Initialize Couchbase client
@@ -52,8 +52,9 @@ class SearchTools:
         try:
             logger.info(f"Search request: query='{query}', repo={repo}, language={language}")
 
-            # Generate query embedding
-            query_embedding = self.embedding_model.encode(query, convert_to_tensor=False)
+            # Generate query embedding with task instruction prefix
+            query_with_prefix = f"search_query: {query}"
+            query_embedding = self.embedding_model.encode(query_with_prefix, convert_to_tensor=False)
             query_vector = query_embedding.tolist()
 
             # TODO: Perform vector search in Couchbase with filters
@@ -104,8 +105,9 @@ class SearchTools:
         try:
             logger.info(f"Finding similar code (language={language}, limit={limit})")
 
-            # Generate embedding for the code snippet
-            snippet_embedding = self.embedding_model.encode(code_snippet, convert_to_tensor=False)
+            # Generate embedding for the code snippet with task instruction prefix
+            snippet_with_prefix = f"search_query: {code_snippet}"
+            snippet_embedding = self.embedding_model.encode(snippet_with_prefix, convert_to_tensor=False)
             snippet_vector = snippet_embedding.tolist()
 
             # TODO: Vector search for similar code in Couchbase

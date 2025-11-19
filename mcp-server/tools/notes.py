@@ -21,7 +21,7 @@ class NotesTools:
     def __init__(self):
         """Initialize notes tools"""
         logger.info("Initializing notes tools")
-        self.embedding_model = SentenceTransformer(settings.embedding_model)
+        self.embedding_model = SentenceTransformer(settings.embedding_model, trust_remote_code=True)
         # TODO: Initialize Couchbase client
         # self.db = CouchbaseClient()
 
@@ -48,8 +48,9 @@ class NotesTools:
             # Generate unique ID
             note_id = str(uuid.uuid4())
 
-            # Generate embedding for the note content
-            note_embedding = self.embedding_model.encode(content, convert_to_tensor=False)
+            # Generate embedding for the note content with task instruction prefix
+            content_with_prefix = f"search_document: {content}"
+            note_embedding = self.embedding_model.encode(content_with_prefix, convert_to_tensor=False)
             embedding_vector = note_embedding.tolist()
 
             # Create note document

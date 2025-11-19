@@ -24,7 +24,7 @@ class EmbeddingGenerator:
         """Initialize the embedding model"""
         logger.info(f"Loading embedding model: {config.embedding_model}")
 
-        self.model = SentenceTransformer(config.embedding_model)
+        self.model = SentenceTransformer(config.embedding_model, trust_remote_code=True)
 
         logger.info(f"✓ Embedding model loaded (dims: {config.embedding_dimensions})")
 
@@ -39,7 +39,9 @@ class EmbeddingGenerator:
             List of floats representing the embedding vector
         """
         try:
-            embedding = self.model.encode(text, convert_to_tensor=False)
+            # Add task instruction prefix for document embedding
+            text_with_prefix = f"search_document: {text}"
+            embedding = self.model.encode(text_with_prefix, convert_to_tensor=False)
             return embedding.tolist()
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
@@ -108,9 +110,12 @@ class EmbeddingGenerator:
 
                 logger.debug(f"Processing batch {i // batch_size + 1}/{(len(texts) + batch_size - 1) // batch_size}")
 
+                # Add task instruction prefix for document embedding
+                prefixed_batch = [f"search_document: {text}" for text in batch_texts]
+
                 # Generate embeddings for the batch
                 batch_embeddings = self.model.encode(
-                    batch_texts,
+                    prefixed_batch,
                     convert_to_tensor=False,
                     show_progress_bar=False
                 )
