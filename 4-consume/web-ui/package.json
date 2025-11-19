@@ -15,9 +15,16 @@
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/kit": "^2.47.1",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@types/bcryptjs": "^2.4.6",
+		"@types/jsonwebtoken": "^9.0.10",
 		"svelte": "^5.41.0",
 		"svelte-check": "^4.3.3",
 		"typescript": "^5.9.3",
 		"vite": "^7.1.10"
+	},
+	"dependencies": {
+		"bcryptjs": "^3.0.3",
+		"couchbase": "^4.6.0",
+		"jsonwebtoken": "^9.0.2"
 	}
 }
