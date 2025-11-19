@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# Health Check - Verify system health
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "========================================"
+echo "CodeSmriti Health Check"
+echo "========================================"
+echo ""
+
+EXIT_CODE=0
+
+# Check Docker
+echo "1. Docker..."
+if docker ps > /dev/null 2>&1; then
+    echo "   ✓ Docker is running"
+else
+    echo "   ✗ Docker is not running"
+    EXIT_CODE=2
+fi
+
+# Check Couchbase
+echo ""
+echo "2. Couchbase..."
+if curl -s -u Administrator:password123 http://localhost:8091/pools/default > /dev/null 2>&1; then
+    echo "   ✓ Couchbase is accessible"
+else
+    echo "   ✗ Couchbase is not accessible"
+    EXIT_CODE=2
+fi
+
+# Check database
+echo ""
+echo "3. Database..."
+COUNT=$(curl -s -u Administrator:password123 http://localhost:8091/pools/default/buckets/code_kosha/stats | \
+    python3 -c "import sys, json; data=json.load(sys.stdin); print(int(data['op']['samples']['curr_items'][-1]))" 2>/dev/null || echo "0")
+
+if [ "$COUNT" -gt 0 ]; then
+    echo "   ✓ Database contains $COUNT chunks"
+else
+    echo "   ⚠ Database is empty"
+    EXIT_CODE=1
+fi
+
+# Check vector index
+echo ""
+echo "4. Vector Search Index..."
+if curl -s -u Administrator:password123 http://localhost:8094/api/index/code_vector_index > /dev/null 2>&1; then
+    echo "   ✓ Vector index exists"
+else
+    echo "   ⚠ Vector index not found"
+    EXIT_CODE=1
+fi
+
+# Check disk space
+echo ""
+echo "5. Disk Space..."
+AVAILABLE=$(df -h . | awk 'NR==2 {print $4}')
+echo "   Available: $AVAILABLE"
+
+echo ""
+echo "========================================"
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ All systems healthy"
+elif [ $EXIT_CODE -eq 1 ]; then
+    echo "⚠ System degraded (warnings)"
+else
+    echo "✗ System down (errors)"
+fi
+echo "========================================"
+
+exit $EXIT_CODE

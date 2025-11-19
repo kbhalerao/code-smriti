@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# Stats - Show knowledge base statistics
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Activate virtual environment
+if [ -f "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate"
+fi
+
+echo "========================================"
+echo "CodeSmriti Statistics"
+echo "========================================"
+echo ""
+
+# Query Couchbase for stats
+python3 << 'EOF'
+from couchbase.cluster import Cluster
+from couchbase.auth import PasswordAuthenticator
+from couchbase.options import ClusterOptions
+from datetime import timedelta
+
+auth = PasswordAuthenticator('Administrator', 'password123')
+cluster = Cluster('couchbase://localhost', ClusterOptions(auth))
+cluster.wait_until_ready(timedelta(seconds=5))
+
+# Total chunks by type
+query = """
+SELECT type, COUNT(*) as count
+FROM `code_kosha`
+GROUP BY type
+"""
+result = cluster.query(query)
+type_counts = {row['type']: row['count'] for row in result}
+
+# Total repositories
+query = """
+SELECT COUNT(DISTINCT repo_id) as repo_count
+FROM `code_kosha`
+WHERE type IN ['code_chunk', 'document']
+"""
+repo_result = list(cluster.query(query))
+repo_count = repo_result[0]['repo_count'] if repo_result else 0
+
+# Top repositories
+query = """
+SELECT repo_id, COUNT(*) as chunks
+FROM `code_kosha`
+WHERE type IN ['code_chunk', 'document']
+GROUP BY repo_id
+ORDER BY chunks DESC
+LIMIT 10
+"""
+top_repos = list(cluster.query(query))
+
+# Language distribution
+query = """
+SELECT language, COUNT(*) as count
+FROM `code_kosha`
+WHERE type = 'code_chunk' AND language IS NOT NULL
+GROUP BY language
+ORDER BY count DESC
+"""
+languages = list(cluster.query(query))
+
+# Print stats
+print("Overall Statistics:")
+print(f"  Total repositories: {repo_count}")
+print(f"  Total chunks: {sum(type_counts.values()):,}")
+print(f"  Code chunks: {type_counts.get('code_chunk', 0):,}")
+print(f"  Documents: {type_counts.get('document', 0):,}")
+print(f"  Commits: {type_counts.get('commit', 0):,}")
+print()
+
+print("Top 10 Repositories:")
+for repo in top_repos:
+    print(f"  {repo['repo_id']:40s} {repo['chunks']:>6,} chunks")
+print()
+
+print("Languages Indexed:")
+total_code = sum(lang['count'] for lang in languages)
+for lang in languages:
+    pct = (lang['count'] / total_code * 100) if total_code > 0 else 0
+    print(f"  {lang['language']:15s} {lang['count']:>6,} ({pct:>5.1f}%)")
+
+EOF

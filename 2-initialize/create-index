@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Create Vector Index - Build HNSW index for fast vector search
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Activate virtual environment
+if [ -f "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate"
+else
+    echo "Error: Virtual environment not found. Run 0-setup/install.sh first."
+    exit 1
+fi
+
+# Create index
+cd "$PROJECT_ROOT/2-initialize"
+python3 create_vector_index.py "$@"

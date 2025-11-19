@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# Run Pipeline - Initial Repository Ingestion
+# Processes all repositories from config/repos-to-ingest.txt
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Activate virtual environment
+if [ -f "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/lib/ingestion-worker/venv/bin/activate"
+else
+    echo "Error: Virtual environment not found. Run 0-setup/install.sh first."
+    exit 1
+fi
+
+# Run pipeline
+cd "$PROJECT_ROOT/2-initialize"
+python3 pipeline_ingestion.py "$@"

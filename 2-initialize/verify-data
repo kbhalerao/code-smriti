@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# Verify Data - Check that ingestion completed successfully
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "========================================"
+echo "Verifying CodeSmriti Data"
+echo "========================================"
+echo ""
+
+# Check Couchbase connection
+echo "1. Checking Couchbase connection..."
+if curl -s -u Administrator:password123 http://localhost:8091/pools/default > /dev/null 2>&1; then
+    echo "   ✓ Couchbase is running"
+else
+    echo "   ✗ Couchbase is not accessible"
+    exit 1
+fi
+
+# Check document count
+echo ""
+echo "2. Checking document count..."
+COUNT=$(curl -s -u Administrator:password123 http://localhost:8091/pools/default/buckets/code_kosha/stats | \
+    python3 -c "import sys, json; data=json.load(sys.stdin); print(int(data['op']['samples']['curr_items'][-1]))" 2>/dev/null || echo "0")
+
+echo "   Total chunks: $COUNT"
+
+if [ "$COUNT" -gt 0 ]; then
+    echo "   ✓ Database contains data"
+else
+    echo "   ✗ Database is empty"
+    exit 1
+fi
+
+# Check vector index
+echo ""
+echo "3. Checking vector search index..."
+INDEX_STATUS=$(curl -s -u Administrator:password123 http://localhost:8094/api/index/code_vector_index 2>/dev/null)
+
+if [ $? -eq 0 ]; then
+    echo "   ✓ Vector index exists"
+else
+    echo "   ⚠ Vector index not found. Run './create-index' to create it."
+fi
+
+echo ""
+echo "========================================"
+echo "✓ Verification complete!"
+echo "========================================"
+echo ""
+echo "Next step: 3-maintain/monitor to track updates"

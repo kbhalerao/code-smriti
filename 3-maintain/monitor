@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Pipeline Monitoring Helper
+# Quick commands to check pipeline progress
+#
+
+SESSION="pipeline-ingestion"
+
+echo "=========================================="
+echo "Pipeline Ingestion Monitor"
+echo "=========================================="
+echo ""
+
+# Check if session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "❌ Pipeline session not running"
+    echo ""
+    echo "To start it:"
+    echo "  ./run_pipeline.sh"
+    exit 1
+fi
+
+echo "✓ Pipeline session is running"
+echo ""
+
+# Get current output
+echo "Last 50 lines of output:"
+echo "------------------------------------------"
+tmux capture-pane -t "$SESSION" -p | tail -50
+
+echo ""
+echo "=========================================="
+echo "Monitoring Commands:"
+echo "=========================================="
+echo ""
+echo "Attach to live session:"
+echo "  tmux attach -t $SESSION"
+echo "  (Ctrl+b d to detach)"
+echo ""
+echo "Watch live (updates every 2s):"
+echo "  watch -n 2 'tmux capture-pane -t $SESSION -p | tail -50'"
+echo ""
+echo "Check log file:"
+echo "  tail -f /tmp/pipeline-ingestion-*.log"
+echo ""
+echo "Database stats:"
+echo "  curl -s -u Administrator:password123 http://localhost:8091/pools/default/buckets/code_kosha/stats | python3 -c 'import sys, json; data=json.load(sys.stdin); print(f\"Chunks: {int(data[\"op\"][\"samples\"][\"curr_items\"][-1])}\")"
+echo ""
+echo "Kill pipeline:"
+echo "  tmux kill-session -t $SESSION"
+echo ""

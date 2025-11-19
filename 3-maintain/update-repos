@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Pipeline Ingestion Runner - Run in tmux
+# This script runs the full pipeline ingestion in a tmux session
+#
+
+cd /Users/kaustubh/Documents/code/code-smriti
+
+# Activate virtual environment
+source ingestion-worker/venv/bin/activate
+
+# Set log file with timestamp
+LOGFILE="/tmp/pipeline-ingestion-$(date +%Y%m%d-%H%M%S).log"
+
+echo "======================================================================="
+echo "PIPELINE INGESTION - Full Repository Queue"
+echo "======================================================================="
+echo ""
+echo "Log file: $LOGFILE"
+echo "Working directory: $(pwd)"
+echo "Repos path: /Users/kaustubh/Documents/codesmriti-repos"
+echo ""
+echo "Starting pipeline ingestion..."
+echo ""
+
+# Run pipeline with full output logging
+python3 pipeline_ingestion.py 2>&1 | tee "$LOGFILE"
+
+# Show completion message
+echo ""
+echo "======================================================================="
+echo "Pipeline ingestion completed!"
+echo "Log file: $LOGFILE"
+echo "======================================================================="
