@@ -21,5 +21,5 @@ loguru==0.7.3
 # CORS
 python-dotenv==1.0.1
 
-# Future: PydanticAI integration
-# pydantic-ai==0.0.x (when ready)
+# PydanticAI for tool calling
+pydantic-ai==0.0.14

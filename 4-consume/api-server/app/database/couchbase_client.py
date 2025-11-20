@@ -89,3 +89,15 @@ async def close_cluster():
         logger.info("Closing Couchbase connection")
         _cluster.close()
         _cluster = None
+
+
+class CouchbaseClient:
+    """Convenience wrapper for Couchbase operations"""
+
+    def __init__(self):
+        self.cluster = get_cluster()
+
+    def get_tenant_collection(self, tenant_id: str):
+        """Get collection for a specific tenant bucket"""
+        bucket = self.cluster.bucket(tenant_id)
+        return bucket.default_collection()

@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# Incremental Update Runner
+# - Ingests new repos from repos_to_ingest.txt
+# - Updates existing repos with latest changes
+# - Can be run as a cron job
+#
+
+cd "$(dirname "$0")/.."
+
+# Activate virtual environment
+source lib/ingestion-worker/venv/bin/activate
+
+# Set log file with timestamp
+LOGFILE="/tmp/incremental-update-$(date +%Y%m%d-%H%M%S).log"
+
+echo "======================================================================="
+echo "INCREMENTAL UPDATE - New Repos + Updates"
+echo "======================================================================="
+echo ""
+echo "Log file: $LOGFILE"
+echo "Working directory: $(pwd)"
+echo "Repos path: /Users/kaustubh/Documents/codesmriti-repos"
+echo ""
+echo "Starting incremental update..."
+echo ""
+
+# Run incremental update with full output logging
+python3 3-maintain/incremental_update.py 2>&1 | tee "$LOGFILE"
+
+EXIT_CODE=${PIPESTATUS[0]}
+
+# Show completion message
+echo ""
+echo "======================================================================="
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✓ Incremental update completed successfully!"
+else
+    echo "✗ Incremental update completed with errors (exit code: $EXIT_CODE)"
+fi
+echo "Log file: $LOGFILE"
+echo "======================================================================="
+
+exit $EXIT_CODE

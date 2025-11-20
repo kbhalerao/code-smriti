@@ -1,0 +1,312 @@
+{
+  "metadata": {
+    "created": "2025-11-19",
+    "total_questions": 37,
+    "repos_sampled": 5,
+    "repos": [
+      "kbhalerao/labcore",
+      "JessiePBhalerao/firstseedtests",
+      "kbhalerao/ask-kev-2026",
+      "kbhalerao/smartbarn2025",
+      "kbhalerao/508hCoverCrop"
+    ]
+  },
+  "questions": [
+    {
+      "id": 1,
+      "query": "Django Channels background worker with job counter decorator",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py", "common/consumer_decorators.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 2,
+      "query": "requeue task decorator with retry logic for async functions",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["common/consumer_decorators.py"],
+      "category": "api_usage",
+      "difficulty": "hard"
+    },
+    {
+      "id": 3,
+      "query": "PDF generation with WeasyPrint in Django consumer",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 4,
+      "query": "Django model with GIS field and spatial queries",
+      "expected_repos": ["kbhalerao/labcore", "kbhalerao/508hCoverCrop"],
+      "expected_files": ["clients/models/gis.py", "app508h2023/models/__init__.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 5,
+      "query": "error handling in background task with traceback logging",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["common/consumer_decorators.py"],
+      "category": "architecture",
+      "difficulty": "medium"
+    },
+    {
+      "id": 6,
+      "query": "Django REST framework API views with pagination",
+      "expected_repos": ["kbhalerao/labcore", "JessiePBhalerao/firstseedtests"],
+      "expected_files": ["clients/apiviews/apiviews.py", "efg/core/views.py"],
+      "category": "framework_pattern",
+      "difficulty": "easy"
+    },
+    {
+      "id": 7,
+      "query": "Svelte 5 component with runes for state management",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/chat/ChatInput.svelte"],
+      "category": "ui_component",
+      "difficulty": "medium"
+    },
+    {
+      "id": 8,
+      "query": "Svelte form submission with derived state validation",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/chat/ChatInput.svelte"],
+      "category": "ui_component",
+      "difficulty": "medium"
+    },
+    {
+      "id": 9,
+      "query": "GRASS GIS initialization and environment setup in Python",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["topology/grass_handler.py"],
+      "category": "domain_logic",
+      "difficulty": "hard"
+    },
+    {
+      "id": 10,
+      "query": "Django management command for geospatial data processing",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["app508h2023/management/commands/"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 11,
+      "query": "seed variety trial data processing and report generation",
+      "expected_repos": ["JessiePBhalerao/firstseedtests"],
+      "expected_files": ["efg/misc/seed_reports.py"],
+      "category": "domain_logic",
+      "difficulty": "medium"
+    },
+    {
+      "id": 12,
+      "query": "Django model aggregation with Avg and StdDev annotations",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 13,
+      "query": "template rendering for PDF with Django template loader",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "framework_pattern",
+      "difficulty": "easy"
+    },
+    {
+      "id": 14,
+      "query": "Redis integration for background job tracking",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["common/consumer_decorators.py", "common/redis_lock.py"],
+      "category": "architecture",
+      "difficulty": "medium"
+    },
+    {
+      "id": 15,
+      "query": "Django Channels layer send message to background worker",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["common/consumer_decorators.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 16,
+      "query": "custom Django template tag for directory operations",
+      "expected_repos": ["JessiePBhalerao/firstseedtests"],
+      "expected_files": ["efg/misc/templatetags/directory_tags.py"],
+      "category": "framework_pattern",
+      "difficulty": "easy"
+    },
+    {
+      "id": 17,
+      "query": "EPSG coordinate system initialization for spatial database",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["topology/grass_handler.py"],
+      "category": "domain_logic",
+      "difficulty": "hard"
+    },
+    {
+      "id": 18,
+      "query": "Svelte reactive state with $state and $derived runes",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/chat/ChatInput.svelte"],
+      "category": "ui_component",
+      "difficulty": "medium"
+    },
+    {
+      "id": 19,
+      "query": "async/sync wrapper pattern for decorator",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["common/consumer_decorators.py"],
+      "category": "architecture",
+      "difficulty": "hard"
+    },
+    {
+      "id": 20,
+      "query": "Django field event journal entry creation",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "domain_logic",
+      "difficulty": "medium"
+    },
+    {
+      "id": 21,
+      "query": "soil laboratory measurement data aggregation statistics",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py", "samples/models.py"],
+      "category": "domain_logic",
+      "difficulty": "medium"
+    },
+    {
+      "id": 22,
+      "query": "Django model with custom fields and JSON data storage",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py", "orders/models.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 23,
+      "query": "pytest fixtures for Django Channels consumers",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["clients/tests/tests_consumers.py"],
+      "category": "testing",
+      "difficulty": "medium"
+    },
+    {
+      "id": 24,
+      "query": "Django model permissions testing",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["clients/tests/test_model_permissions.py"],
+      "category": "testing",
+      "difficulty": "easy"
+    },
+    {
+      "id": 25,
+      "query": "SVG export for geographic regions visualization",
+      "expected_repos": ["JessiePBhalerao/firstseedtests"],
+      "expected_files": ["efg/misc/export_region_svgs.py"],
+      "category": "data_processing",
+      "difficulty": "medium"
+    },
+    {
+      "id": 26,
+      "query": "bulk data loading script for Django models",
+      "expected_repos": ["JessiePBhalerao/firstseedtests"],
+      "expected_files": ["efg/misc/entries_load_script.py", "efg/misc/load_customers.py"],
+      "category": "data_processing",
+      "difficulty": "easy"
+    },
+    {
+      "id": 27,
+      "query": "raster data processing for agricultural fields",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["app508h2023/management/commands/populate_raster_numbers.py"],
+      "category": "domain_logic",
+      "difficulty": "hard"
+    },
+    {
+      "id": 28,
+      "query": "field boundary validation for GIS polygons",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["app508h2023/management/commands/validate_boundaries.py"],
+      "category": "domain_logic",
+      "difficulty": "medium"
+    },
+    {
+      "id": 29,
+      "query": "Svelte chat interface with suggestion buttons",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/chat/SuggestionButton.svelte"],
+      "category": "ui_component",
+      "difficulty": "easy"
+    },
+    {
+      "id": 30,
+      "query": "Google Sign In integration with Svelte component",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/landing/GoogleSignInButton.svelte"],
+      "category": "ui_component",
+      "difficulty": "medium"
+    },
+    {
+      "id": 31,
+      "query": "color scheme mapping for geospatial visualization",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["topology/color_schemes.py"],
+      "category": "domain_logic",
+      "difficulty": "easy"
+    },
+    {
+      "id": 32,
+      "query": "split billing custom field handling in order processing",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "domain_logic",
+      "difficulty": "hard"
+    },
+    {
+      "id": 33,
+      "query": "agricultural insurance data population script",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["app508h2023/management/commands/populate_adp_insurance.py"],
+      "category": "domain_logic",
+      "difficulty": "medium"
+    },
+    {
+      "id": 34,
+      "query": "Django Channels SyncConsumer for background processing",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "framework_pattern",
+      "difficulty": "medium"
+    },
+    {
+      "id": 35,
+      "query": "input validation and disabled state handling in forms",
+      "expected_repos": ["kbhalerao/ask-kev-2026"],
+      "expected_files": ["src/lib/components/chat/ChatInput.svelte"],
+      "category": "ui_component",
+      "difficulty": "easy"
+    },
+    {
+      "id": 36,
+      "query": "subprocess execution for GRASS GIS commands in Django",
+      "expected_repos": ["kbhalerao/508hCoverCrop"],
+      "expected_files": ["topology/grass_handler.py"],
+      "category": "architecture",
+      "difficulty": "hard"
+    },
+    {
+      "id": 37,
+      "query": "Django email notification after PDF report generation",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["orders/consumers.py"],
+      "category": "framework_pattern",
+      "difficulty": "easy"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from typing import Optional
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -88,7 +88,7 @@ def verify_token(token: str) -> Optional[dict]:
 
 def _derive_key(salt: bytes) -> bytes:
     """Derive an encryption key from the master key using PBKDF2."""
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=KEY_LENGTH,
         salt=salt,
