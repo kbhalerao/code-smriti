@@ -1,12 +1,13 @@
-"""FastAPI routes for LLM chat endpoint"""
+"""FastAPI routes for LLM chat endpoint with PydanticAI RAG"""
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from loguru import logger
 
 from app.dependencies import get_current_user
 from app.database.couchbase_client import CouchbaseClient
-from app.chat.simple_agent import SimpleRAGAgent, ChatResponse
+from app.chat.pydantic_rag_agent import CodeSmritiRAGAgent, ConversationMessage
 from app.config import settings
 
 
@@ -27,53 +28,78 @@ class ChatRequest(BaseModel):
         description="Tenant ID (defaults to user's tenant)"
     )
 
+    conversation_history: Optional[List[dict]] = Field(
+        default=None,
+        description="Previous conversation messages for context"
+    )
+
+    stream: bool = Field(
+        default=False,
+        description="Enable streaming response"
+    )
+
 
 class ChatResponseAPI(BaseModel):
     """API response model for chat endpoint"""
 
-    answer: str = Field(description="Generated answer")
-
-    intent: dict = Field(description="Intent classification details")
-
-    sources: List[dict] = Field(
-        default_factory=list,
-        description="Source code chunks used"
-    )
+    answer: str = Field(description="Generated answer in markdown format")
 
     metadata: dict = Field(
         default_factory=dict,
-        description="Additional metadata"
+        description="Additional metadata (tools used, timing, etc.)"
     )
 
 
-@router.post("/", response_model=ChatResponseAPI)
+@router.post("/")
 async def chat(
     request: ChatRequest,
     current_user: dict = Depends(get_current_user)
-) -> ChatResponseAPI:
+):
     """
-    Chat endpoint with RAG-enriched responses.
+    Chat endpoint with RAG-enriched responses using PydanticAI.
 
-    Two-phase architecture:
-    1. Intent Classification: Determines if query can be answered from code
-    2. RAG Research: Searches code and generates contextual answer
+    Features:
+    - Intent validation and scope checking
+    - Vector search with Couchbase FTS + kNN
+    - Tool-calling architecture for flexible search
+    - Conversation history support for context
+    - Streaming and non-streaming modes
+    - High-quality markdown narratives with code blocks
 
     Requires authentication via JWT token in Authorization header.
 
-    Example:
+    Example (non-streaming):
         ```bash
         curl -X POST http://localhost:8000/api/chat/ \\
           -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
           -H "Content-Type: application/json" \\
-          -d '{"query": "How does authentication work in the API?"}'
+          -d '{
+            "query": "How does authentication work in the API?",
+            "stream": false
+          }'
+        ```
+
+    Example (streaming):
+        ```bash
+        curl -X POST http://localhost:8000/api/chat/ \\
+          -H "Authorization: Bearer YOUR_JWT_TOKEN" \\
+          -H "Content-Type: application/json" \\
+          -d '{
+            "query": "Show me examples of vector search",
+            "stream": true,
+            "conversation_history": [
+              {"role": "user", "content": "What repos do we have?"},
+              {"role": "assistant", "content": "We have..."}
+            ]
+          }'
         ```
 
     Args:
-        request: Chat request with query
+        request: Chat request with query, optional history, stream flag
         current_user: Authenticated user (from JWT token)
 
     Returns:
-        ChatResponseAPI with answer, intent classification, and sources
+        StreamingResponse if stream=true, else ChatResponseAPI
 
     Raises:
         HTTPException: If query processing fails
@@ -84,30 +110,62 @@ async def chat(
 
         logger.info(
             f"Chat request from user={current_user.get('username')} "
-            f"tenant={tenant_id} query='{request.query}'"
+            f"tenant={tenant_id} stream={request.stream} query='{request.query[:100]}'"
         )
 
-        # Initialize database and agent
+        # Initialize database
         db = CouchbaseClient()
-        agent = SimpleRAGAgent(
+
+        # Parse conversation history
+        conversation_history = []
+        if request.conversation_history:
+            conversation_history = [
+                ConversationMessage(role=msg["role"], content=msg["content"])
+                for msg in request.conversation_history
+            ]
+
+        # Initialize agent
+        agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
-            ollama_host=settings.ollama_host
+            ollama_host=settings.ollama_host,
+            conversation_history=conversation_history
         )
 
         try:
-            # Process the query (two-phase: intent → RAG)
-            response = await agent.chat(query=request.query)
+            # Streaming response
+            if request.stream:
+                async def stream_generator():
+                    """Generator for streaming response."""
+                    try:
+                        async for chunk in agent.chat_stream(request.query):
+                            yield chunk
+                    except Exception as e:
+                        logger.error(f"Streaming error: {e}", exc_info=True)
+                        yield f"\n\n[Error: {str(e)}]"
+                    finally:
+                        await agent.close()
 
-            # Convert to API response format
-            return ChatResponseAPI(
-                answer=response.answer,
-                intent=response.metadata.get("intent", {}),
-                sources=response.sources,
-                metadata=response.metadata
-            )
+                return StreamingResponse(
+                    stream_generator(),
+                    media_type="text/plain"
+                )
+
+            # Non-streaming response
+            else:
+                answer = await agent.chat(request.query)
+
+                return ChatResponseAPI(
+                    answer=answer,
+                    metadata={
+                        "tenant_id": tenant_id,
+                        "conversation_length": len(agent.conversation_history)
+                    }
+                )
+
         finally:
-            await agent.close()
+            if not request.stream:
+                await agent.close()
 
     except Exception as e:
         logger.error(f"Chat request failed: {e}", exc_info=True)
@@ -127,40 +185,82 @@ async def chat_health():
     }
 
 
-@router.post("/test", response_model=ChatResponseAPI)
-async def chat_test(request: ChatRequest) -> ChatResponseAPI:
+@router.post("/test")
+async def chat_test(request: ChatRequest):
     """
-    Test chat endpoint WITHOUT authentication (for internal testing only)
+    Test chat endpoint WITHOUT authentication (for internal testing only).
 
-    Example:
+    Supports both streaming and non-streaming modes.
+
+    Example (non-streaming):
         ```bash
         curl -X POST http://localhost:8000/api/chat/test \\
           -H "Content-Type: application/json" \\
-          -d '{"query": "How does authentication work?"}'
+          -d '{"query": "How does authentication work?", "stream": false}'
+        ```
+
+    Example (streaming):
+        ```bash
+        curl -X POST http://localhost:8000/api/chat/test \\
+          -H "Content-Type: application/json" \\
+          -d '{"query": "Show me vector search examples", "stream": true}'
         ```
     """
     try:
         tenant_id = "code_kosha"
-        logger.info(f"Test chat request: query='{request.query}'")
+        logger.info(f"Test chat request: stream={request.stream} query='{request.query[:100]}'")
 
         db = CouchbaseClient()
-        agent = SimpleRAGAgent(
+
+        # Parse conversation history
+        conversation_history = []
+        if request.conversation_history:
+            conversation_history = [
+                ConversationMessage(role=msg["role"], content=msg["content"])
+                for msg in request.conversation_history
+            ]
+
+        agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
-            ollama_host=settings.ollama_host
+            ollama_host=settings.ollama_host,
+            conversation_history=conversation_history
         )
 
         try:
-            response = await agent.chat(query=request.query)
+            # Streaming response
+            if request.stream:
+                async def stream_generator():
+                    """Generator for streaming response."""
+                    try:
+                        async for chunk in agent.chat_stream(request.query):
+                            yield chunk
+                    except Exception as e:
+                        logger.error(f"Streaming error: {e}", exc_info=True)
+                        yield f"\n\n[Error: {str(e)}]"
+                    finally:
+                        await agent.close()
 
-            return ChatResponseAPI(
-                answer=response.answer,
-                intent=response.metadata.get("intent", {}),
-                sources=response.sources,
-                metadata=response.metadata
-            )
+                return StreamingResponse(
+                    stream_generator(),
+                    media_type="text/plain"
+                )
+
+            # Non-streaming response
+            else:
+                answer = await agent.chat(request.query)
+
+                return ChatResponseAPI(
+                    answer=answer,
+                    metadata={
+                        "tenant_id": tenant_id,
+                        "conversation_length": len(agent.conversation_history)
+                    }
+                )
+
         finally:
-            await agent.close()
+            if not request.stream:
+                await agent.close()
 
     except Exception as e:
         logger.error(f"Test chat failed: {e}", exc_info=True)

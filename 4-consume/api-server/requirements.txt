@@ -15,6 +15,9 @@ couchbase==4.3.3
 # HTTP client for Ollama
 httpx==0.28.1
 
+# Embeddings
+sentence-transformers==3.3.1
+
 # Logging
 loguru==0.7.3
 
