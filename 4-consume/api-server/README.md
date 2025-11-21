@@ -1,6 +1,6 @@
 # CodeSmriti API Server
 
-RAG-enriched LLM chat API with two-phase architecture for code search and assistance.
+RAG-enriched LLM chat API with PydanticAI tool-calling architecture for code search and assistance.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ TOKEN="<your-token-here>"
 curl -X POST http://localhost:8000/api/chat/ \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "How does authentication work in the API?"}'
+  -d '{"query": "How does authentication work in the API?", "stream": false}'
 ```
 
 ### 4. Chat without Auth (Testing Only)
@@ -48,33 +48,45 @@ curl -X POST http://localhost:8000/api/chat/ \
 ```bash
 curl -X POST http://localhost:8000/api/chat/test \
   -H "Content-Type: application/json" \
-  -d '{"query": "Show me examples of FastAPI routes"}'
+  -d '{"query": "Show me examples of FastAPI routes", "stream": false}'
 ```
 
 ## Architecture
 
-### Two-Phase RAG System
+### PydanticAI Tool-Calling RAG System
 
-**Phase 1: Intent Classification**
-- Uses Ollama (qwen2.5-coder:7b) to analyze if query can be answered from code
-- Returns structured decision with confidence score
-- Acts as guardrail to filter off-topic questions
+**Intent Validation (Heuristic)**
+- Lightweight keyword-based filtering to catch obvious off-topic queries
+- Fast pre-filter before expensive LLM operations
 
-**Phase 2: RAG Research**
-- Searches Couchbase for relevant code chunks
-- Generates contextual answer using Ollama with retrieved code
-- Returns answer with source attribution
+**PydanticAI Agent (deepseek-coder:6.7b)**
+- Tool-calling architecture for flexible code search
+- Agent decides when and how to search based on query context
+- Supports conversation history for follow-up questions
+- Available tools:
+  - `search_code()` - Vector search with Couchbase FTS + kNN
+  - `list_available_repos()` - Get list of indexed repositories
+
+**Vector Search**
+- Couchbase FTS with kNN similarity
+- sentence-transformers (nomic-ai/nomic-embed-text-v1.5, 768 dims)
+- Matches ingestion embedding model for compatibility
+
+**Response Generation**
+- Streaming and non-streaming modes
+- High-quality markdown narratives with code blocks
+- File references and citations
 
 ### Endpoints
 
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `GET /health` | No | Health check |
-| `POST /api/auth/login` | No | Get JWT token |
-| `POST /api/chat/` | Yes | RAG chat (authenticated) |
-| `POST /api/chat/test` | No | RAG chat (test only - no auth) |
-| `GET /api/chat/health` | No | Chat service health |
-| `GET /docs` | No | Interactive API docs |
+| Endpoint | Auth | Streaming | Description |
+|----------|------|-----------|-------------|
+| `GET /health` | No | - | Health check |
+| `POST /api/auth/login` | No | - | Get JWT token |
+| `POST /api/chat/` | Yes | Both | RAG chat (set `stream: true/false`) |
+| `POST /api/chat/test` | No | Both | RAG chat (test only - no auth) |
+| `GET /api/chat/health` | No | - | Chat service health |
+| `GET /docs` | No | - | Interactive API docs |
 
 ## Configuration
 
@@ -86,10 +98,15 @@ OLLAMA_HOST=http://localhost:11434
 
 # Couchbase
 COUCHBASE_HOST=localhost
+COUCHBASE_USERNAME=Administrator
 COUCHBASE_PASSWORD=password123
+COUCHBASE_BUCKET_CODE=code_kosha
 
 # JWT Secret (change in production!)
 JWT_SECRET=your-secret-key-here-change-in-production
+
+# AES encryption for GitHub PATs
+AES_ENCRYPTION_KEY=your-aes-encryption-key-here
 ```
 
 ## Access from LAN
@@ -138,37 +155,54 @@ http POST :8000/api/chat/test query="Show me FastAPI examples"
 
 ## Response Format
 
+**Non-streaming response:**
 ```json
 {
-  "answer": "Generated answer with code context...",
-  "intent": {
-    "can_answer": true,
-    "confidence": 0.95,
-    "reasoning": "Query is about code implementation",
-    "max_results": 5
-  },
-  "sources": [
-    {
-      "repo": "owner/repo",
-      "file": "path/to/file.py",
-      "language": "python",
-      "content": "code snippet..."
-    }
-  ],
+  "answer": "# Authentication in the API\n\nThe API uses JWT tokens...",
   "metadata": {
-    "num_sources": 3,
-    "tenant_id": "code_kosha"
+    "tenant_id": "code_kosha",
+    "conversation_length": 2
   }
 }
 ```
 
-## Next Steps
+**Streaming response:**
+```
+text/plain stream
+Chunks of markdown text as they're generated...
+```
 
-1. **Add proper authentication**: Currently accepts any username/password for testing
-2. **Upgrade to Python 3.10+**: Enable Pydantic AI for better tool calling rigor
-3. **Implement vector search**: Add semantic search using embeddings
-4. **Rate limiting**: Add rate limits for production use
-5. **Multi-tenancy**: Implement proper user buckets and permissions
+**Request with conversation history:**
+```bash
+curl -X POST http://localhost:8000/api/chat/test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Can you give me more details?",
+    "stream": false,
+    "conversation_history": [
+      {"role": "user", "content": "How does auth work?"},
+      {"role": "assistant", "content": "We use JWT tokens..."}
+    ]
+  }'
+```
+
+## Current Features
+
+- ✅ PydanticAI tool-calling RAG system
+- ✅ Vector search with Couchbase FTS + kNN
+- ✅ Conversation history support
+- ✅ Streaming and non-streaming responses
+- ✅ JWT authentication
+- ✅ Multi-tenant support (code_kosha bucket)
+
+## Potential Enhancements
+
+1. **User authentication**: Currently accepts any username/password for testing
+2. **Re-ranking**: Add re-ranking layer after vector search for better relevance
+3. **Hybrid search**: Combine vector search with keyword search
+4. **More tools**: Add tools for file-specific queries, language filters, etc.
+5. **Rate limiting**: Add rate limits for production use
+6. **Evaluation dashboard**: Visualize performance metrics from evals
 
 ## Troubleshooting
 
@@ -187,8 +221,41 @@ curl http://localhost:8091
 ollama list
 
 # Pull the model if missing
-ollama pull qwen2.5-coder:7b
+ollama pull deepseek-coder:6.7b
+
+# Alternative models that work:
+# ollama pull qwen2.5-coder:7b
+# ollama pull codellama:13b
 ```
 
 ### No code found in database
 This is expected if ingestion hasn't run yet. The system will still work but return "No relevant code found" messages.
+
+### ModuleNotFoundError: No module named '_griffe'
+
+**Problem**: Python 3.9 with pydantic-ai==0.0.14 fails with:
+```
+ModuleNotFoundError: No module named '_griffe'
+from _griffe.enumerations import DocstringSectionKind
+```
+
+**Root Cause**: pydantic-ai 0.0.14 tries to import from `_griffe` but griffe 1.14.0 moved these modules to `griffe._internal`.
+
+**Solution**: Patch the import in pydantic-ai's _griffe.py:
+```bash
+# Edit venv/lib/python3.9/site-packages/pydantic_ai/_griffe.py lines 7-8
+# Change:
+from _griffe.enumerations import DocstringSectionKind
+from _griffe.models import Docstring, Object as GriffeObject
+
+# To:
+from griffe._internal.enumerations import DocstringSectionKind
+from griffe._internal.models import Docstring, Object as GriffeObject
+```
+
+Or reinstall with uv for better compatibility:
+```bash
+/opt/homebrew/bin/uv pip uninstall --python venv/bin/python3 pydantic-ai pydantic-ai-slim griffe
+/opt/homebrew/bin/uv pip install --python venv/bin/python3 pydantic-ai==0.0.14
+# Then apply the patch above
+```

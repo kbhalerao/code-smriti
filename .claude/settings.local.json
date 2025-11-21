@@ -108,7 +108,12 @@
       "Bash(/opt/homebrew/bin/uv pip install:*)",
       "Bash(venv/bin/python3:*)",
       "Bash(sort:*)",
-      "Bash(/opt/homebrew/bin/uv run test_async_pipeline.py)"
+      "Bash(/opt/homebrew/bin/uv run test_async_pipeline.py)",
+      "Bash(git checkout:*)",
+      "Bash(git fetch:*)",
+      "Bash(venv/bin/pip show:*)",
+      "Bash(/opt/homebrew/bin/uv pip uninstall:*)",
+      "Bash(/tmp/openapi.json)"
     ],
     "deny": [],
     "ask": []

@@ -13,6 +13,7 @@ from loguru import logger
 
 from .config import settings
 from .database import close_cluster
+from .chat.pydantic_rag_agent import close_shared_resources
 
 # Import routers (will be created next)
 from .auth.routes import router as auth_router
@@ -35,7 +36,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down gracefully...")
-    await close_cluster()
+    await close_shared_resources()  # Close RAG agent shared resources
+    await close_cluster()  # Close Couchbase connection
     logger.info("Shutdown complete")
 
 

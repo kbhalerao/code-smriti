@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "nomic-embed-text"
 
+    # LLM and Embedding Models
+    # Note: LLM must support tool/function calling for RAG agent to work
+    llm_model_name: str = "llama3:latest"  # Changed from deepseek-coder (doesn't support tools)
+    embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
+
     # Application
     app_name: str = "CodeSmriti API"
     api_version: str = "v1"
