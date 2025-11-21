@@ -192,3 +192,32 @@ ollama pull qwen2.5-coder:7b
 
 ### No code found in database
 This is expected if ingestion hasn't run yet. The system will still work but return "No relevant code found" messages.
+
+### ModuleNotFoundError: No module named '_griffe'
+
+**Problem**: Python 3.9 with pydantic-ai==0.0.14 fails with:
+```
+ModuleNotFoundError: No module named '_griffe'
+from _griffe.enumerations import DocstringSectionKind
+```
+
+**Root Cause**: pydantic-ai 0.0.14 tries to import from `_griffe` but griffe 1.14.0 moved these modules to `griffe._internal`.
+
+**Solution**: Patch the import in pydantic-ai's _griffe.py:
+```bash
+# Edit venv/lib/python3.9/site-packages/pydantic_ai/_griffe.py lines 7-8
+# Change:
+from _griffe.enumerations import DocstringSectionKind
+from _griffe.models import Docstring, Object as GriffeObject
+
+# To:
+from griffe._internal.enumerations import DocstringSectionKind
+from griffe._internal.models import Docstring, Object as GriffeObject
+```
+
+Or reinstall with uv for better compatibility:
+```bash
+/opt/homebrew/bin/uv pip uninstall --python venv/bin/python3 pydantic-ai pydantic-ai-slim griffe
+/opt/homebrew/bin/uv pip install --python venv/bin/python3 pydantic-ai==0.0.14
+# Then apply the patch above
+```
