@@ -17,7 +17,8 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.ollama import OllamaModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.ollama import OllamaProvider
 from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
@@ -56,25 +57,65 @@ class RAGContext:
 
 
 # ============================================================================
-# Global Embedding Model (Singleton)
+# Global Singletons (Shared Resources)
 # ============================================================================
 
-_embedding_model = None
+_embedding_model: Optional[SentenceTransformer] = None
+_http_client: Optional[httpx.AsyncClient] = None
+_rag_agent: Optional[Agent] = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model(model_name: str = "nomic-ai/nomic-embed-text-v1.5") -> SentenceTransformer:
     """Get or create the embedding model (singleton)."""
     global _embedding_model
     if _embedding_model is None:
-        logger.info("Loading sentence-transformers embedding model...")
+        logger.info(f"Loading sentence-transformers embedding model: {model_name}")
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        # MUST match ingestion model: nomic-ai/nomic-embed-text-v1.5 (768 dims)
+        # MUST match ingestion model for vector search to work
         _embedding_model = SentenceTransformer(
-            'nomic-ai/nomic-embed-text-v1.5',
+            model_name,
             trust_remote_code=True
         )
-        logger.info("✓ Embedding model loaded: nomic-ai/nomic-embed-text-v1.5")
+        logger.info(f"✓ Embedding model loaded: {model_name}")
     return _embedding_model
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """Get or create the shared HTTP client (singleton)."""
+    global _http_client
+    if _http_client is None:
+        logger.info("Creating shared httpx AsyncClient with connection pooling")
+        _http_client = httpx.AsyncClient(
+            timeout=60.0,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        )
+        logger.info("✓ HTTP client created with max_connections=100")
+    return _http_client
+
+
+def get_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "deepseek-coder:6.7b") -> Agent[RAGContext, str]:
+    """Get or create the shared PydanticAI agent (singleton)."""
+    global _rag_agent
+    if _rag_agent is None:
+        logger.info(f"Creating shared PydanticAI agent with model: {llm_model}")
+        _rag_agent = create_rag_agent(ollama_host, llm_model)
+        logger.info("✓ PydanticAI agent created")
+    return _rag_agent
+
+
+async def close_shared_resources():
+    """Close all shared resources (for graceful shutdown)."""
+    global _http_client, _rag_agent, _embedding_model
+
+    if _http_client:
+        logger.info("Closing shared HTTP client")
+        await _http_client.aclose()
+        _http_client = None
+
+    # Note: Embedding model and agent don't need explicit cleanup
+    _rag_agent = None
+    _embedding_model = None
+    logger.info("✓ Shared resources closed")
 
 
 # ============================================================================
@@ -106,19 +147,21 @@ Output format:
 
 
 # Initialize the agent with Ollama model
-def create_rag_agent(ollama_host: str = "http://localhost:11434") -> Agent[RAGContext, str]:
-    """Create PydanticAI agent for RAG."""
+def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "llama3.1:latest") -> Agent[RAGContext, str]:
+    """Create PydanticAI agent for RAG (using v1.21.0 API)."""
 
-    # Use Ollama model - deepseek-coder is good for code understanding
-    model = OllamaModel(
-        model_name='deepseek-coder:6.7b',
-        base_url=ollama_host,
+    # Use OpenAIChatModel with OllamaProvider (v1.21.0 pattern)
+    # Base URL must include /v1 for OpenAI-compatible API
+    base_url = ollama_host if ollama_host.endswith("/v1") or ollama_host.endswith("/v1/") else f"{ollama_host}/v1"
+
+    model = OpenAIChatModel(
+        model_name=llm_model,
+        provider=OllamaProvider(base_url=base_url)
     )
 
     agent = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
-        result_type=str,
         retries=1,
     )
 
@@ -267,24 +310,32 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434") -> Agent[RAGCo
 # ============================================================================
 
 class CodeSmritiRAGAgent:
-    """High-level wrapper for code-smriti RAG agent."""
+    """
+    High-level wrapper for code-smriti RAG agent.
+
+    Note: This class uses shared singleton resources (agent, HTTP client, embedding model)
+    to avoid creating new connections and models per request. Only conversation state
+    is per-instance.
+    """
 
     def __init__(
         self,
         db: CouchbaseClient,
         tenant_id: str,
         ollama_host: str = "http://localhost:11434",
+        llm_model: str = "deepseek-coder:6.7b",
+        embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5",
         conversation_history: Optional[List[ConversationMessage]] = None
     ):
         self.db = db
         self.tenant_id = tenant_id
         self.ollama_host = ollama_host
-        self.http_client = httpx.AsyncClient(timeout=60.0)
-        self.embedding_model = get_embedding_model()
         self.conversation_history = conversation_history or []
 
-        # Create the agent
-        self.agent = create_rag_agent(ollama_host)
+        # Use shared singletons (created once per server process)
+        self.http_client = get_http_client()
+        self.embedding_model = get_embedding_model(embedding_model_name)
+        self.agent = get_rag_agent(ollama_host, llm_model)
 
 
     async def chat(self, query: str) -> str:
@@ -325,13 +376,13 @@ class CodeSmritiRAGAgent:
 
         # Add to conversation history
         self.conversation_history.append(ConversationMessage(role="user", content=query))
-        self.conversation_history.append(ConversationMessage(role="assistant", content=result.data))
+        self.conversation_history.append(ConversationMessage(role="assistant", content=result.output))
 
         # Keep only last 6 messages (3 exchanges)
         if len(self.conversation_history) > 6:
             self.conversation_history = self.conversation_history[-6:]
 
-        return result.data
+        return result.output
 
 
     async def chat_stream(self, query: str):
@@ -428,8 +479,3 @@ class CodeSmritiRAGAgent:
 Current question: {query}
 
 Please answer the current question, taking into account the conversation history for context."""
-
-
-    async def close(self):
-        """Close HTTP client."""
-        await self.http_client.aclose()

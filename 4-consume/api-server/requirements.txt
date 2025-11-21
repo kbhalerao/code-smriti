@@ -25,4 +25,10 @@ loguru==0.7.3
 python-dotenv==1.0.1
 
 # PydanticAI for tool calling
-pydantic-ai==0.0.14
+pydantic-ai==1.21.0
+
+# Additional dependencies for transformers
+einops==0.8.1
+
+# Note: Python 3.12+ required
+# huggingface-hub must be <1.0 for transformers compatibility

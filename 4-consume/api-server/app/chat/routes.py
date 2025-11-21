@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from loguru import logger
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_db, get_rag_agent_wrapper
 from app.database.couchbase_client import CouchbaseClient
 from app.chat.pydantic_rag_agent import CodeSmritiRAGAgent, ConversationMessage
 from app.config import settings
@@ -53,7 +53,8 @@ class ChatResponseAPI(BaseModel):
 @router.post("/")
 async def chat(
     request: ChatRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
 ):
     """
     Chat endpoint with RAG-enriched responses using PydanticAI.
@@ -97,6 +98,7 @@ async def chat(
     Args:
         request: Chat request with query, optional history, stream flag
         current_user: Authenticated user (from JWT token)
+        db: Shared database client (injected)
 
     Returns:
         StreamingResponse if stream=true, else ChatResponseAPI
@@ -113,9 +115,6 @@ async def chat(
             f"tenant={tenant_id} stream={request.stream} query='{request.query[:100]}'"
         )
 
-        # Initialize database
-        db = CouchbaseClient()
-
         # Parse conversation history
         conversation_history = []
         if request.conversation_history:
@@ -124,51 +123,46 @@ async def chat(
                 for msg in request.conversation_history
             ]
 
-        # Initialize agent
+        # Initialize agent (uses shared singletons for HTTP client, embedding model, PydanticAI agent)
         agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
             ollama_host=settings.ollama_host,
+            llm_model=settings.llm_model_name,
+            embedding_model_name=settings.embedding_model_name,
             conversation_history=conversation_history
         )
 
-        try:
-            # Streaming response
-            if request.stream:
-                async def stream_generator():
-                    """Generator for streaming response."""
-                    try:
-                        async for chunk in agent.chat_stream(request.query):
-                            yield chunk
-                    except Exception as e:
-                        logger.error(f"Streaming error: {e}", exc_info=True)
-                        yield f"\n\n[Error: {str(e)}]"
-                    finally:
-                        await agent.close()
+        # Streaming response
+        if request.stream:
+            async def stream_generator():
+                """Generator for streaming response."""
+                try:
+                    async for chunk in agent.chat_stream(request.query):
+                        yield chunk
+                except Exception as e:
+                    logger.error(f"Streaming error: {e}", exc_info=True)
+                    yield f"\n\n[Error: {str(e)}]"
 
-                return StreamingResponse(
-                    stream_generator(),
-                    media_type="text/plain"
-                )
+            return StreamingResponse(
+                stream_generator(),
+                media_type="text/plain"
+            )
 
-            # Non-streaming response
-            else:
-                answer = await agent.chat(request.query)
+        # Non-streaming response
+        else:
+            answer = await agent.chat(request.query)
 
-                return ChatResponseAPI(
-                    answer=answer,
-                    metadata={
-                        "tenant_id": tenant_id,
-                        "conversation_length": len(agent.conversation_history)
-                    }
-                )
-
-        finally:
-            if not request.stream:
-                await agent.close()
+            return ChatResponseAPI(
+                answer=answer,
+                metadata={
+                    "tenant_id": tenant_id,
+                    "conversation_length": len(agent.conversation_history)
+                }
+            )
 
     except Exception as e:
-        logger.error(f"Chat request failed: {e}", exc_info=True)
+        logger.error(f"Chat request failed: {str(e).replace('{', '{{').replace('}', '}}')}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process chat request: {str(e)}"
@@ -186,7 +180,7 @@ async def chat_health():
 
 
 @router.post("/test")
-async def chat_test(request: ChatRequest):
+async def chat_test(request: ChatRequest, db: CouchbaseClient = Depends(get_db)):
     """
     Test chat endpoint WITHOUT authentication (for internal testing only).
 
@@ -210,8 +204,6 @@ async def chat_test(request: ChatRequest):
         tenant_id = "code_kosha"
         logger.info(f"Test chat request: stream={request.stream} query='{request.query[:100]}'")
 
-        db = CouchbaseClient()
-
         # Parse conversation history
         conversation_history = []
         if request.conversation_history:
@@ -220,50 +212,46 @@ async def chat_test(request: ChatRequest):
                 for msg in request.conversation_history
             ]
 
+        # Initialize agent (uses shared singletons for HTTP client, embedding model, PydanticAI agent)
         agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
             ollama_host=settings.ollama_host,
+            llm_model=settings.llm_model_name,
+            embedding_model_name=settings.embedding_model_name,
             conversation_history=conversation_history
         )
 
-        try:
-            # Streaming response
-            if request.stream:
-                async def stream_generator():
-                    """Generator for streaming response."""
-                    try:
-                        async for chunk in agent.chat_stream(request.query):
-                            yield chunk
-                    except Exception as e:
-                        logger.error(f"Streaming error: {e}", exc_info=True)
-                        yield f"\n\n[Error: {str(e)}]"
-                    finally:
-                        await agent.close()
+        # Streaming response
+        if request.stream:
+            async def stream_generator():
+                """Generator for streaming response."""
+                try:
+                    async for chunk in agent.chat_stream(request.query):
+                        yield chunk
+                except Exception as e:
+                    logger.error(f"Streaming error: {e}", exc_info=True)
+                    yield f"\n\n[Error: {str(e)}]"
 
-                return StreamingResponse(
-                    stream_generator(),
-                    media_type="text/plain"
-                )
+            return StreamingResponse(
+                stream_generator(),
+                media_type="text/plain"
+            )
 
-            # Non-streaming response
-            else:
-                answer = await agent.chat(request.query)
+        # Non-streaming response
+        else:
+            answer = await agent.chat(request.query)
 
-                return ChatResponseAPI(
-                    answer=answer,
-                    metadata={
-                        "tenant_id": tenant_id,
-                        "conversation_length": len(agent.conversation_history)
-                    }
-                )
-
-        finally:
-            if not request.stream:
-                await agent.close()
+            return ChatResponseAPI(
+                answer=answer,
+                metadata={
+                    "tenant_id": tenant_id,
+                    "conversation_length": len(agent.conversation_history)
+                }
+            )
 
     except Exception as e:
-        logger.error(f"Test chat failed: {e}", exc_info=True)
+        logger.error(f"Test chat failed: {str(e).replace('{', '{{').replace('}', '}}')}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process chat request: {str(e)}"
