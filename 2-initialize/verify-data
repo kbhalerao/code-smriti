@@ -45,7 +45,7 @@ INDEX_STATUS=$(curl -s -u Administrator:password123 http://localhost:8094/api/in
 if [ $? -eq 0 ]; then
     echo "   ✓ Vector index exists"
 else
-    echo "   ⚠ Vector index not found. Run './create-index' to create it."
+    echo "   ⚠ Vector index not found. Run './create-vector-index' to create it."
 fi
 
 echo ""

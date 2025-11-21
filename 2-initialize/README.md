@@ -9,7 +9,7 @@ Run the initial ingestion to populate your knowledge base.
 ./run-pipeline
 
 # 2. Create vector search index
-./create-index
+./create-vector-index
 
 # 3. Verify data loaded correctly
 ./verify-data
@@ -40,7 +40,7 @@ cd ../3-maintain
 ./monitor
 ```
 
-### create-index
+### create-vector-index
 
 Creates the HNSW vector search index for fast similarity search.
 
