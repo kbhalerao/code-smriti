@@ -148,10 +148,10 @@ Output format:
 
 # Initialize the agent with Ollama model
 def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "llama3.1:latest") -> Agent[RAGContext, str]:
-    """Create PydanticAI agent for RAG (using v1.21.0 API)."""
+    """Create PydanticAI agent for RAG."""
 
-    # Use OpenAIChatModel with OllamaProvider (v1.21.0 pattern)
-    # Base URL must include /v1 for OpenAI-compatible API
+    # Use OpenAIChatModel with OllamaProvider
+    # Note: Tool calling with Ollama has known issues in pydantic-ai v1.21.0
     base_url = ollama_host if ollama_host.endswith("/v1") or ollama_host.endswith("/v1/") else f"{ollama_host}/v1"
 
     model = OpenAIChatModel(
@@ -162,6 +162,8 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
     agent = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT,
+        deps_type=RAGContext,
+        output_type=str,
         retries=1,
     )
 
@@ -185,6 +187,7 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
         Returns:
             List of relevant code chunks with metadata
         """
+        logger.warning(f"🔧 TOOL EXECUTED: search_code(query='{query}', limit={limit}, repo={repo_filter})")
         logger.info(f"Tool called: search_code(query='{query}', limit={limit}, repo={repo_filter})")
 
         try:
