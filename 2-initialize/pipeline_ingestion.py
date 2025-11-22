@@ -60,7 +60,7 @@ async def main():
     logger.info("="*70)
 
     # Load repository list
-    repos_file = Path(__file__).parent / "repos_to_ingest.txt"
+    repos_file = Path(__file__).parent.parent / "1-config" / "repos_to_ingest.txt"
     logger.info(f"\nLoading repository list from: {repos_file}")
 
     repos = load_repos_list(str(repos_file))
