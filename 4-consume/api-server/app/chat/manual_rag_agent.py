@@ -90,10 +90,12 @@ async def search_code_tool(
     logger.warning(f"🔧 TOOL EXECUTING: search_code(mode={search_mode}, limit={limit}, repo={repo_filter}, type={doc_type}, file={file_path_pattern})")
 
     try:
-        # Retrieve more chunks than needed for reranking
-        code_limit = min(limit * 4, 20)
+        # Retrieve significantly more chunks than needed for application-side filtering
+        # FTS kNN pre-filtering is broken, so we must oversample to ensure we get enough valid docs
+        oversample_factor = 10
+        code_limit = max(limit * oversample_factor, 50)
 
-        logger.info(f"Searching via FTS REST API ({search_mode} mode): {code_limit} chunks")
+        logger.info(f"Searching via FTS REST API ({search_mode} mode): {code_limit} chunks (oversampling for filtering)")
 
         # Build FTS request based on search mode
         fts_request = {
@@ -102,6 +104,7 @@ async def search_code_tool(
         }
 
         # Build filter conjuncts (required filters) - will go INSIDE knn for pre-filtering
+        # Even though pre-filtering is broken for 'type', we still include it in case it gets fixed later
         filter_conjuncts = []
 
         # ALWAYS filter by doc_type to avoid retrieving wrong document types
@@ -147,7 +150,9 @@ async def search_code_tool(
 
         # Call FTS REST API directly
         import httpx
-        fts_url = "http://localhost:8094/api/index/code_vector_index/query"
+        # Use hardcoded host/port for now as per environment
+        fts_host = os.getenv("COUCHBASE_HOST", "localhost")
+        fts_url = f"http://{fts_host}:8094/api/index/code_vector_index/query"
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -168,7 +173,7 @@ async def search_code_tool(
                 logger.info("No FTS results found")
                 return []
 
-            logger.info(f"FTS returned {len(hits)} hits")
+            logger.info(f"FTS returned {len(hits)} hits (before filtering)")
 
             # Extract document IDs and scores
             doc_ids = [hit['id'] for hit in hits]
@@ -178,28 +183,27 @@ async def search_code_tool(
             from couchbase.options import QueryOptions
 
             # Build N1QL WHERE clause
-            # IMPORTANT: FTS kNN pre-filtering is broken for type field, so we filter in N1QL too
+            # We fetch ALL docs returned by FTS, then filter in Python to preserve FTS ranking logic
             where_clauses = ["META().id IN $doc_ids"]
             query_params = {"doc_ids": doc_ids}
 
-            # Add type filter (defense against broken FTS pre-filtering)
+            # Note: We do NOT filter by type in N1QL here because we want to see what we got
+            # and filter in Python to log how many were rejected.
+            # However, for performance, we SHOULD filter in N1QL to avoid fetching useless docs.
+            # Let's filter in N1QL for efficiency, but we rely on the oversampling to ensure we have enough left.
+            
             where_clauses.append("type = $doc_type")
             query_params["doc_type"] = doc_type
 
-            # Add repo filter if specified
             if repo_filter:
                 where_clauses.append("repo_id = $repo_id")
                 query_params["repo_id"] = repo_filter
 
-            # Filter out very short content (e.g., empty __init__.py files)
-            # These files have high vector similarity but low information value
-            where_clauses.append("LENGTH(content) > 50")  # Minimum 50 characters
+            # Filter out very short content
+            where_clauses.append("LENGTH(content) > 50")
 
-            # File path filtering still needs to be done in N1QL (FTS doesn't support wildcards well)
             if file_path_pattern:
-                # Support wildcard patterns using LIKE
                 where_clauses.append("file_path LIKE $file_path_pattern")
-                # Convert glob-style wildcards to SQL LIKE patterns
                 sql_pattern = file_path_pattern.replace('*', '%').replace('?', '_')
                 query_params["file_path_pattern"] = sql_pattern
 
@@ -218,6 +222,10 @@ async def search_code_tool(
             code_chunks = []
             for row in result:
                 doc_id = row['id']
+                # Double check type just in case
+                if row.get('type') != doc_type:
+                    continue
+                    
                 code_chunks.append({
                     "content": row.get("content", row.get("code_text", "")),
                     "repo_id": row.get('repo_id', ''),
@@ -229,13 +237,13 @@ async def search_code_tool(
                     "type": row.get('type', doc_type)
                 })
 
-            # Sort by score descending (FTS order might not be preserved)
+            # Sort by score descending (FTS order might not be preserved by N1QL IN clause)
             code_chunks.sort(key=lambda x: x['score'], reverse=True)
 
             # Return top 'limit' results
             final_results = code_chunks[:limit]
 
-            logger.info(f"✓ Returning {len(final_results)} results with scores {[r['score'] for r in final_results[:3]]}")
+            logger.info(f"✓ Returning {len(final_results)} results after filtering (from {len(hits)} candidates)")
             return final_results
 
     except Exception as e:
