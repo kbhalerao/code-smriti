@@ -6,6 +6,7 @@ and vector search capabilities. Designed for PydanticAI integration.
 """
 
 from contextlib import asynccontextmanager
+import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,26 @@ from loguru import logger
 from .config import settings
 from .database import close_cluster
 from .chat.pydantic_rag_agent import close_shared_resources
+
+
+# Configure logging
+logger.remove()  # Remove default handler
+
+# Add file handler for all logs
+logger.add(
+    "logs/api-server.log",
+    rotation="100 MB",
+    retention="7 days",
+    level="DEBUG",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+)
+
+# Add console handler for warnings and errors only
+logger.add(
+    sys.stderr,
+    level="WARNING",
+    format="<level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
+)
 
 # Import routers (will be created next)
 from .auth.routes import router as auth_router

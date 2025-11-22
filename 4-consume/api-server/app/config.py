@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # LLM and Embedding Models
     # Note: LLM must support tool/function calling for RAG agent to work
-    llm_model_name: str = "llama3:latest"  # Changed from deepseek-coder (doesn't support tools)
+    llm_model_name: str = "llama3.1:latest"  # Better instruction following than llama3/codellama
     embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
 
     # Application

@@ -58,7 +58,7 @@ from .pydantic_rag_agent import get_embedding_model, get_http_client
 
 async def search_code_tool(
     ctx: RAGContext,
-    query: str,
+    query: Optional[str] = None,
     limit: int = 5,
     repo_filter: Optional[str] = None,
     doc_type: str = "code_chunk",
@@ -294,46 +294,79 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_code",
-            "description": "Search for code, documents, or commits using hybrid text+vector search. Supports vector-only (semantic), text-only (keyword/BM25), or hybrid (combined) search modes.",
+            "description": (
+                "Search for code, documentation, or commits using semantic and keyword search. "
+                "Returns diverse, deduplicated results ranked by relevance. "
+                "\n\n"
+                "SEARCH MODES:\n"
+                "- Vector-only (semantic): Use 'query' alone for conceptual searches\n"
+                "- Text-only (keyword): Use 'text_query' alone for exact terms/function names\n"
+                "- Hybrid: Use both for combined semantic + keyword matching\n"
+                "\n"
+                "FILTERING (all optional - use to narrow results):\n"
+                "- repo_filter: Restrict to specific repository when user mentions project name\n"
+                "- doc_type: Choose 'code_chunk' (default), 'document' (README/docs), or 'commit'\n"
+                "- file_path_pattern: Target specific files (*.py, test_*, src/, *views*)\n"
+                "\n"
+                "BEHAVIOR:\n"
+                "- Results are automatically deduplicated for diversity\n"
+                "- Combines multiple filters with AND logic (all must match)\n"
+                "- Leave filters unset for broad, exploratory searches\n"
+                "- Set filters when user specifies a particular project/file type/location"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Natural language query for semantic vector search. Optional if text_query provided."
+                        "description": (
+                            "Natural language description for semantic search. "
+                            "Examples: 'Django background task processing', 'JWT authentication', "
+                            "'file upload handling'. Use for conceptual queries."
+                        )
                     },
                     "text_query": {
                         "type": "string",
-                        "description": "Keywords for full-text/BM25 search on code content. Use for exact terms, function names, or specific code patterns. Combines with 'query' for hybrid search."
+                        "description": (
+                            "Exact keywords/terms for BM25 full-text search. "
+                            "Use for: function names ('get_queryset'), class names ('BackgroundConsumer'), "
+                            "specific code patterns ('async def'), or technical terms. "
+                            "Searches within code content only."
+                        )
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of results (default: 5, max: 10)",
+                        "description": "Number of results to return (default: 5, max: 10). Use higher limits for exploratory searches.",
                         "default": 5
                     },
                     "repo_filter": {
                         "type": "string",
-                        "description": "Filter by repository ID (e.g., 'kbhalerao/labcore')"
+                        "description": (
+                            "Filter to specific repository (e.g., 'kbhalerao/labcore', 'PeoplesCompany/farmworth_frontend'). "
+                            "Use when user mentions a specific project or repo name. Leave empty for cross-repo search."
+                        )
                     },
                     "file_path_pattern": {
                         "type": "string",
-                        "description": "Filter by file path pattern using wildcards. Examples: '*.py' (Python files), 'test_*' (test files), 'src/' (files in src), '*consumer*' (files containing 'consumer')"
+                        "description": (
+                            "Filter by file path using SQL LIKE wildcards. "
+                            "Examples: '*.py' (all Python files), 'test_*' (test files), "
+                            "'src/components/*' (files in src/components), '*views.py' (files ending in views.py). "
+                            "Use when user asks about specific file types or locations."
+                        )
                     },
                     "doc_type": {
                         "type": "string",
-                        "description": "Type of document: 'code_chunk' for code, 'document' for docs/README, 'commit' for git commits",
+                        "description": (
+                            "Type of content to search:\n"
+                            "- 'code_chunk': Source code (default, use for most queries)\n"
+                            "- 'document': Documentation, README files, markdown docs\n"
+                            "- 'commit': Git commit messages and metadata\n"
+                            "Choose 'document' when user asks about documentation or architecture. "
+                            "Choose 'commit' for git history or change information."
+                        ),
                         "enum": ["code_chunk", "document", "commit"],
                         "default": "code_chunk"
-                    },
-                    "min_file_length": {
-                        "type": "integer",
-                        "description": "Minimum file size in characters (default: 100). Filters out very small files like empty __init__.py or config stubs.",
-                        "default": 100
-                    },
-                    "max_file_length": {
-                        "type": "integer",
-                        "description": "Maximum file size in characters (default: 10000). Set lower to focus on smaller, focused code files. Set higher to include larger files.",
-                        "default": 10000
                     }
                 },
                 "required": []
@@ -359,9 +392,7 @@ TOOL_SCHEMAS = [
 # Manual RAG Agent
 # ============================================================================
 
-SYSTEM_PROMPT = """You are a helpful assistant with access to a code search tool.
-
-When the user asks about code, use the search_code tool to find relevant code snippets from indexed repositories. Then provide a clear answer with the code examples you found."""
+SYSTEM_PROMPT = """You are a helpful code search assistant. Use the search_code tool to find relevant code, then provide clear answers with citations in the format: [repo_id/file_path]"""
 
 
 class ManualRAGAgent:
@@ -463,14 +494,17 @@ class ManualRAGAgent:
                 "Your query seems to be off-topic. Please ask about code-related topics."
             )
 
-        # Build messages (skip system prompt - it seems to interfere with tool calling)
+        # Build messages (no system prompt to avoid breaking tool calling)
         messages = []
+
+        # Track sources from tool calls
+        sources_used = []
 
         # Add conversation history
         for msg in self.conversation_history[-4:]:  # Last 2 exchanges
             messages.append({"role": msg.role, "content": msg.content})
 
-        # Add current query
+        # Add current query (citation instructions are in system prompt)
         messages.append({"role": "user", "content": query})
 
         # Tool calling loop
@@ -498,6 +532,14 @@ class ManualRAGAgent:
                 for tool_call in tool_calls:
                     tool_result = await self._execute_tool(tool_call)
 
+                    # Track sources from search_code tool
+                    if tool_call["function"]["name"] == "search_code" and isinstance(tool_result, list):
+                        for result in tool_result:
+                            if isinstance(result, dict) and "repo_id" in result and "file_path" in result:
+                                source = f"{result['repo_id']}/{result['file_path']}"
+                                if source not in sources_used:
+                                    sources_used.append(source)
+
                     # Add tool result to messages
                     messages.append({
                         "role": "tool",
@@ -512,6 +554,12 @@ class ManualRAGAgent:
                 # Got final text response
                 final_answer = response.get("content", "")
 
+                # Append sources to answer if any were found
+                if sources_used:
+                    final_answer += "\n\n**Sources:**\n"
+                    for source in sources_used:
+                        final_answer += f"- [{source}]\n"
+
                 # Update conversation history
                 self.conversation_history.append(ConversationMessage(role="user", content=query))
                 self.conversation_history.append(ConversationMessage(role="assistant", content=final_answer))
@@ -520,7 +568,7 @@ class ManualRAGAgent:
                 if len(self.conversation_history) > 6:
                     self.conversation_history = self.conversation_history[-6:]
 
-                logger.info(f"✓ Got final response ({len(final_answer)} chars)")
+                logger.info(f"✓ Got final response ({len(final_answer)} chars, {len(sources_used)} sources)")
                 return final_answer
 
         # Max iterations reached
@@ -569,6 +617,16 @@ class ManualRAGAgent:
         if not tool_fn:
             logger.error(f"Unknown tool: {function_name}")
             return {"error": f"Unknown tool: {function_name}"}
+
+        # Fix common LLM mistakes with parameter names
+        if function_name == "search_code":
+            # Map 'type' -> 'doc_type' (LLMs often use 'type' instead)
+            if "type" in arguments and "doc_type" not in arguments:
+                arguments["doc_type"] = arguments.pop("type")
+                logger.warning("Mapped 'type' parameter to 'doc_type'")
+
+            # Remove None values and empty strings for optional params
+            arguments = {k: v for k, v in arguments.items() if v not in (None, "", "None", "null")}
 
         # Execute tool
         try:
