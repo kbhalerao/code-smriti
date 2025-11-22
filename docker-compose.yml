@@ -114,6 +114,8 @@ services:
         condition: service_healthy
     networks:
       - codesmriti_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Access host's Ollama
     healthcheck:
       test: ["CMD-SHELL", "pgrep nginx"]
       interval: 30s
