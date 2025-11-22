@@ -101,7 +101,36 @@ async def search_code_tool(
             "fields": ["*"]  # Request all stored fields
         }
 
-        # Add vector search (kNN) if query provided
+        # Build filter conjuncts (required filters) - will go INSIDE knn for pre-filtering
+        filter_conjuncts = []
+
+        # ALWAYS filter by doc_type to avoid retrieving wrong document types
+        filter_conjuncts.append({
+            "term": doc_type,
+            "field": "type"
+        })
+
+        # Add text search if text_query provided
+        if text_query:
+            filter_conjuncts.append({
+                "match": text_query,
+                "field": "content"
+            })
+
+        # Add repo filter if provided
+        if repo_filter:
+            filter_conjuncts.append({
+                "term": repo_filter,
+                "field": "repo_id"
+            })
+
+        # Build the filter object
+        if len(filter_conjuncts) == 1:
+            knn_filter = filter_conjuncts[0]
+        else:
+            knn_filter = {"conjuncts": filter_conjuncts}
+
+        # Add vector search (kNN) with pre-filtering
         if query:
             query_with_prefix = f"search_document: {query}"
             query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
@@ -109,17 +138,12 @@ async def search_code_tool(
             fts_request["knn"] = [{
                 "field": "embedding",
                 "vector": query_embedding,
-                "k": code_limit
+                "k": code_limit,
+                "filter": knn_filter  # Pre-filter INSIDE kNN!
             }]
-
-        # Add text search if text_query provided
-        if text_query:
-            fts_request["query"] = {
-                "match": text_query,
-                "field": "content"
-            }
-
-        # FTS will automatically fuse scores when both knn and query are present
+        else:
+            # Text-only search: use filter as top-level query
+            fts_request["query"] = knn_filter
 
         # Call FTS REST API directly
         import httpx
@@ -153,14 +177,25 @@ async def search_code_tool(
             # Fetch full documents via N1QL using IDs with filtering
             from couchbase.options import QueryOptions
 
-            # Build N1QL WHERE clause with filters (since FTS kNN filters don't work)
-            where_clauses = ["META().id IN $doc_ids", "type = $doc_type"]
-            query_params = {"doc_ids": doc_ids, "doc_type": doc_type}
+            # Build N1QL WHERE clause
+            # IMPORTANT: FTS kNN pre-filtering is broken for type field, so we filter in N1QL too
+            where_clauses = ["META().id IN $doc_ids"]
+            query_params = {"doc_ids": doc_ids}
 
+            # Add type filter (defense against broken FTS pre-filtering)
+            where_clauses.append("type = $doc_type")
+            query_params["doc_type"] = doc_type
+
+            # Add repo filter if specified
             if repo_filter:
-                where_clauses.append("repo_id = $repo_filter")
-                query_params["repo_filter"] = repo_filter
+                where_clauses.append("repo_id = $repo_id")
+                query_params["repo_id"] = repo_filter
 
+            # Filter out very short content (e.g., empty __init__.py files)
+            # These files have high vector similarity but low information value
+            where_clauses.append("LENGTH(content) > 50")  # Minimum 50 characters
+
+            # File path filtering still needs to be done in N1QL (FTS doesn't support wildcards well)
             if file_path_pattern:
                 # Support wildcard patterns using LIKE
                 where_clauses.append("file_path LIKE $file_path_pattern")

@@ -15,19 +15,22 @@ import httpx
 import json
 from datetime import datetime
 
-# Test queries
+# Test queries from eval suite
 TEST_QUERIES = [
     {
-        "query": "How does background consumer processing work?",
-        "description": "Testing retrieval of consumer-related code"
+        "query": "Django Channels background worker with job counter decorator",
+        "description": "Framework pattern - medium difficulty",
+        "expected_files": ["orders/consumers.py", "common/consumer_decorators.py"]
     },
     {
-        "query": "What authentication mechanisms are implemented?",
-        "description": "Testing retrieval of auth/security code"
+        "query": "Svelte 5 component with runes for state management",
+        "description": "UI component - medium difficulty",
+        "expected_files": ["src/lib/components/chat/ChatInput.svelte"]
     },
     {
-        "query": "How are database connections managed?",
-        "description": "Testing retrieval of database/connection code"
+        "query": "Redis integration for background job tracking",
+        "description": "Architecture - medium difficulty",
+        "expected_files": ["common/consumer_decorators.py", "common/redis_lock.py"]
     }
 ]
 
@@ -78,11 +81,13 @@ async def main():
     for i, test_case in enumerate(TEST_QUERIES, 1):
         query = test_case["query"]
         description = test_case["description"]
+        expected_files = test_case.get("expected_files", [])
 
         print(f"\n{'#' * 80}")
         print(f"QUERY {i}/{len(TEST_QUERIES)}: {description}")
         print(f"{'#' * 80}")
         print(f"Question: {query}")
+        print(f"Expected files: {', '.join(expected_files)}")
         print()
 
         # Test 1: Raw Search
@@ -100,11 +105,24 @@ async def main():
             print()
 
             # Show top 3 documents
+            retrieved_files = []
             for j, doc in enumerate(search_result.get('results', [])[:3], 1):
-                print(f"{j}. {doc.get('repo_id', 'unknown')}/{doc.get('file_path', 'unknown')}")
+                file_path = doc.get('file_path', 'unknown')
+                retrieved_files.append(file_path)
+
+                # Check if this file is in expected files
+                is_expected = any(exp in file_path for exp in expected_files)
+                marker = "✓" if is_expected else " "
+
+                print(f"{marker} {j}. {doc.get('repo_id', 'unknown')}/{file_path}")
                 print(f"   Score: {doc.get('score', 0):.2f}")
                 print(f"   Preview: {doc.get('content', '')[:100]}...")
                 print()
+
+            # Show match summary
+            matches = [f for f in retrieved_files if any(exp in f for exp in expected_files)]
+            print(f"Match rate: {len(matches)}/3 expected files found in top results")
+            print()
 
         # Test 2: RAG with LLM
         print("-" * 80)
