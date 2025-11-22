@@ -906,6 +906,12 @@ class CodeParser:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
+            # Skip empty or very small files (< 100 chars)
+            # These are typically empty __init__.py, license headers, or boilerplate
+            if len(content.strip()) < 100:
+                logger.debug(f"Skipping empty/small file: {file_path} ({len(content)} chars)")
+                return []
+
             # Get relative path
             relative_path = str(file_path.relative_to(repo_path))
 

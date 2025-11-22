@@ -63,9 +63,7 @@ async def search_code_tool(
     repo_filter: Optional[str] = None,
     doc_type: str = "code_chunk",
     text_query: Optional[str] = None,
-    file_path_pattern: Optional[str] = None,
-    min_file_length: int = 100,
-    max_file_length: int = 10000
+    file_path_pattern: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Search for code/documents/commits using hybrid text+vector search.
@@ -85,10 +83,10 @@ async def search_code_tool(
         doc_type: Document type filter (code_chunk, document, commit)
         text_query: Optional text query for keyword/BM25 search on content field
         file_path_pattern: Optional file path pattern (e.g., "*.py", "src/", "test_")
-        min_file_length: Minimum file size in characters (default: 100)
-        max_file_length: Maximum file size in characters (default: 10000)
 
     Returns list of dicts (for JSON serialization to LLM).
+
+    Note: File size filtering removed - ingestion now handles minimum file size (>100 chars).
     """
     search_mode = "hybrid" if (query and text_query) else ("text" if text_query else "vector")
     logger.warning(f"🔧 TOOL EXECUTING: search_code(mode={search_mode}, limit={limit}, repo={repo_filter}, type={doc_type}, file={file_path_pattern})")
@@ -206,11 +204,8 @@ async def search_code_tool(
                 where_clauses.append("repo_id = $repo_id")
                 query_params["repo_id"] = repo_filter
 
-            # Filter by file size range (using metadata.file_size)
-            where_clauses.append("metadata.file_size >= $min_file_length")
-            where_clauses.append("metadata.file_size <= $max_file_length")
-            query_params["min_file_length"] = min_file_length
-            query_params["max_file_length"] = max_file_length
+            # File size filtering removed - ingestion now handles minimum file size (>100 chars)
+            # The metadata.file_size field is not present in all documents, causing false negatives
 
             if file_path_pattern:
                 where_clauses.append("file_path LIKE $file_path_pattern")

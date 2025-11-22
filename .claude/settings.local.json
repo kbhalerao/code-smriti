@@ -30,7 +30,10 @@
       "Bash(for i in {1..6})",
       "Bash(do echo \"Check $i:\")",
       "WebFetch(domain:www.couchbase.com)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git push:*)",
+      "Bash(source:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []
