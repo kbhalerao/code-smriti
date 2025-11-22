@@ -13,6 +13,9 @@ from datetime import datetime
 # Set REPOS_PATH for native execution (outside project to prevent recursion)
 os.environ["REPOS_PATH"] = "/Users/kaustubh/Documents/codesmriti-repos"
 
+# Disable incremental mode for full pipeline runs - use chunk-count deduplication instead
+os.environ["ENABLE_INCREMENTAL_UPDATES"] = "false"
+
 # Add ingestion-worker to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "lib" / "ingestion-worker"))
 

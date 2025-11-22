@@ -177,6 +177,32 @@ class CouchbaseClient:
             logger.error(f"Error retrieving chunks for {repo_id}/{file_path}: {e}")
             return []
 
+    def count_file_chunks(self, repo_id: str, file_path: str) -> int:
+        """
+        Count chunks for a specific file in the database
+        Used for chunk-count-based deduplication
+
+        Args:
+            repo_id: Repository identifier
+            file_path: File path within repository
+
+        Returns:
+            Number of chunks in database for this file
+        """
+        try:
+            count_query = f"""
+                SELECT COUNT(*) as count
+                FROM `{config.couchbase_bucket}`
+                WHERE repo_id = $repo_id AND file_path = $file_path
+                AND type IN ["code_chunk", "document"]
+            """
+            count_result = self.cluster.query(count_query, repo_id=repo_id, file_path=file_path)
+            count_rows = list(count_result)
+            return count_rows[0]['count'] if count_rows else 0
+        except CouchbaseException as e:
+            logger.error(f"Error counting chunks for {repo_id}/{file_path}: {e}")
+            return 0
+
     def delete_file_chunks(self, repo_id: str, file_path: str) -> int:
         """
         Delete all chunks for a specific file
@@ -191,14 +217,7 @@ class CouchbaseClient:
         """
         try:
             # First count
-            count_query = f"""
-                SELECT COUNT(*) as count
-                FROM `{config.couchbase_bucket}`
-                WHERE repo_id = $repo_id AND file_path = $file_path
-            """
-            count_result = self.cluster.query(count_query, repo_id=repo_id, file_path=file_path)
-            count_rows = list(count_result)
-            deleted_count = count_rows[0]['count'] if count_rows else 0
+            deleted_count = self.count_file_chunks(repo_id, file_path)
 
             if deleted_count == 0:
                 return 0

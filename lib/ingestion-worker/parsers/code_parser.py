@@ -33,8 +33,12 @@ def should_skip_file(file_path: Path) -> bool:
     path_str = str(file_path)
     file_name = file_path.name
 
-    # Skip minified files
+    # Skip minified files by extension
     if file_name.endswith('.min.js') or file_name.endswith('.min.css'):
+        return True
+
+    # Skip bundle files (often minified even without .min. extension)
+    if any(keyword in file_name.lower() for keyword in ['bundle', 'vendor', 'chunk', 'runtime']):
         return True
 
     # Skip source maps
@@ -61,12 +65,25 @@ def should_skip_file(file_path: Path) -> bool:
     if file_name.endswith('.pb.go') or file_name.endswith('.g.dart'):
         return True
 
-    # Skip very large files (>1MB)
+    # Skip very large files (>500KB - likely minified/bundled)
     try:
-        if file_path.stat().st_size > 1_000_000:
-            logger.debug(f"Skipping large file: {file_name} ({file_path.stat().st_size} bytes)")
+        file_size = file_path.stat().st_size
+        if file_size > 500_000:
+            logger.debug(f"Skipping large file: {file_name} ({file_size} bytes)")
             return True
-    except:
+
+        # For JS/CSS files, detect minified content by checking line length
+        if file_name.endswith(('.js', '.css')) and file_size > 50_000:
+            # Read first 10KB to check if minified
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                sample = f.read(10_000)
+                lines = sample.split('\n')[:10]  # Check first 10 lines
+                # If any line is super long (>500 chars), likely minified
+                if any(len(line) > 500 for line in lines):
+                    logger.debug(f"Skipping minified file (long lines): {file_name}")
+                    return True
+    except Exception as e:
+        logger.debug(f"Error checking file size/content for {file_name}: {e}")
         pass
 
     return False
@@ -158,7 +175,22 @@ class CodeParser:
                 "python": get_parser("python"),
                 "javascript": get_parser("javascript"),
                 "typescript": get_parser("typescript"),
+                "html": get_parser("html"),
+                "css": get_parser("css"),
             }
+
+            # Try to add Svelte parser from tree-sitter-svelte
+            try:
+                import tree_sitter_svelte
+                from tree_sitter import Parser
+                svelte_parser = Parser()
+                svelte_parser.set_language(tree_sitter_svelte.language())
+                self.parsers["svelte"] = svelte_parser
+            except ImportError:
+                logger.debug("tree-sitter-svelte not available, will use regex-based Svelte parser")
+            except Exception as e:
+                logger.debug(f"Could not load Svelte parser: {e}")
+
             logger.info(f"✓ Tree-sitter parsers loaded: {list(self.parsers.keys())}")
         except ImportError:
             logger.warning("tree-sitter-languages not available, will use regex fallback")
@@ -256,6 +288,12 @@ class CodeParser:
             ".jsx": "javascript",
             ".ts": "typescript",
             ".tsx": "typescript",
+            ".svelte": "svelte",
+            ".vue": "vue",
+            ".html": "html",
+            ".css": "css",
+            ".scss": "css",
+            ".sass": "css",
         }
 
         return extension_map.get(file_path.suffix)
@@ -747,6 +785,100 @@ class CodeParser:
 
         return chunks
 
+    async def parse_svelte_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict
+    ) -> List[CodeChunk]:
+        """
+        Parse Svelte file by extracting script, template, and style sections
+
+        Args:
+            file_path: Path to the file
+            content: File content
+            repo_id: Repository identifier
+            relative_path: Relative path within repo
+            git_metadata: Git commit metadata
+
+        Returns:
+            List of CodeChunk objects
+        """
+        import re
+        chunks = []
+
+        # Extract <script> section (can be TS or JS)
+        script_match = re.search(r'<script(?:\s+lang=["\']ts["\'])?(?:\s+context=["\']module["\'])?\s*>(.*?)</script>', content, re.DOTALL)
+        if script_match:
+            script_content = script_match.group(1).strip()
+            is_typescript = 'lang="ts"' in script_match.group(0) or "lang='ts'" in script_match.group(0)
+
+            if script_content:
+                # Parse script section as JS/TS
+                try:
+                    script_chunks = await self.parse_javascript_file(
+                        file_path, script_content, repo_id, relative_path + " <script>",
+                        git_metadata, is_typescript=is_typescript
+                    )
+                    chunks.extend(script_chunks)
+                except Exception as e:
+                    logger.debug(f"Could not parse Svelte script section: {e}")
+                    # Fallback: create single chunk for script
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="svelte_script",
+                        code_text=self.truncate_chunk_text(script_content, f"in {relative_path} <script>"),
+                        language="svelte",
+                        metadata={
+                            "language": "svelte",
+                            "section": "script",
+                            **git_metadata
+                        }
+                    ))
+
+        # Extract <style> section
+        style_match = re.search(r'<style(?:\s+lang=["\'](?:scss|sass)["\'])?\s*>(.*?)</style>', content, re.DOTALL)
+        if style_match:
+            style_content = style_match.group(1).strip()
+            if style_content:
+                chunks.append(CodeChunk(
+                    repo_id=repo_id,
+                    file_path=relative_path,
+                    chunk_type="svelte_style",
+                    code_text=self.truncate_chunk_text(style_content, f"in {relative_path} <style>"),
+                    language="svelte",
+                    metadata={
+                        "language": "svelte",
+                        "section": "style",
+                        **git_metadata
+                    }
+                ))
+
+        # Extract template (everything outside script/style)
+        template = content
+        template = re.sub(r'<script(?:\s+[^>]*)?>.*?</script>', '', template, flags=re.DOTALL)
+        template = re.sub(r'<style(?:\s+[^>]*)?>.*?</style>', '', template, flags=re.DOTALL)
+        template = template.strip()
+
+        if template:
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="svelte_template",
+                code_text=self.truncate_chunk_text(template, f"in {relative_path} <template>"),
+                language="svelte",
+                metadata={
+                    "language": "svelte",
+                    "section": "template",
+                    **git_metadata
+                }
+            ))
+
+        return chunks
+
     async def parse_file(
         self,
         file_path: Path,
@@ -810,6 +942,15 @@ class CodeParser:
             elif language == "typescript":
                 chunks.extend(await self.parse_javascript_file(
                     file_path, content, repo_id, relative_path, git_metadata, is_typescript=True
+                ))
+            elif language == "svelte" or language == "vue":
+                chunks.extend(await self.parse_svelte_file(
+                    file_path, content, repo_id, relative_path, git_metadata
+                ))
+            elif language == "html" or language == "css":
+                # For HTML/CSS, create single file chunk
+                chunks.append(self.create_metadata_chunk(
+                    relative_path, content, language, git_metadata, repo_id
                 ))
             
             return chunks

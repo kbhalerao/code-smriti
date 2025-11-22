@@ -229,13 +229,14 @@ class IngestionWorker:
     ) -> Optional[List]:
         """
         Process a single file atomically: parse → check → embed → upsert
+        Uses chunk-count-based deduplication to save on embedding costs
 
         Args:
             file_path: Path to the file
             repo_path: Path to the repository root
             repo_id: Repository identifier
             file_type: "code" or "doc"
-            stored_file_commits: Dictionary of file_path → commit_hash from DB
+            stored_file_commits: Dictionary of file_path → commit_hash from DB (unused now)
 
         Returns:
             List of chunks (for commit extraction) or None if skipped
@@ -253,8 +254,9 @@ class IngestionWorker:
                 if not chunks:
                     return None
 
-                # Step 2: Check if file needs processing (incremental update check)
+                # Step 2: Deduplication check (git-commit for incremental, chunk-count for full runs)
                 if config.enable_incremental_updates and stored_file_commits:
+                    # INCREMENTAL MODE: Use git-commit-based change detection
                     # Get current commit for this file
                     if file_type == "code":
                         git_metadata = self.code_parser.get_git_metadata(repo_path, relative_path)
@@ -264,13 +266,26 @@ class IngestionWorker:
                     current_commit = git_metadata.get("commit_hash", "")
                     cached_commit = stored_file_commits.get(relative_path, "")
 
-                    if current_commit == cached_commit:
-                        # File unchanged - skip
-                        logger.debug(f"Skipping unchanged file: {relative_path}")
+                    if current_commit and current_commit == cached_commit:
+                        # File unchanged by git - skip
+                        logger.debug(f"✓ {relative_path}: Unchanged (git commit match), skipping")
+                        return None
+                else:
+                    # FULL RUN MODE: Use chunk-count-based deduplication for crash recovery
+                    expected_count = len(chunks)
+                    existing_count = self.db.count_file_chunks(repo_id, relative_path)
+
+                    if existing_count == expected_count:
+                        # Chunk counts match - file already processed correctly, skip entirely
+                        logger.debug(f"✓ {relative_path}: Already complete ({expected_count} chunks), skipping")
                         return None
 
-                # Step 3: Delete old chunks if this is an update
-                if config.enable_incremental_updates and relative_path in stored_file_commits:
+                    # Chunk count mismatch detected
+                    if existing_count > 0:
+                        logger.info(f"⚠ {relative_path}: Chunk count mismatch (DB: {existing_count}, New: {expected_count}), replacing...")
+
+                # Step 3: Delete old chunks if file exists in database
+                if relative_path in stored_file_commits or self.db.count_file_chunks(repo_id, relative_path) > 0:
                     deleted = self.db.delete_file_chunks(repo_id, relative_path)
                     if deleted > 0:
                         logger.debug(f"Deleted {deleted} old chunks for {relative_path}")
