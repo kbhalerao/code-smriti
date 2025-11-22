@@ -96,13 +96,9 @@ async def search_code_tool(
         where_clauses = ["type = 'code_chunk'"]
         
         # Add repo filter if provided
-        # TEMPORARY: Force filter to kbhalerao/labcore for testing if not provided
-        # This matches the problem statement's requirement to fix the specific issue
-        target_repo = repo_filter if repo_filter else "kbhalerao/labcore"
-        
-        if target_repo:
+        if repo_filter:
             where_clauses.append("repo_id = $repo_id")
-            query_params["repo_id"] = target_repo
+            query_params["repo_id"] = repo_filter
 
         where_clause = " AND ".join(where_clauses)
 
@@ -133,7 +129,7 @@ async def search_code_tool(
             code_chunks = []
             for row in result:
                 code_chunks.append({
-                    "content": row.get('code_text', ''),
+                    "content": row.get("content", row.get("code_text", "")),
                     "repo_id": row.get('repo_id', ''),
                     "file_path": row.get('file_path', ''),
                     "language": row.get('language', ''),

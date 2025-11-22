@@ -74,7 +74,7 @@ class CodeChunkDocument(BaseModel):
     repo_id: str
     file_path: str
     chunk_index: int
-    content: str
+    content: str  # Unified content field (was code_text)
     language: str
     start_line: int
     end_line: int

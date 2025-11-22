@@ -78,12 +78,21 @@ async def main():
     if len(repos) > 10:
         logger.info(f"  ... and {len(repos) - 10} more")
 
+    # Parse arguments
+    import argparse
+    parser = argparse.ArgumentParser(description="Pipeline Ingestion")
+    parser.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
+    args = parser.parse_args()
+
     # Confirm before proceeding
     logger.info("\n" + "-"*70)
-    response = input(f"Process all {len(repos)} repositories? (y/n): ")
-    if response.lower() != 'y':
-        logger.info("Aborted by user")
-        return
+    if not args.yes:
+        response = input(f"Process all {len(repos)} repositories? (y/n): ")
+        if response.lower() != 'y':
+            logger.info("Aborted by user")
+            return
+    else:
+        logger.info(f"Auto-confirming process for {len(repos)} repositories")
 
     # Initialize worker
     db = CouchbaseClient()
@@ -114,10 +123,13 @@ async def main():
             logger.error(f"✗ {repo_id} failed: {e}")
 
             # Ask whether to continue on failure
-            response = input(f"\nContinue with remaining {len(repos) - i} repos? (y/n): ")
-            if response.lower() != 'y':
-                logger.info("Pipeline stopped by user")
-                break
+            if not args.yes:
+                response = input(f"\nContinue with remaining {len(repos) - i} repos? (y/n): ")
+                if response.lower() != 'y':
+                    logger.info("Pipeline stopped by user")
+                    break
+            else:
+                logger.warning("Continuing despite failure (non-interactive mode)")
 
     # Final summary
     elapsed = datetime.now() - start_time

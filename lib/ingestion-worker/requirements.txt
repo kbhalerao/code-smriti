@@ -7,8 +7,7 @@ torch>=2.1.0
 einops>=0.7.0
 
 # Code parsing
-tree-sitter==0.20.4  # Pin to 0.20.x - tree-sitter 2.x has breaking changes incompatible with tree-sitter-languages
-tree-sitter-languages>=1.10.0
+tree-sitter>=0.21.0
 
 # GitHub API
 PyGithub>=2.1.0
