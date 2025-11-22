@@ -1,0 +1,2056 @@
+{
+  "metadata": {
+    "timestamp": "2025-11-22T15:54:35.891514",
+    "total_questions": 37,
+    "limit_per_query": 10,
+    "endpoint": "/api/chat/search"
+  },
+  "summary": {
+    "total_usable": 23,
+    "total_found_repo": 23,
+    "total_found_file": 7,
+    "avg_repo_precision": 0.15675675675675677,
+    "avg_file_precision": 0.032432432432432434,
+    "avg_score": 0.6823072694443367,
+    "avg_diversity": 0.6094594594594595,
+    "by_category": {
+      "framework_pattern": {
+        "total": 12,
+        "usable": 9
+      },
+      "api_usage": {
+        "total": 1,
+        "usable": 1
+      },
+      "architecture": {
+        "total": 4,
+        "usable": 2
+      },
+      "ui_component": {
+        "total": 6,
+        "usable": 1
+      },
+      "domain_logic": {
+        "total": 10,
+        "usable": 7
+      },
+      "testing": {
+        "total": 2,
+        "usable": 2
+      },
+      "data_processing": {
+        "total": 2,
+        "usable": 1
+      }
+    }
+  },
+  "results": [
+    {
+      "question_id": 1,
+      "query": "Django Channels background worker with job counter decorator",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py",
+        "common/consumer_decorators.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.5,
+        "file_precision": 0.0,
+        "avg_score": 0.6906414985656738,
+        "top_score": 0.7519306540489197,
+        "usable_for_llm": true,
+        "diversity_score": 0.5,
+        "unique_repos": 4,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/management/commands/reset_redis_job_counter.py",
+          "score": 0.7519306540489197
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/management/commands/reset_redis_job_counter.py",
+          "score": 0.7301817536354065
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/tests/test_management_worker.py",
+          "score": 0.7011603116989136
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/routing.py",
+          "score": 0.6825841069221497
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "common/routing.py",
+          "score": 0.6769000887870789
+        }
+      ]
+    },
+    {
+      "question_id": 2,
+      "query": "requeue task decorator with retry logic for async functions",
+      "category": "api_usage",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "common/consumer_decorators.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.2,
+        "file_precision": 0.2,
+        "avg_score": 0.7266084611415863,
+        "top_score": 0.8016610145568848,
+        "usable_for_llm": true,
+        "diversity_score": 0.55,
+        "unique_repos": 5,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/consumer_decorators.py",
+          "score": 0.8016610145568848
+        },
+        {
+          "repo": "kbhalerao/channels_decorators",
+          "file": "workers/consumer_decorators.py",
+          "score": 0.7998775839805603
+        },
+        {
+          "repo": "kbhalerao/agkit.io-backend",
+          "file": "network_helpers/consumer_helpers.py",
+          "score": 0.7906677722930908
+        },
+        {
+          "repo": "kbhalerao/channels_decorators",
+          "file": "workers/consumers.py",
+          "score": 0.7269850373268127
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/consumer_decorators.py",
+          "score": 0.7037736177444458
+        }
+      ]
+    },
+    {
+      "question_id": 3,
+      "query": "PDF generation with WeasyPrint in Django consumer",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.6913141310214996,
+        "top_score": 0.6969218850135803,
+        "usable_for_llm": true,
+        "diversity_score": 0.4,
+        "unique_repos": 3,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "organizations/backends/forms.py",
+          "score": 0.6969218850135803
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "organizations/backends/forms.py",
+          "score": 0.6967706680297852
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "organizations/backends/forms.py",
+          "score": 0.6967706680297852
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "organizations/forms.py",
+          "score": 0.6902912259101868
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "organizations/forms.py",
+          "score": 0.6902449131011963
+        }
+      ]
+    },
+    {
+      "question_id": 4,
+      "query": "Django model with GIS field and spatial queries",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore",
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "clients/models/gis.py",
+        "app508h2023/models/__init__.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.7727385222911834,
+        "top_score": 0.7801783084869385,
+        "usable_for_llm": true,
+        "diversity_score": 0.6,
+        "unique_repos": 7,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/tests/tests_helpers.py",
+          "score": 0.7801783084869385
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/tests/tests_helpers.py",
+          "score": 0.7800237536430359
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/tests/tests_helpers.py",
+          "score": 0.7800237536430359
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "soils/migrations/0006_statecountyasd_boundary_statecountyasd_idx_boundary.py",
+          "score": 0.7705506682395935
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "soils/migrations/0006_statecountyasd_boundary_statecountyasd_idx_boundary.py",
+          "score": 0.7703931927680969
+        }
+      ]
+    },
+    {
+      "question_id": 5,
+      "query": "error handling in background task with traceback logging",
+      "category": "architecture",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "common/consumer_decorators.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.3,
+        "file_precision": 0.1,
+        "avg_score": 0.6717297673225403,
+        "top_score": 0.7225087285041809,
+        "usable_for_llm": true,
+        "diversity_score": 0.8,
+        "unique_repos": 7,
+        "unique_files": 9,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/channels_decorators",
+          "file": "workers/consumer_decorators.py",
+          "score": 0.7225087285041809
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/consumer_decorators.py",
+          "score": 0.7163035273551941
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.6720535755157471
+        },
+        {
+          "repo": "PeoplesCompany/farmland_insights",
+          "file": "src/lib/utils.js",
+          "score": 0.6701475381851196
+        },
+        {
+          "repo": "kbhalerao/topsoil",
+          "file": "econmodel/consumers.py",
+          "score": 0.6686266660690308
+        }
+      ]
+    },
+    {
+      "question_id": 6,
+      "query": "Django REST framework API views with pagination",
+      "category": "framework_pattern",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/labcore",
+        "JessiePBhalerao/firstseedtests"
+      ],
+      "expected_files": [
+        "clients/apiviews/apiviews.py",
+        "efg/core/views.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.2,
+        "file_precision": 0.0,
+        "avg_score": 0.7480944871902466,
+        "top_score": 0.7928469181060791,
+        "usable_for_llm": true,
+        "diversity_score": 0.9,
+        "unique_repos": 8,
+        "unique_files": 10,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/django-seed-elastic",
+          "file": "seed_es/views.py",
+          "score": 0.7928469181060791
+        },
+        {
+          "repo": "kbhalerao/evolvechiro",
+          "file": "payment_adjustments/views.py",
+          "score": 0.7501734495162964
+        },
+        {
+          "repo": "kbhalerao/evolvechiro",
+          "file": "patients/views.py",
+          "score": 0.7466257214546204
+        },
+        {
+          "repo": "kbhalerao/devanand",
+          "file": "devanand/projects/views.py",
+          "score": 0.7440913915634155
+        },
+        {
+          "repo": "kbhalerao/topsoil",
+          "file": "hubspot/views.py",
+          "score": 0.7434462308883667
+        }
+      ]
+    },
+    {
+      "question_id": 7,
+      "query": "Svelte 5 component with runes for state management",
+      "category": "ui_component",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/chat/ChatInput.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.691103172302246,
+        "top_score": 0.7068310379981995,
+        "usable_for_llm": false,
+        "diversity_score": 0.85,
+        "unique_repos": 8,
+        "unique_files": 9,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/svelte-command-palette",
+          "file": "src/components/Features.svelte",
+          "score": 0.7068310379981995
+        },
+        {
+          "repo": "PeoplesCompany/farmworth_frontend",
+          "file": "src/lib/components/draw/SearchToolStateCountyOwner.svelte <script>",
+          "score": 0.6988548040390015
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.697309136390686
+        },
+        {
+          "repo": "kbhalerao/svelte-command-palette",
+          "file": "src/components/Document.svelte",
+          "score": 0.6937012672424316
+        },
+        {
+          "repo": "ContinuumAgInc/rabo_topsoil",
+          "file": "src/lib/components/nav/TopBar.svelte <script>",
+          "score": 0.6920422911643982
+        }
+      ]
+    },
+    {
+      "question_id": 8,
+      "query": "Svelte form submission with derived state validation",
+      "category": "ui_component",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/chat/ChatInput.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6464176535606384,
+        "top_score": 0.675518274307251,
+        "usable_for_llm": false,
+        "diversity_score": 0.75,
+        "unique_repos": 7,
+        "unique_files": 8,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.675518274307251
+        },
+        {
+          "repo": "kbhalerao/pinionfe",
+          "file": "src/lib/components/projects/ProjectStage.svelte <script>",
+          "score": 0.6486598253250122
+        },
+        {
+          "repo": "PeoplesCompany/farmworth_frontend",
+          "file": "src/lib/components/draw/SearchToolStateCountyOwner.svelte <script>",
+          "score": 0.6475934386253357
+        },
+        {
+          "repo": "ContinuumAgInc/rabo_topsoil",
+          "file": "src/lib/components/nav/TopBar.svelte <script>",
+          "score": 0.6465415358543396
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/nav/TopBar.svelte <script>",
+          "score": 0.6460726857185364
+        }
+      ]
+    },
+    {
+      "question_id": 9,
+      "query": "GRASS GIS initialization and environment setup in Python",
+      "category": "domain_logic",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "topology/grass_handler.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.1,
+        "file_precision": 0.2,
+        "avg_score": 0.6848226189613342,
+        "top_score": 0.6947696208953857,
+        "usable_for_llm": true,
+        "diversity_score": 0.55,
+        "unique_repos": 5,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "topology/grass_handler.py",
+          "score": 0.6947696208953857
+        },
+        {
+          "repo": "kbhalerao/508hCoverCrop",
+          "file": "topology/grass_handler.py",
+          "score": 0.6946115493774414
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.6897815465927124
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.6897815465927124
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/gis/__init__.py",
+          "score": 0.6857292056083679
+        }
+      ]
+    },
+    {
+      "question_id": 10,
+      "query": "Django management command for geospatial data processing",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "app508h2023/management/commands/"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.7319783091545105,
+        "top_score": 0.7353569865226746,
+        "usable_for_llm": false,
+        "diversity_score": 0.55,
+        "unique_repos": 6,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "soils/management/commands/load_boundarystatecountyasd.py",
+          "score": 0.7353569865226746
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "soils/management/commands/load_boundarystatecountyasd.py",
+          "score": 0.7349899411201477
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "soils/management/commands/load_boundarystatecountyasd.py",
+          "score": 0.7349899411201477
+        },
+        {
+          "repo": "PeoplesCompany/farmworthdb",
+          "file": "appraisals/management/commands/import_appraisals_json_hack.py",
+          "score": 0.7340191006660461
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/tests/tests_helpers.py",
+          "score": 0.7321721315383911
+        }
+      ]
+    },
+    {
+      "question_id": 11,
+      "query": "seed variety trial data processing and report generation",
+      "category": "domain_logic",
+      "difficulty": "medium",
+      "expected_repos": [
+        "JessiePBhalerao/firstseedtests"
+      ],
+      "expected_files": [
+        "efg/misc/seed_reports.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.4,
+        "file_precision": 0.1,
+        "avg_score": 0.6319069385528564,
+        "top_score": 0.6582380533218384,
+        "usable_for_llm": true,
+        "diversity_score": 0.65,
+        "unique_repos": 3,
+        "unique_files": 10,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/seed_reports.py",
+          "score": 0.6582380533218384
+        },
+        {
+          "repo": "kbhalerao/ask-kev-2026",
+          "file": "src/lib/agent/elasticsearch/examples.ts",
+          "score": 0.6490049958229065
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/utils.py",
+          "score": 0.6337151527404785
+        },
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/routes/(app)/products/+page@.svelte",
+          "score": 0.6323340535163879
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/report_animations.py",
+          "score": 0.6299762725830078
+        }
+      ]
+    },
+    {
+      "question_id": 12,
+      "query": "Django model aggregation with Avg and StdDev annotations",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.7206725716590882,
+        "top_score": 0.7240330576896667,
+        "usable_for_llm": false,
+        "diversity_score": 0.7,
+        "unique_repos": 6,
+        "unique_files": 8,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/migrations/0006_auto_20190919_2118.py",
+          "score": 0.7240330576896667
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/migrations/0009_auto_20191029_2153.py",
+          "score": 0.7235340476036072
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/associates/migrations/0006_add_image_fields.py",
+          "score": 0.723479688167572
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/associates/migrations/0021_auto_20220301_1104.py",
+          "score": 0.7215532660484314
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/associates/migrations/0016_auto_20200224_1040.py",
+          "score": 0.7200745344161987
+        }
+      ]
+    },
+    {
+      "question_id": 13,
+      "query": "template rendering for PDF with Django template loader",
+      "category": "framework_pattern",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.7130601048469544,
+        "top_score": 0.7324614524841309,
+        "usable_for_llm": true,
+        "diversity_score": 0.45,
+        "unique_repos": 5,
+        "unique_files": 4,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "common/tests/test_pdf_response_generator.py",
+          "score": 0.7324614524841309
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/tests/test_pdf_response_generator.py",
+          "score": 0.7324614524841309
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "common/tests/test_pdf_response_generator.py",
+          "score": 0.7322540879249573
+        },
+        {
+          "repo": "bmwyman/uilevents",
+          "file": "uilevents/labelmaker/templatetags/badge_tags.py",
+          "score": 0.709320068359375
+        },
+        {
+          "repo": "JessiePBhalerao/uilevents",
+          "file": "uilevents/labelmaker/templatetags/badge_tags.py",
+          "score": 0.7092618942260742
+        }
+      ]
+    },
+    {
+      "question_id": 14,
+      "query": "Redis integration for background job tracking",
+      "category": "architecture",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "common/consumer_decorators.py",
+        "common/redis_lock.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.5665764212608337,
+        "top_score": 0.5843266248703003,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 5,
+        "unique_files": 7,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/routes/api/sponsorship/sponsorship.js",
+          "score": 0.5843266248703003
+        },
+        {
+          "repo": "jayp-eci/sdxweather",
+          "file": "src/app.css",
+          "score": 0.576892614364624
+        },
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/routes/api/sponsorship/sponsorship.js",
+          "score": 0.5759370923042297
+        },
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/routes/api/sponsorship/sponsorship.js",
+          "score": 0.5717633962631226
+        },
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/routes/api/sponsorship/sponsorship.js",
+          "score": 0.567257821559906
+        }
+      ]
+    },
+    {
+      "question_id": 15,
+      "query": "Django Channels layer send message to background worker",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "common/consumer_decorators.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.7159406900405884,
+        "top_score": 0.7387126088142395,
+        "usable_for_llm": true,
+        "diversity_score": 0.55,
+        "unique_repos": 5,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/tests/test_management_worker.py",
+          "score": 0.7387126088142395
+        },
+        {
+          "repo": "PeoplesCompany/farmworthdb",
+          "file": "camoag/management/commands/camo_sync.py",
+          "score": 0.7323921918869019
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/routing.py",
+          "score": 0.7191906571388245
+        },
+        {
+          "repo": "PeoplesCompany/farmworthdb",
+          "file": "camoag/admin.py",
+          "score": 0.7170066833496094
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "common/routing.py",
+          "score": 0.7145740389823914
+        }
+      ]
+    },
+    {
+      "question_id": 16,
+      "query": "custom Django template tag for directory operations",
+      "category": "framework_pattern",
+      "difficulty": "easy",
+      "expected_repos": [
+        "JessiePBhalerao/firstseedtests"
+      ],
+      "expected_files": [
+        "efg/misc/templatetags/directory_tags.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.4,
+        "file_precision": 0.0,
+        "avg_score": 0.7091324627399445,
+        "top_score": 0.7189920544624329,
+        "usable_for_llm": true,
+        "diversity_score": 0.55,
+        "unique_repos": 6,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/entry/templatetags/application_tags.py",
+          "score": 0.7189920544624329
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/fielddata/templatetags/fieldtest_tags.py",
+          "score": 0.7189567685127258
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "workflows/templatetags/workflows_extras.py",
+          "score": 0.7153018712997437
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "workflows/templatetags/workflows_extras.py",
+          "score": 0.7150838971138
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "workflows/templatetags/workflows_extras.py",
+          "score": 0.7150838971138
+        }
+      ]
+    },
+    {
+      "question_id": 17,
+      "query": "EPSG coordinate system initialization for spatial database",
+      "category": "domain_logic",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "topology/grass_handler.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.2,
+        "file_precision": 0.0,
+        "avg_score": 0.6248940229415894,
+        "top_score": 0.633551836013794,
+        "usable_for_llm": true,
+        "diversity_score": 0.6,
+        "unique_repos": 6,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/508hCoverCrop",
+          "file": "topology/geoworker.py",
+          "score": 0.633551836013794
+        },
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "topology/geoworker.py",
+          "score": 0.633551836013794
+        },
+        {
+          "repo": "PeoplesCompany/public-farmworth",
+          "file": "src/lib/utils.ts",
+          "score": 0.631006121635437
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/fielddata/models.py",
+          "score": 0.6281863451004028
+        },
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "topology/geoworker.py",
+          "score": 0.6237940192222595
+        }
+      ]
+    },
+    {
+      "question_id": 18,
+      "query": "Svelte reactive state with $state and $derived runes",
+      "category": "ui_component",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/chat/ChatInput.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6529826819896698,
+        "top_score": 0.6724556088447571,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 6,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/rabo_topsoil",
+          "file": "src/lib/components/nav/TopBar.svelte <script>",
+          "score": 0.6724556088447571
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/nav/TopBar.svelte <script>",
+          "score": 0.671653151512146
+        },
+        {
+          "repo": "PeoplesCompany/insights-state-map",
+          "file": "src/lib/Choropleth.svelte <script>",
+          "score": 0.6681608557701111
+        },
+        {
+          "repo": "PeoplesCompany/farmland_insights",
+          "file": "src/lib/Choropleth.svelte <script>",
+          "score": 0.6680974960327148
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.6592399477958679
+        }
+      ]
+    },
+    {
+      "question_id": 19,
+      "query": "async/sync wrapper pattern for decorator",
+      "category": "architecture",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "common/consumer_decorators.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.4,
+        "file_precision": 0.1,
+        "avg_score": 0.6445967793464661,
+        "top_score": 0.6582322716712952,
+        "usable_for_llm": true,
+        "diversity_score": 0.7,
+        "unique_repos": 6,
+        "unique_files": 8,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/channels_decorators",
+          "file": "workers/consumers.py",
+          "score": 0.6582322716712952
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "common/consumer_decorators.py",
+          "score": 0.6537328362464905
+        },
+        {
+          "repo": "PeoplesCompany/farmworth_frontend",
+          "file": ".claude/templates/component-template.svelte <script>",
+          "score": 0.6519674062728882
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.648338794708252
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.648338794708252
+        }
+      ]
+    },
+    {
+      "question_id": 20,
+      "query": "Django field event journal entry creation",
+      "category": "domain_logic",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.7370908439159394,
+        "top_score": 0.7728768587112427,
+        "usable_for_llm": true,
+        "diversity_score": 0.4,
+        "unique_repos": 4,
+        "unique_files": 4,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "fieldcalendar/mixins.py",
+          "score": 0.7728768587112427
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "fieldcalendar/mixins.py",
+          "score": 0.7728768587112427
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "fieldcalendar/mixins.py",
+          "score": 0.7723438143730164
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "fieldcalendar/management/commands/convert_id_from_str_to_int.py",
+          "score": 0.724975049495697
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "fieldcalendar/management/commands/convert_id_from_str_to_int.py",
+          "score": 0.724885880947113
+        }
+      ]
+    },
+    {
+      "question_id": 21,
+      "query": "soil laboratory measurement data aggregation statistics",
+      "category": "domain_logic",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py",
+        "samples/models.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6009908378124237,
+        "top_score": 0.6360029578208923,
+        "usable_for_llm": false,
+        "diversity_score": 0.7,
+        "unique_repos": 5,
+        "unique_files": 9,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "templates/frontpage/index.html",
+          "score": 0.6360029578208923
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/fielddata/tests/tests_models.py",
+          "score": 0.6186209917068481
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/fielddata/models.py",
+          "score": 0.6170017123222351
+        },
+        {
+          "repo": "kbhalerao/ask-kev-2026",
+          "file": "scripts/test-researcher-aggregation.ts",
+          "score": 0.605093777179718
+        },
+        {
+          "repo": "PeoplesCompany/farmworthdb",
+          "file": "fwreporting/tests/test_aggregators.py",
+          "score": 0.6006203293800354
+        }
+      ]
+    },
+    {
+      "question_id": 22,
+      "query": "Django model with custom fields and JSON data storage",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py",
+        "orders/models.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.3,
+        "file_precision": 0.0,
+        "avg_score": 0.7622245490550995,
+        "top_score": 0.7640106081962585,
+        "usable_for_llm": true,
+        "diversity_score": 0.45,
+        "unique_repos": 4,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "fieldcalendar/event_base.py",
+          "score": 0.7640106081962585
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "fieldcalendar/event_base.py",
+          "score": 0.7639104723930359
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "inventory/migrations/0019_auto_20200909_1428.py",
+          "score": 0.7627690434455872
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "inventory/migrations/0019_auto_20200909_1428.py",
+          "score": 0.7627026438713074
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "inventory/migrations/0019_auto_20200909_1428.py",
+          "score": 0.7626351714134216
+        }
+      ]
+    },
+    {
+      "question_id": 23,
+      "query": "pytest fixtures for Django Channels consumers",
+      "category": "testing",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "clients/tests/tests_consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.1,
+        "file_precision": 0.0,
+        "avg_score": 0.659667831659317,
+        "top_score": 0.6742830276489258,
+        "usable_for_llm": true,
+        "diversity_score": 0.85,
+        "unique_repos": 9,
+        "unique_files": 8,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/evolvechiro",
+          "file": "paylocity/tests/tests_models.py",
+          "score": 0.6742830276489258
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/yieldguide/tests.py",
+          "score": 0.6679046750068665
+        },
+        {
+          "repo": "kbhalerao/uofi_labcore",
+          "file": "uofi/routing.py",
+          "score": 0.6661543846130371
+        },
+        {
+          "repo": "kbhalerao/devanand",
+          "file": "devanand/people/tests/test_api_invites.py",
+          "score": 0.6641398072242737
+        },
+        {
+          "repo": "kbhalerao/channels_decorators",
+          "file": "consumer_helpers/settings.py",
+          "score": 0.6577974557876587
+        }
+      ]
+    },
+    {
+      "question_id": 24,
+      "query": "Django model permissions testing",
+      "category": "testing",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "clients/tests/test_model_permissions.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.2,
+        "file_precision": 0.0,
+        "avg_score": 0.7728232443332672,
+        "top_score": 0.8016416430473328,
+        "usable_for_llm": true,
+        "diversity_score": 0.65,
+        "unique_repos": 5,
+        "unique_files": 8,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/devanand",
+          "file": "devanand/people/tests/test_api_auth.py",
+          "score": 0.8016416430473328
+        },
+        {
+          "repo": "kbhalerao/fertisavern",
+          "file": "fertisaverN/tests.py",
+          "score": 0.7895743250846863
+        },
+        {
+          "repo": "kbhalerao/fertisavern",
+          "file": "recipes/tests.py",
+          "score": 0.7850062847137451
+        },
+        {
+          "repo": "kbhalerao/devanand",
+          "file": "devanand/projects/tests/test_access_control.py",
+          "score": 0.7737411856651306
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "associates/tests/test_models.py",
+          "score": 0.7654027938842773
+        }
+      ]
+    },
+    {
+      "question_id": 25,
+      "query": "SVG export for geographic regions visualization",
+      "category": "data_processing",
+      "difficulty": "medium",
+      "expected_repos": [
+        "JessiePBhalerao/firstseedtests"
+      ],
+      "expected_files": [
+        "efg/misc/export_region_svgs.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.3,
+        "file_precision": 0.3,
+        "avg_score": 0.7462316513061523,
+        "top_score": 0.7645174264907837,
+        "usable_for_llm": true,
+        "diversity_score": 0.5,
+        "unique_repos": 8,
+        "unique_files": 2,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/export_region_svgs.py",
+          "score": 0.7645174264907837
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/export_region_svgs.py",
+          "score": 0.7574173808097839
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/export_region_svgs.py",
+          "score": 0.7475956678390503
+        },
+        {
+          "repo": "ContinuumAgInc/rabo_topsoil",
+          "file": "src/lib/js/draw/geosvg.js",
+          "score": 0.7419527769088745
+        },
+        {
+          "repo": "jayp-eci/labcoredemo",
+          "file": "src/lib/js/draw/geosvg.js",
+          "score": 0.7419527769088745
+        }
+      ]
+    },
+    {
+      "question_id": 26,
+      "query": "bulk data loading script for Django models",
+      "category": "data_processing",
+      "difficulty": "easy",
+      "expected_repos": [
+        "JessiePBhalerao/firstseedtests"
+      ],
+      "expected_files": [
+        "efg/misc/entries_load_script.py",
+        "efg/misc/load_customers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.7319065511226654,
+        "top_score": 0.7373112440109253,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 7,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ecinfo/Atlas-PMP_backend",
+          "file": "integrations/github/models.py",
+          "score": 0.7373112440109253
+        },
+        {
+          "repo": "bmwyman/uilevents",
+          "file": "uilevents/core/models.py",
+          "score": 0.7332352995872498
+        },
+        {
+          "repo": "JessiePBhalerao/uilevents",
+          "file": "uilevents/core/models.py",
+          "score": 0.7332352995872498
+        },
+        {
+          "repo": "kbhalerao/devanand",
+          "file": "devanand/projects/models.py",
+          "score": 0.7318702340126038
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/migrations/0039_auto_20190314_1628.py",
+          "score": 0.7316384315490723
+        }
+      ]
+    },
+    {
+      "question_id": 27,
+      "query": "raster data processing for agricultural fields",
+      "category": "domain_logic",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "app508h2023/management/commands/populate_raster_numbers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.1,
+        "file_precision": 0.0,
+        "avg_score": 0.6526728212833405,
+        "top_score": 0.6651089191436768,
+        "usable_for_llm": true,
+        "diversity_score": 0.7,
+        "unique_repos": 8,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/508hCoverCrop",
+          "file": "app508h2023/management/commands/attach_prism_grace_data.py",
+          "score": 0.6651089191436768
+        },
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "app508h2023/management/commands/attach_prism_grace_data.py",
+          "score": 0.6648675799369812
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.6541370749473572
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/report_animations.py",
+          "score": 0.6531395316123962
+        },
+        {
+          "repo": "kbhalerao/feldspar",
+          "file": "webapp/backend/FieldBoundaryDetector.py",
+          "score": 0.6520861983299255
+        }
+      ]
+    },
+    {
+      "question_id": 28,
+      "query": "field boundary validation for GIS polygons",
+      "category": "domain_logic",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "app508h2023/management/commands/validate_boundaries.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6714346706867218,
+        "top_score": 0.7025662660598755,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 6,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/feldspar",
+          "file": "webapp/backend/FieldBoundaryDetector.py",
+          "score": 0.7025662660598755
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/models/clients.py",
+          "score": 0.6696287393569946
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/models/clients.py",
+          "score": 0.6696287393569946
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/models/clients.py",
+          "score": 0.6696287393569946
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/tests/tests_gis.py",
+          "score": 0.6695905327796936
+        }
+      ]
+    },
+    {
+      "question_id": 29,
+      "query": "Svelte chat interface with suggestion buttons",
+      "category": "ui_component",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/chat/SuggestionButton.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.1,
+        "file_precision": 0.0,
+        "avg_score": 0.6446301877498627,
+        "top_score": 0.6672232151031494,
+        "usable_for_llm": true,
+        "diversity_score": 0.45,
+        "unique_repos": 4,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/asktom-chatbot",
+          "file": "asktom-chat-website/src/lib/components/ChatWindow.svelte <script>",
+          "score": 0.6672232151031494
+        },
+        {
+          "repo": "kbhalerao/asktom-chatbot",
+          "file": "asktom-chat-website/src/lib/components/ChatWindow.svelte <script>",
+          "score": 0.6625478863716125
+        },
+        {
+          "repo": "kbhalerao/svelte-command-palette",
+          "file": "src/components/Features.svelte",
+          "score": 0.6473762392997742
+        },
+        {
+          "repo": "kbhalerao/asktom-chatbot",
+          "file": "asktom-chat-website/src/lib/components/ChatWindow.svelte <script>",
+          "score": 0.6438192129135132
+        },
+        {
+          "repo": "kbhalerao/ask-kev-2026",
+          "file": "src/routes/chat/+page.svelte <script>",
+          "score": 0.6416053771972656
+        }
+      ]
+    },
+    {
+      "question_id": 30,
+      "query": "Google Sign In integration with Svelte component",
+      "category": "ui_component",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/landing/GoogleSignInButton.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6621554970741272,
+        "top_score": 0.6702311635017395,
+        "usable_for_llm": false,
+        "diversity_score": 0.5,
+        "unique_repos": 5,
+        "unique_files": 5,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.6702311635017395
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.6686658263206482
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.6627659797668457
+        },
+        {
+          "repo": "kbhalerao/svelte-command-palette",
+          "file": "src/components/Features.svelte",
+          "score": 0.6622830033302307
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/certificationSummary/SignAttestation.svelte <script>",
+          "score": 0.6615909934043884
+        }
+      ]
+    },
+    {
+      "question_id": 31,
+      "query": "color scheme mapping for geospatial visualization",
+      "category": "domain_logic",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "topology/color_schemes.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": true,
+        "repo_precision": 0.2,
+        "file_precision": 0.2,
+        "avg_score": 0.6293105721473694,
+        "top_score": 0.6504191756248474,
+        "usable_for_llm": true,
+        "diversity_score": 0.7,
+        "unique_repos": 7,
+        "unique_files": 7,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "topology/geocolorize.py",
+          "score": 0.6504191756248474
+        },
+        {
+          "repo": "kbhalerao/508hCoverCrop",
+          "file": "topology/geocolorize.py",
+          "score": 0.6504191756248474
+        },
+        {
+          "repo": "JessiePBhalerao/firstpwa",
+          "file": "src/lib/scss/pixel/_functions.scss",
+          "score": 0.6346907615661621
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/lib/components/leaflet/helpers.js",
+          "score": 0.6264957785606384
+        },
+        {
+          "repo": "woodardjoshua/508hCoverCrop",
+          "file": "topology/color_schemes.py",
+          "score": 0.6232428550720215
+        }
+      ]
+    },
+    {
+      "question_id": 32,
+      "query": "split billing custom field handling in order processing",
+      "category": "domain_logic",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.2,
+        "file_precision": 0.0,
+        "avg_score": 0.5992834091186523,
+        "top_score": 0.6178019642829895,
+        "usable_for_llm": true,
+        "diversity_score": 0.5,
+        "unique_repos": 4,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/serializers/serializers.py",
+          "score": 0.6178019642829895
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/forms.py",
+          "score": 0.614033579826355
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "orders/models.py",
+          "score": 0.6024266481399536
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/utils.py",
+          "score": 0.6007554531097412
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/utils.py",
+          "score": 0.5998607873916626
+        }
+      ]
+    },
+    {
+      "question_id": 33,
+      "query": "agricultural insurance data population script",
+      "category": "domain_logic",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "app508h2023/management/commands/populate_adp_insurance.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.5858746588230133,
+        "top_score": 0.5968415141105652,
+        "usable_for_llm": false,
+        "diversity_score": 0.9,
+        "unique_repos": 9,
+        "unique_files": 9,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/misc/report_animations.py",
+          "score": 0.5968415141105652
+        },
+        {
+          "repo": "PeoplesCompany/farmworth_frontend",
+          "file": "src/lib/components/mapbinder/insurace/InsuranceTable.svelte <script>",
+          "score": 0.5926581621170044
+        },
+        {
+          "repo": "kbhalerao/adm_browser",
+          "file": "src/lib/components/insurance/EvaluatorCalculator.svelte",
+          "score": 0.5921711325645447
+        },
+        {
+          "repo": "PeoplesCompany/farmworth_frontend",
+          "file": "src/lib/components/mapbinder/insurace/InsuranceTable.svelte <script>",
+          "score": 0.588402509689331
+        },
+        {
+          "repo": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file": "src/lib/components/Insights.svelte",
+          "score": 0.5859258770942688
+        }
+      ]
+    },
+    {
+      "question_id": 34,
+      "query": "Django Channels SyncConsumer for background processing",
+      "category": "framework_pattern",
+      "difficulty": "medium",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": true,
+        "found_expected_file": false,
+        "repo_precision": 0.1,
+        "file_precision": 0.0,
+        "avg_score": 0.7378482520580292,
+        "top_score": 0.7491821050643921,
+        "usable_for_llm": true,
+        "diversity_score": 0.35,
+        "unique_repos": 4,
+        "unique_files": 3,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.7491821050643921
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.7487689852714539
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.7450302243232727
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.7450302243232727
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/consumers/backgroundconsumers.py",
+          "score": 0.7371654510498047
+        }
+      ]
+    },
+    {
+      "question_id": 35,
+      "query": "input validation and disabled state handling in forms",
+      "category": "ui_component",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/ask-kev-2026"
+      ],
+      "expected_files": [
+        "src/lib/components/chat/ChatInput.svelte"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6200151860713958,
+        "top_score": 0.6283735632896423,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 5,
+        "unique_files": 7,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/forms.py",
+          "score": 0.6283735632896423
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/forms.py",
+          "score": 0.6281383633613586
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/entry/forms.py",
+          "score": 0.6236441135406494
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/firsttest/forms.py",
+          "score": 0.6217367649078369
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil_frontend",
+          "file": "src/routes/(app)/certificationSummary/[id]/+page.svelte <script>",
+          "score": 0.619458794593811
+        }
+      ]
+    },
+    {
+      "question_id": 36,
+      "query": "subprocess execution for GRASS GIS commands in Django",
+      "category": "architecture",
+      "difficulty": "hard",
+      "expected_repos": [
+        "kbhalerao/508hCoverCrop"
+      ],
+      "expected_files": [
+        "topology/grass_handler.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6998251736164093,
+        "top_score": 0.7110691070556641,
+        "usable_for_llm": false,
+        "diversity_score": 0.65,
+        "unique_repos": 7,
+        "unique_files": 6,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "kbhalerao/cropProfit",
+          "file": "cropProfit/settings.py",
+          "score": 0.7110691070556641
+        },
+        {
+          "repo": "kbhalerao/labcore",
+          "file": "clients/tests/test_farm_splitter.py",
+          "score": 0.701833963394165
+        },
+        {
+          "repo": "ContinuumAgInc/topsoil2.0",
+          "file": "clients/tests/test_farm_splitter.py",
+          "score": 0.7016293406486511
+        },
+        {
+          "repo": "jayp-eci/labcore",
+          "file": "clients/tests/test_farm_splitter.py",
+          "score": 0.7014820575714111
+        },
+        {
+          "repo": "kbhalerao/agkit.io-backend",
+          "file": "tier1apps/clients/admin.py",
+          "score": 0.7006896734237671
+        }
+      ]
+    },
+    {
+      "question_id": 37,
+      "query": "Django email notification after PDF report generation",
+      "category": "framework_pattern",
+      "difficulty": "easy",
+      "expected_repos": [
+        "kbhalerao/labcore"
+      ],
+      "expected_files": [
+        "orders/consumers.py"
+      ],
+      "search_count": 10,
+      "metrics": {
+        "found_any": true,
+        "found_expected_repo": false,
+        "found_expected_file": false,
+        "repo_precision": 0.0,
+        "file_precision": 0.0,
+        "avg_score": 0.6961717367172241,
+        "top_score": 0.7182716727256775,
+        "usable_for_llm": false,
+        "diversity_score": 0.6,
+        "unique_repos": 2,
+        "unique_files": 10,
+        "total_results": 10
+      },
+      "top_results": [
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/core/facebook.py",
+          "score": 0.7182716727256775
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/accounts/admin.py",
+          "score": 0.7053869366645813
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/accounts/tests/tests_email_utility.py",
+          "score": 0.701032817363739
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/accounts/signals.py",
+          "score": 0.6997843384742737
+        },
+        {
+          "repo": "JessiePBhalerao/firstseedtests",
+          "file": "efg/apps/reports/utils.py",
+          "score": 0.6974840760231018
+        }
+      ]
+    }
+  ]
+}
