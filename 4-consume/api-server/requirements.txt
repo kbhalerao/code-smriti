@@ -1,7 +1,7 @@
 # FastAPI and ASGI server
-fastapi==0.115.5
+fastapi
 uvicorn[standard]==0.32.1
-pydantic==2.10.3
+pydantic
 pydantic-settings==2.6.1
 
 # Authentication and security
@@ -10,7 +10,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.19
 
 # Database
-couchbase==4.3.3
+couchbase
 
 # HTTP client for Ollama
 httpx==0.28.1
@@ -22,10 +22,10 @@ sentence-transformers==3.3.1
 loguru==0.7.3
 
 # CORS
-python-dotenv==1.0.1
+python-dotenv
 
 # PydanticAI for tool calling
-pydantic-ai==1.21.0
+pydantic-ai
 
 # Additional dependencies for transformers
 einops==0.8.1
