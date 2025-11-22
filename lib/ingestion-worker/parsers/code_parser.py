@@ -313,6 +313,11 @@ class CodeParser:
         chunks = []
 
         try:
+            # Fallback if parser not available
+            if "python" not in self.parsers:
+                logger.warning("Parser for python not found, using regex fallback")
+                return self._regex_parse_python(content, relative_path, repo_id, git_metadata)
+
             parser = self.parsers["python"]
             tree = parser.parse(bytes(content, "utf8"))
             root = tree.root_node
@@ -481,6 +486,133 @@ class CodeParser:
 
         return chunks
 
+    def _regex_parse_python(self, content: str, relative_path: str, repo_id: str, git_metadata: Dict) -> List[CodeChunk]:
+        """Fallback regex parser for Python"""
+        import re
+        chunks = []
+        
+        # Find functions
+        func_pattern = re.compile(r'^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', re.MULTILINE)
+        for match in func_pattern.finditer(content):
+            func_name = match.group(1)
+            start_idx = match.start()
+            
+            # Simple heuristic for end index (indentation based or next def)
+            # This is imperfect but better than nothing
+            next_match = func_pattern.search(content, match.end())
+            end_idx = next_match.start() if next_match else len(content)
+            
+            code_text = content[start_idx:end_idx]
+            code_text = self.truncate_chunk_text(code_text, context=f"in {relative_path}::{func_name}()")
+            code_text = self.add_context_header(code_text, relative_path)
+            
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="function",
+                code_text=code_text,
+                language="python",
+                metadata={
+                    "language": "python",
+                    "function_name": func_name,
+                    "start_line": content.count('\n', 0, start_idx) + 1,
+                    "end_line": content.count('\n', 0, end_idx) + 1,
+                    **git_metadata
+                }
+            ))
+            
+        # Find classes
+        class_pattern = re.compile(r'^class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[:\(]', re.MULTILINE)
+        for match in class_pattern.finditer(content):
+            class_name = match.group(1)
+            start_idx = match.start()
+            next_match = class_pattern.search(content, match.end())
+            end_idx = next_match.start() if next_match else len(content)
+            
+            code_text = content[start_idx:end_idx]
+            code_text = self.truncate_chunk_text(code_text, context=f"in {relative_path}::class {class_name}")
+            code_text = self.add_context_header(code_text, relative_path)
+            
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="class",
+                code_text=code_text,
+                language="python",
+                metadata={
+                    "language": "python",
+                    "class_name": class_name,
+                    "start_line": content.count('\n', 0, start_idx) + 1,
+                    "end_line": content.count('\n', 0, end_idx) + 1,
+                    **git_metadata
+                }
+            ))
+            
+        return chunks
+
+    def _regex_parse_javascript(self, content: str, relative_path: str, repo_id: str, git_metadata: Dict, is_typescript: bool) -> List[CodeChunk]:
+        """Fallback regex parser for JS/TS"""
+        import re
+        chunks = []
+        lang = "typescript" if is_typescript else "javascript"
+        
+        # Find functions (function foo() {})
+        func_pattern = re.compile(r'function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', re.MULTILINE)
+        for match in func_pattern.finditer(content):
+            func_name = match.group(1)
+            start_idx = match.start()
+            # Very rough end detection
+            end_idx = content.find('}', start_idx) + 1
+            if end_idx <= 0: end_idx = len(content)
+            
+            code_text = content[start_idx:end_idx]
+            code_text = self.truncate_chunk_text(code_text, context=f"in {relative_path}::{func_name}()")
+            code_text = self.add_context_header(code_text, relative_path)
+            
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="function",
+                code_text=code_text,
+                language=lang,
+                metadata={
+                    "language": lang,
+                    "function_name": func_name,
+                    "start_line": content.count('\n', 0, start_idx) + 1,
+                    "end_line": content.count('\n', 0, end_idx) + 1,
+                    **git_metadata
+                }
+            ))
+
+        # Find const/let exports (export const MyComponent = ...)
+        export_pattern = re.compile(r'export\s+(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=', re.MULTILINE)
+        for match in export_pattern.finditer(content):
+            name = match.group(1)
+            start_idx = match.start()
+            end_idx = content.find(';', start_idx) + 1
+            if end_idx <= 0: end_idx = len(content)
+            
+            code_text = content[start_idx:end_idx]
+            code_text = self.truncate_chunk_text(code_text, context=f"in {relative_path}::{name}")
+            code_text = self.add_context_header(code_text, relative_path)
+            
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="variable",
+                code_text=code_text,
+                language=lang,
+                metadata={
+                    "language": lang,
+                    "function_name": name,
+                    "start_line": content.count('\n', 0, start_idx) + 1,
+                    "end_line": content.count('\n', 0, end_idx) + 1,
+                    **git_metadata
+                }
+            ))
+            
+        return chunks
+
     async def parse_javascript_file(
         self,
         file_path: Path,
@@ -492,22 +624,17 @@ class CodeParser:
     ) -> List[CodeChunk]:
         """
         Parse a JavaScript/TypeScript file into semantic chunks
-
-        Args:
-            file_path: Path to the file
-            content: File content
-            repo_id: Repository identifier
-            relative_path: Relative path within repo
-            git_metadata: Git commit metadata
-            is_typescript: Whether this is a TypeScript file
-
-        Returns:
-            List of CodeChunk objects
         """
         chunks = []
 
         try:
             parser_key = "typescript" if is_typescript else "javascript"
+            
+            # Fallback if parser not available
+            if parser_key not in self.parsers:
+                logger.warning(f"Parser for {parser_key} not found, using regex fallback")
+                return self._regex_parse_javascript(content, relative_path, repo_id, git_metadata, is_typescript)
+
             parser = self.parsers[parser_key]
             tree = parser.parse(bytes(content, "utf8"))
             root = tree.root_node
@@ -525,6 +652,9 @@ class CodeParser:
                         code_text,
                         context=f"in {relative_path}::{func_name}()"
                     )
+                    
+                    # Add context header
+                    code_text = self.add_context_header(code_text, relative_path)
 
                     metadata = {
                         "language": parser_key,
@@ -550,6 +680,9 @@ class CodeParser:
                         code_text,
                         context=f"in {relative_path}::arrow_function"
                     )
+                    
+                    # Add context header
+                    code_text = self.add_context_header(code_text, relative_path)
 
                     metadata = {
                         "language": parser_key,
@@ -578,6 +711,9 @@ class CodeParser:
                         code_text,
                         context=f"in {relative_path}::class {class_name}"
                     )
+                    
+                    # Add context header
+                    code_text = self.add_context_header(code_text, relative_path)
 
                     metadata = {
                         "language": parser_key,
