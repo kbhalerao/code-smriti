@@ -65,6 +65,9 @@ async def search_code_tool(
     """
     Search for code across indexed repositories using semantic vector search.
 
+    Makes separate queries for code chunks vs documents to ensure we get actual code,
+    not just documentation headers.
+
     Returns list of dicts (for JSON serialization to LLM).
     """
     logger.warning(f"🔧 TOOL EXECUTING: search_code(query='{query}', limit={limit}, repo={repo_filter})")
@@ -74,53 +77,132 @@ async def search_code_tool(
         query_with_prefix = f"search_document: {query}"
         query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
 
-        # Build FTS search request with kNN vector search
-        search_request = {
-            "query": {
-                "match_none": {}  # We only want vector results
-            },
-            "knn": [
-                {
-                    "field": "embedding",
-                    "vector": query_embedding,
-                    "k": min(limit, 10)
-                }
-            ],
-            "size": min(limit, 10),
-            "fields": ["*"]
-        }
+        # Retrieve plenty of chunks - 128k context window can handle it
+        code_limit = 20    # Top 20 code chunks
+        doc_limit = 20     # Top 20 documents
+        commit_limit = 10  # Top 10 commit messages
 
-        # Add repository filter if specified
-        if repo_filter:
-            search_request["query"] = {
-                "conjuncts": [
-                    {"match": repo_filter, "field": "repo_id"}
-                ]
-            }
+        logger.info(f"Searching: {code_limit} code chunks + {doc_limit} documents + {commit_limit} commits")
 
-        # Call Couchbase FTS API
+        # Couchbase FTS connection details
         couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
         couchbase_user = os.getenv('COUCHBASE_USERNAME', 'Administrator')
         couchbase_pass = os.getenv('COUCHBASE_PASSWORD', 'password123')
-
         fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
 
+        all_hits = []
+
+        # Query 1: Search for code chunks (type='code_chunk')
+        # TEMPORARY: Force filter to kbhalerao/labcore for testing
+        # Filter goes INSIDE knn object for pre-filtering (before kNN ranking)
+        # Use "term" query for exact matching without analysis
+        # NOTE: keyword_analyzer has to_lower filter, so we must lowercase our terms
+        code_filter = {
+            "conjuncts": [
+                {"term": "code_chunk", "field": "type"},
+                {"term": "kbhalerao/labcore".lower(), "field": "repo_id"}
+            ]
+        }
+        # if repo_filter:
+        #     code_filter["conjuncts"].append({"term": repo_filter.lower(), "field": "repo_id"})
+
+        code_search_request = {
+            "knn": [{
+                "field": "embedding",
+                "vector": query_embedding,
+                "k": code_limit,
+                "filter": code_filter  # Filter INSIDE knn object
+            }],
+            "size": code_limit,
+            "fields": ["*"]
+        }
+
+        logger.info(f"Query 1: Searching for code chunks (k={code_limit})")
+        logger.warning(f"FTS Request: {json.dumps(code_search_request, indent=2)}")
         response = await ctx.http_client.post(
             fts_url,
-            json=search_request,
+            json=code_search_request,
             auth=(couchbase_user, couchbase_pass)
         )
 
-        if response.status_code != 200:
-            logger.error(f"FTS search failed: {response.status_code} - {response.text}")
-            return []
+        if response.status_code == 200:
+            result = response.json()
+            code_hits = result.get('hits', [])
+            all_hits.extend(code_hits)
+            logger.info(f"  → Found {len(code_hits)} code chunks")
+        else:
+            logger.error(f"Code chunk search failed: {response.status_code} - {response.text}")
 
-        result = response.json()
-        hits = result.get('hits', [])
+        # TEMPORARY: Disable document and commit queries to focus on code chunks only
+        # # Query 2: Search for documents (type='document')
+        # doc_query_filters = [{"match": "document", "field": "type"}]
+        # if repo_filter:
+        #     doc_query_filters.append({"match": repo_filter, "field": "repo_id"})
 
-        # Fetch full documents from Couchbase
+        # doc_search_request = {
+        #     "query": {
+        #         "conjuncts": doc_query_filters
+        #     },
+        #     "knn": [{
+        #         "field": "embedding",
+        #         "vector": query_embedding,
+        #         "k": min(doc_limit, 5)
+        #     }],
+        #     "size": min(doc_limit, 5),
+        #     "fields": ["*"]
+        # }
+
+        # logger.info(f"Query 2: Searching for documents (k={doc_limit})")
+        # response = await ctx.http_client.post(
+        #     fts_url,
+        #     json=doc_search_request,
+        #     auth=(couchbase_user, couchbase_pass)
+        # )
+
+        # if response.status_code == 200:
+        #     result = response.json()
+        #     doc_hits = result.get('hits', [])
+        #     all_hits.extend(doc_hits)
+        #     logger.info(f"  → Found {len(doc_hits)} documents")
+        # else:
+        #     logger.error(f"Document search failed: {response.status_code} - {response.text}")
+
+        # # Query 3: Search for commit messages (type='commit')
+        # commit_query_filters = [{"match": "commit", "field": "type"}]
+        # if repo_filter:
+        #     commit_query_filters.append({"match": repo_filter, "field": "repo_id"})
+
+        # commit_search_request = {
+        #     "query": {
+        #         "conjuncts": commit_query_filters
+        #     },
+        #     "knn": [{
+        #         "field": "embedding",
+        #         "vector": query_embedding,
+        #         "k": commit_limit
+        #     }],
+        #     "size": commit_limit,
+        #     "fields": ["*"]
+        # }
+
+        # logger.info(f"Query 3: Searching for commits (k={commit_limit})")
+        # response = await ctx.http_client.post(
+        #     fts_url,
+        #     json=commit_search_request,
+        #     auth=(couchbase_user, couchbase_pass)
+        # )
+
+        # if response.status_code == 200:
+        #     result = response.json()
+        #     commit_hits = result.get('hits', [])
+        #     all_hits.extend(commit_hits)
+        #     logger.info(f"  → Found {len(commit_hits)} commits")
+        # else:
+        #     logger.error(f"Commit search failed: {response.status_code} - {response.text}")
+
+        # Fetch full documents from Couchbase for all hits
         code_chunks = []
-        for hit in hits:
+        for hit in all_hits:
             doc_id = hit.get('id')
             if not doc_id:
                 continue
@@ -131,20 +213,34 @@ async def search_code_tool(
                 doc_result = collection.get(doc_id)
                 doc = doc_result.content_as[dict]
 
+                # Extract content based on document type
+                # Code chunks use 'code_text', documents use 'content', commits use 'commit_message'
+                doc_type = doc.get('type', '')
+                if doc_type == 'code_chunk':
+                    text_content = doc.get('code_text', '')
+                elif doc_type == 'document':
+                    text_content = doc.get('content', '')
+                elif doc_type == 'commit':
+                    text_content = doc.get('commit_message', '')
+                else:
+                    # Fallback: try all fields
+                    text_content = doc.get('code_text', '') or doc.get('content', '') or doc.get('commit_message', '')
+
                 code_chunks.append({
-                    "content": doc.get('code_text', '')[:500],  # Truncate for LLM context
+                    "content": text_content,
                     "repo_id": doc.get('repo_id', ''),
                     "file_path": doc.get('file_path', ''),
                     "language": doc.get('language', ''),
                     "score": hit.get('score', 0.0),
                     "start_line": doc.get('start_line'),
-                    "end_line": doc.get('end_line')
+                    "end_line": doc.get('end_line'),
+                    "type": doc_type  # Include type for debugging
                 })
             except Exception as e:
                 logger.warning(f"Failed to fetch document {doc_id}: {e}")
                 continue
 
-        logger.info(f"✓ Found {len(code_chunks)} code chunks")
+        logger.info(f"✓ Found {len(code_chunks)} total chunks ({code_limit} code, {doc_limit} docs)")
         return code_chunks
 
     except Exception as e:
