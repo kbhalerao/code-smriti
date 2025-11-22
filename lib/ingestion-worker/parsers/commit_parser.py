@@ -55,7 +55,7 @@ class CommitChunk:
             "commit_hash": self.commit_hash,
             "commit_date": self.commit_date,
             "author": self.author,
-            "commit_message": self.commit_message,
+            "content": self.commit_message,  # Unified schema: commit_message -> content
             "files_changed": self.files_changed,
             "embedding": self.embedding,
             "created_at": self.created_at

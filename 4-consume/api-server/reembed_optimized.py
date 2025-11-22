@@ -77,14 +77,16 @@ async def reembed_optimized(batch_size=32):
                 doc_type = chunk.get('type', '')
 
                 # Extract text based on type
+                # Note: Using unified 'content' field (code_text is legacy)
                 if doc_type == 'code_chunk':
-                    text = chunk.get('code_text', '')
+                    text = chunk.get('content', chunk.get('code_text', ''))
                 elif doc_type == 'document':
                     text = chunk.get('content', '')
                 elif doc_type == 'commit':
-                    text = chunk.get('commit_message', '')
+                    text = chunk.get('content', '')
                 else:
-                    text = chunk.get('code_text') or chunk.get('content') or chunk.get('commit_message') or ''
+                    # Fallback: try unified field first, then legacy fields
+                    text = chunk.get('content') or chunk.get('code_text') or ''
 
                 # Skip empty or huge texts
                 if text and 0 < len(text) < 1_000_000:

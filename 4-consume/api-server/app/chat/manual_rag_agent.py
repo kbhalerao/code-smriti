@@ -105,7 +105,7 @@ async def search_code_tool(
         # Construct N1QL query
         # We select fields directly to avoid a second fetch
         n1ql = f"""
-            SELECT META().id, repo_id, file_path, code_text, language, start_line, end_line, type,
+            SELECT META().id, repo_id, file_path, content, language, start_line, end_line, type,
                    SEARCH_SCORE() as score
             FROM `{ctx.tenant_id}`
             WHERE {where_clause}

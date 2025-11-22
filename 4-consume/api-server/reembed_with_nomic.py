@@ -94,15 +94,16 @@ async def reembed_all_chunks(batch_size=16):  # Reduced from 128 to avoid MPS bu
                     doc_type = chunk.get('type', doc.get('type', ''))
                     text = ''
 
+                    # Note: Using unified 'content' field (code_text and commit_message are legacy)
                     if doc_type == 'code_chunk':
-                        text = doc.get('code_text', '')
+                        text = doc.get('content', doc.get('code_text', ''))
                     elif doc_type == 'document':
                         text = doc.get('content', '')
                     elif doc_type == 'commit':
-                        text = doc.get('commit_message', '')
+                        text = doc.get('content', '')
                     else:
-                        # Fallback: try all possible text fields
-                        text = doc.get('code_text') or doc.get('content') or doc.get('commit_message') or doc.get('message') or ''
+                        # Fallback: try unified field first, then legacy fields
+                        text = doc.get('content') or doc.get('code_text') or ''
 
                     # Skip empty or extremely large texts (> 1MB to avoid buffer overflow)
                     if text and 0 < len(text) < 1_000_000:

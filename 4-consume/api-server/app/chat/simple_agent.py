@@ -185,7 +185,7 @@ CANNOT answer: weather, jokes, general knowledge, off-topic questions"""
                     doc = doc_result.content_as[dict]
 
                     sources.append({
-                        "content": doc.get('code_text', ''),  # Field is 'code_text' not 'content'
+                        "content": doc.get('content', doc.get('code_text', '')),  # Unified schema with fallback
                         "repo": doc.get('repo_id', ''),
                         "file": doc.get('file_path', ''),
                         "language": doc.get('language', ''),

@@ -255,7 +255,7 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
                     doc = doc_result.content_as[dict]
 
                     code_chunks.append(CodeChunk(
-                        content=doc.get('code_text', ''),
+                        content=doc.get('content', doc.get('code_text', '')),  # Unified schema with fallback
                         repo_id=doc.get('repo_id', ''),
                         file_path=doc.get('file_path', ''),
                         language=doc.get('language', ''),
