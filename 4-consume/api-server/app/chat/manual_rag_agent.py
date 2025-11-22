@@ -77,171 +77,81 @@ async def search_code_tool(
         query_with_prefix = f"search_document: {query}"
         query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
 
-        # Retrieve plenty of chunks - 128k context window can handle it
-        code_limit = 20    # Top 20 code chunks
-        doc_limit = 20     # Top 20 documents
-        commit_limit = 10  # Top 10 commit messages
+        # Retrieve plenty of chunks
+        code_limit = 20
 
-        logger.info(f"Searching: {code_limit} code chunks + {doc_limit} documents + {commit_limit} commits")
+        logger.info(f"Searching: {code_limit} code chunks (using N1QL)")
 
-        # Couchbase FTS connection details
-        couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
-        couchbase_user = os.getenv('COUCHBASE_USERNAME', 'Administrator')
-        couchbase_pass = os.getenv('COUCHBASE_PASSWORD', 'password123')
-        fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
-
-        all_hits = []
-
-        # Query 1: Search for code chunks (type='code_chunk')
-        # TEMPORARY: Force filter to kbhalerao/labcore for testing
-        # Filter goes INSIDE knn object for pre-filtering (before kNN ranking)
-        # Use "term" query for exact matching without analysis
-        # NOTE: keyword_analyzer has to_lower filter, so we must lowercase our terms
-        code_filter = {
-            "conjuncts": [
-                {"term": "code_chunk", "field": "type"},
-                {"term": "kbhalerao/labcore".lower(), "field": "repo_id"}
-            ]
-        }
-        # if repo_filter:
-        #     code_filter["conjuncts"].append({"term": repo_filter.lower(), "field": "repo_id"})
-
-        code_search_request = {
-            "knn": [{
-                "field": "embedding",
-                "vector": query_embedding,
-                "k": code_limit,
-                "filter": code_filter  # Filter INSIDE knn object
-            }],
-            "size": code_limit,
-            "fields": ["*"]
+        # Build N1QL query with SEARCH() function
+        # This allows us to use standard SQL filtering (WHERE clause) BEFORE vector search
+        # effectively achieving pre-filtering.
+        
+        # Base parameters
+        query_params = {
+            "vector": query_embedding,
+            "k": code_limit
         }
 
-        logger.info(f"Query 1: Searching for code chunks (k={code_limit})")
-        logger.warning(f"FTS Request: {json.dumps(code_search_request, indent=2)}")
-        response = await ctx.http_client.post(
-            fts_url,
-            json=code_search_request,
-            auth=(couchbase_user, couchbase_pass)
-        )
+        # Build WHERE clause
+        where_clauses = ["type = 'code_chunk'"]
+        
+        # Add repo filter if provided
+        # TEMPORARY: Force filter to kbhalerao/labcore for testing if not provided
+        # This matches the problem statement's requirement to fix the specific issue
+        target_repo = repo_filter if repo_filter else "kbhalerao/labcore"
+        
+        if target_repo:
+            where_clauses.append("repo_id = $repo_id")
+            query_params["repo_id"] = target_repo
 
-        if response.status_code == 200:
-            result = response.json()
-            code_hits = result.get('hits', [])
-            all_hits.extend(code_hits)
-            logger.info(f"  → Found {len(code_hits)} code chunks")
-        else:
-            logger.error(f"Code chunk search failed: {response.status_code} - {response.text}")
+        where_clause = " AND ".join(where_clauses)
 
-        # TEMPORARY: Disable document and commit queries to focus on code chunks only
-        # # Query 2: Search for documents (type='document')
-        # doc_query_filters = [{"match": "document", "field": "type"}]
-        # if repo_filter:
-        #     doc_query_filters.append({"match": repo_filter, "field": "repo_id"})
+        # Construct N1QL query
+        # We select fields directly to avoid a second fetch
+        n1ql = f"""
+            SELECT META().id, repo_id, file_path, code_text, language, start_line, end_line, type,
+                   SEARCH_SCORE() as score
+            FROM `{ctx.tenant_id}`
+            WHERE {where_clause}
+            AND SEARCH(`{ctx.tenant_id}`, {{
+                "knn": [{{
+                    "field": "embedding",
+                    "vector": $vector,
+                    "k": $k
+                }}]
+            }})
+            ORDER BY score DESC
+            LIMIT $k
+        """
 
-        # doc_search_request = {
-        #     "query": {
-        #         "conjuncts": doc_query_filters
-        #     },
-        #     "knn": [{
-        #         "field": "embedding",
-        #         "vector": query_embedding,
-        #         "k": min(doc_limit, 5)
-        #     }],
-        #     "size": min(doc_limit, 5),
-        #     "fields": ["*"]
-        # }
+        logger.info(f"Executing N1QL: {n1ql}")
+        logger.info(f"Params: repo_id={query_params.get('repo_id')}")
 
-        # logger.info(f"Query 2: Searching for documents (k={doc_limit})")
-        # response = await ctx.http_client.post(
-        #     fts_url,
-        #     json=doc_search_request,
-        #     auth=(couchbase_user, couchbase_pass)
-        # )
-
-        # if response.status_code == 200:
-        #     result = response.json()
-        #     doc_hits = result.get('hits', [])
-        #     all_hits.extend(doc_hits)
-        #     logger.info(f"  → Found {len(doc_hits)} documents")
-        # else:
-        #     logger.error(f"Document search failed: {response.status_code} - {response.text}")
-
-        # # Query 3: Search for commit messages (type='commit')
-        # commit_query_filters = [{"match": "commit", "field": "type"}]
-        # if repo_filter:
-        #     commit_query_filters.append({"match": repo_filter, "field": "repo_id"})
-
-        # commit_search_request = {
-        #     "query": {
-        #         "conjuncts": commit_query_filters
-        #     },
-        #     "knn": [{
-        #         "field": "embedding",
-        #         "vector": query_embedding,
-        #         "k": commit_limit
-        #     }],
-        #     "size": commit_limit,
-        #     "fields": ["*"]
-        # }
-
-        # logger.info(f"Query 3: Searching for commits (k={commit_limit})")
-        # response = await ctx.http_client.post(
-        #     fts_url,
-        #     json=commit_search_request,
-        #     auth=(couchbase_user, couchbase_pass)
-        # )
-
-        # if response.status_code == 200:
-        #     result = response.json()
-        #     commit_hits = result.get('hits', [])
-        #     all_hits.extend(commit_hits)
-        #     logger.info(f"  → Found {len(commit_hits)} commits")
-        # else:
-        #     logger.error(f"Commit search failed: {response.status_code} - {response.text}")
-
-        # Fetch full documents from Couchbase for all hits
-        code_chunks = []
-        for hit in all_hits:
-            doc_id = hit.get('id')
-            if not doc_id:
-                continue
-
-            try:
-                bucket = ctx.db.cluster.bucket(ctx.tenant_id)
-                collection = bucket.default_collection()
-                doc_result = collection.get(doc_id)
-                doc = doc_result.content_as[dict]
-
-                # Extract content based on document type
-                # Code chunks use 'code_text', documents use 'content', commits use 'commit_message'
-                doc_type = doc.get('type', '')
-                if doc_type == 'code_chunk':
-                    text_content = doc.get('code_text', '')
-                elif doc_type == 'document':
-                    text_content = doc.get('content', '')
-                elif doc_type == 'commit':
-                    text_content = doc.get('commit_message', '')
-                else:
-                    # Fallback: try all fields
-                    text_content = doc.get('code_text', '') or doc.get('content', '') or doc.get('commit_message', '')
-
+        try:
+            result = ctx.db.cluster.query(n1ql, query_params)
+            
+            code_chunks = []
+            for row in result:
                 code_chunks.append({
-                    "content": text_content,
-                    "repo_id": doc.get('repo_id', ''),
-                    "file_path": doc.get('file_path', ''),
-                    "language": doc.get('language', ''),
-                    "score": hit.get('score', 0.0),
-                    "start_line": doc.get('start_line'),
-                    "end_line": doc.get('end_line'),
-                    "type": doc_type  # Include type for debugging
+                    "content": row.get('code_text', ''),
+                    "repo_id": row.get('repo_id', ''),
+                    "file_path": row.get('file_path', ''),
+                    "language": row.get('language', ''),
+                    "score": row.get('score', 0.0),
+                    "start_line": row.get('start_line'),
+                    "end_line": row.get('end_line'),
+                    "type": row.get('type', 'code_chunk')
                 })
-            except Exception as e:
-                logger.warning(f"Failed to fetch document {doc_id}: {e}")
-                continue
 
-        logger.info(f"✓ Found {len(code_chunks)} total chunks ({code_limit} code, {doc_limit} docs)")
-        return code_chunks
+            logger.info(f"✓ Found {len(code_chunks)} code chunks")
+            return code_chunks
+
+        except Exception as e:
+            logger.error(f"N1QL vector search failed: {e}")
+            # Fallback or re-raise? For now, return empty list to be safe
+            return []
+
+
 
     except Exception as e:
         logger.error(f"Vector search failed: {e}", exc_info=True)
