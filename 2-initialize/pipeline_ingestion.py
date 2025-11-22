@@ -14,7 +14,7 @@ from datetime import datetime
 os.environ["REPOS_PATH"] = "/Users/kaustubh/Documents/codesmriti-repos"
 
 # Add ingestion-worker to path
-sys.path.insert(0, str(Path(__file__).parent / "ingestion-worker"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "lib" / "ingestion-worker"))
 
 from storage.couchbase_client import CouchbaseClient
 from worker import IngestionWorker

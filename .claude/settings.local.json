@@ -6,7 +6,11 @@
       "Bash(tmux capture-pane:*)",
       "Bash(python:*)",
       "WebFetch(domain:docs.couchbase.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git pull:*)",
+      "Bash(tmux new-session:*)",
+      "Bash(tmux list-sessions:*)",
+      "Bash(uv pip install:*)"
     ],
     "deny": [],
     "ask": []

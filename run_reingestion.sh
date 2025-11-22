@@ -6,14 +6,12 @@
 # Ensure we are in the project root
 cd "$(dirname "$0")"
 
-# Activate virtual environment
-if [ -d "venv" ]; then
-    source venv/bin/activate
+# Activate UV-managed virtual environment
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
 else
-    echo "Creating virtual environment..."
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r lib/ingestion-worker/requirements.txt
+    echo "Error: .venv not found. Please run 'uv venv .venv' first."
+    exit 1
 fi
 
 # Run re-ingestion script
