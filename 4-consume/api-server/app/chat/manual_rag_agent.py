@@ -60,94 +60,148 @@ async def search_code_tool(
     ctx: RAGContext,
     query: str,
     limit: int = 5,
-    repo_filter: Optional[str] = None
+    repo_filter: Optional[str] = None,
+    doc_type: str = "code_chunk",
+    text_query: Optional[str] = None,
+    file_path_pattern: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
-    Search for code across indexed repositories using semantic vector search.
+    Search for code/documents/commits using hybrid text+vector search.
 
-    Makes separate queries for code chunks vs documents to ensure we get actual code,
-    not just documentation headers.
+    Uses FTS REST API (not N1QL SEARCH) due to Couchbase 7.6.2 bug where
+    N1QL SEARCH() returns zero scores for vector similarity.
+
+    Supports three search modes:
+    1. Vector-only: Just semantic similarity (default)
+    2. Text-only: Just keyword matching (if text_query provided, query=None)
+    3. Hybrid: Combined text + vector scores (if both provided)
+
+    Args:
+        query: Natural language query for semantic vector search
+        limit: Max results to return
+        repo_filter: Optional repo_id to filter by
+        doc_type: Document type filter (code_chunk, document, commit)
+        text_query: Optional text query for keyword/BM25 search on content field
+        file_path_pattern: Optional file path pattern (e.g., "*.py", "src/", "test_")
 
     Returns list of dicts (for JSON serialization to LLM).
     """
-    logger.warning(f"🔧 TOOL EXECUTING: search_code(query='{query}', limit={limit}, repo={repo_filter})")
+    search_mode = "hybrid" if (query and text_query) else ("text" if text_query else "vector")
+    logger.warning(f"🔧 TOOL EXECUTING: search_code(mode={search_mode}, limit={limit}, repo={repo_filter}, type={doc_type}, file={file_path_pattern})")
 
     try:
-        # Generate embedding for the query
-        query_with_prefix = f"search_document: {query}"
-        query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
+        # Retrieve more chunks than needed for reranking
+        code_limit = min(limit * 4, 20)
 
-        # Retrieve plenty of chunks
-        code_limit = 20
+        logger.info(f"Searching via FTS REST API ({search_mode} mode): {code_limit} chunks")
 
-        logger.info(f"Searching: {code_limit} code chunks (using N1QL)")
-
-        # Build N1QL query with SEARCH() function
-        # This allows us to use standard SQL filtering (WHERE clause) BEFORE vector search
-        # effectively achieving pre-filtering.
-        
-        # Base parameters
-        query_params = {
-            "vector": query_embedding,
-            "k": code_limit
+        # Build FTS request based on search mode
+        fts_request = {
+            "size": code_limit,
+            "fields": ["*"]  # Request all stored fields
         }
 
-        # Build WHERE clause
-        where_clauses = ["type = 'code_chunk'"]
-        
-        # Add repo filter if provided
-        if repo_filter:
-            where_clauses.append("repo_id = $repo_id")
-            query_params["repo_id"] = repo_filter
+        # Add vector search (kNN) if query provided
+        if query:
+            query_with_prefix = f"search_document: {query}"
+            query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
 
-        where_clause = " AND ".join(where_clauses)
+            fts_request["knn"] = [{
+                "field": "embedding",
+                "vector": query_embedding,
+                "k": code_limit
+            }]
 
-        # Construct N1QL query
-        # We select fields directly to avoid a second fetch
-        n1ql = f"""
-            SELECT META().id, repo_id, file_path, content, language, start_line, end_line, type,
-                   SEARCH_SCORE() as score
-            FROM `{ctx.tenant_id}`
-            WHERE {where_clause}
-            AND SEARCH(`{ctx.tenant_id}`, {{
-                "knn": [{{
-                    "field": "embedding",
-                    "vector": $vector,
-                    "k": $k
-                }}]
-            }})
-            ORDER BY score DESC
-            LIMIT $k
-        """
+        # Add text search if text_query provided
+        if text_query:
+            fts_request["query"] = {
+                "match": text_query,
+                "field": "content"
+            }
 
-        logger.info(f"Executing N1QL: {n1ql}")
-        logger.info(f"Params: repo_id={query_params.get('repo_id')}")
+        # FTS will automatically fuse scores when both knn and query are present
 
-        try:
-            result = ctx.db.cluster.query(n1ql, query_params)
-            
+        # Call FTS REST API directly
+        import httpx
+        fts_url = "http://localhost:8094/api/index/code_vector_index/query"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                fts_url,
+                json=fts_request,
+                auth=("Administrator", "password123"),
+                timeout=30.0
+            )
+
+            if response.status_code != 200:
+                logger.error(f"FTS request failed: {response.status_code} - {response.text}")
+                return []
+
+            fts_results = response.json()
+            hits = fts_results.get('hits', [])
+
+            if not hits:
+                logger.info("No FTS results found")
+                return []
+
+            logger.info(f"FTS returned {len(hits)} hits")
+
+            # Extract document IDs and scores
+            doc_ids = [hit['id'] for hit in hits]
+            scores_by_id = {hit['id']: hit.get('score', 0.0) for hit in hits}
+
+            # Fetch full documents via N1QL using IDs with filtering
+            from couchbase.options import QueryOptions
+
+            # Build N1QL WHERE clause with filters (since FTS kNN filters don't work)
+            where_clauses = ["META().id IN $doc_ids", "type = $doc_type"]
+            query_params = {"doc_ids": doc_ids, "doc_type": doc_type}
+
+            if repo_filter:
+                where_clauses.append("repo_id = $repo_filter")
+                query_params["repo_filter"] = repo_filter
+
+            if file_path_pattern:
+                # Support wildcard patterns using LIKE
+                where_clauses.append("file_path LIKE $file_path_pattern")
+                # Convert glob-style wildcards to SQL LIKE patterns
+                sql_pattern = file_path_pattern.replace('*', '%').replace('?', '_')
+                query_params["file_path_pattern"] = sql_pattern
+
+            where_clause = " AND ".join(where_clauses)
+
+            n1ql = f"""
+                SELECT META().id, repo_id, file_path, content, `language`,
+                       start_line, end_line, type
+                FROM `{ctx.tenant_id}`
+                WHERE {where_clause}
+            """
+
+            result = ctx.db.cluster.query(n1ql, QueryOptions(named_parameters=query_params))
+
+            # Build results with FTS scores
             code_chunks = []
             for row in result:
+                doc_id = row['id']
                 code_chunks.append({
                     "content": row.get("content", row.get("code_text", "")),
                     "repo_id": row.get('repo_id', ''),
                     "file_path": row.get('file_path', ''),
                     "language": row.get('language', ''),
-                    "score": row.get('score', 0.0),
+                    "score": scores_by_id.get(doc_id, 0.0),
                     "start_line": row.get('start_line'),
                     "end_line": row.get('end_line'),
-                    "type": row.get('type', 'code_chunk')
+                    "type": row.get('type', doc_type)
                 })
 
-            logger.info(f"✓ Found {len(code_chunks)} code chunks")
-            return code_chunks
+            # Sort by score descending (FTS order might not be preserved)
+            code_chunks.sort(key=lambda x: x['score'], reverse=True)
 
-        except Exception as e:
-            logger.error(f"N1QL vector search failed: {e}")
-            # Fallback or re-raise? For now, return empty list to be safe
-            return []
+            # Return top 'limit' results
+            final_results = code_chunks[:limit]
 
-
+            logger.info(f"✓ Returning {len(final_results)} results with scores {[r['score'] for r in final_results[:3]]}")
+            return final_results
 
     except Exception as e:
         logger.error(f"Vector search failed: {e}", exc_info=True)
@@ -192,13 +246,17 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_code",
-            "description": "Search for code across indexed repositories using semantic vector search.",
+            "description": "Search for code, documents, or commits using hybrid text+vector search. Supports vector-only (semantic), text-only (keyword/BM25), or hybrid (combined) search modes.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Natural language or code search query"
+                        "description": "Natural language query for semantic vector search. Optional if text_query provided."
+                    },
+                    "text_query": {
+                        "type": "string",
+                        "description": "Keywords for full-text/BM25 search on code content. Use for exact terms, function names, or specific code patterns. Combines with 'query' for hybrid search."
                     },
                     "limit": {
                         "type": "integer",
@@ -207,11 +265,20 @@ TOOL_SCHEMAS = [
                     },
                     "repo_filter": {
                         "type": "string",
-                        "description": "Optional repository filter (format: owner/repo)",
-                        "default": None
+                        "description": "Filter by repository ID (e.g., 'kbhalerao/labcore')"
+                    },
+                    "file_path_pattern": {
+                        "type": "string",
+                        "description": "Filter by file path pattern using wildcards. Examples: '*.py' (Python files), 'test_*' (test files), 'src/' (files in src), '*consumer*' (files containing 'consumer')"
+                    },
+                    "doc_type": {
+                        "type": "string",
+                        "description": "Type of document: 'code_chunk' for code, 'document' for docs/README, 'commit' for git commits",
+                        "enum": ["code_chunk", "document", "commit"],
+                        "default": "code_chunk"
                     }
                 },
-                "required": ["query"]
+                "required": []
             }
         }
     },

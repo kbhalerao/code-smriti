@@ -256,3 +256,87 @@ async def chat_test(request: ChatRequest, db: CouchbaseClient = Depends(get_db))
             status_code=500,
             detail=f"Failed to process chat request: {str(e)}"
         )
+
+
+class SearchRequest(BaseModel):
+    """Request model for search-only endpoint"""
+    query: Optional[str] = Field(default=None, description="Semantic vector search query")
+    text_query: Optional[str] = Field(default=None, description="Keyword/BM25 text search query")
+    limit: int = Field(default=5, ge=1, le=20, description="Number of results")
+    repo_filter: Optional[str] = Field(default=None, description="Filter by repository")
+    file_path_pattern: Optional[str] = Field(default=None, description="File path pattern (e.g., '*.py')")
+    doc_type: str = Field(default="code_chunk", description="Document type: code_chunk, document, or commit")
+
+
+@router.post("/search")
+async def search_code_only(request: SearchRequest, db: CouchbaseClient = Depends(get_db)):
+    """
+    Raw search endpoint that returns documents without LLM processing.
+    Supports hybrid text+vector search and filtering.
+
+    Use this to evaluate search quality before RAG processing.
+
+    Examples:
+        Vector search:
+          {"query": "background consumer processing"}
+
+        Text search:
+          {"text_query": "BackgroundConsumer class"}
+
+        Hybrid search:
+          {"query": "background consumer", "text_query": "BackgroundConsumer"}
+
+        With filters:
+          {"query": "authentication", "repo_filter": "kbhalerao/labcore", "file_path_pattern": "*.py"}
+    """
+    try:
+        tenant_id = "code_kosha"
+        logger.info(f"Search request: vector={request.query} text={request.text_query}")
+
+        # Initialize context for search
+        from app.chat.manual_rag_agent import RAGContext, search_code_tool
+        from app.chat.pydantic_rag_agent import get_embedding_model, get_http_client
+
+        embedding_model = get_embedding_model(settings.embedding_model_name)
+        http_client = get_http_client()
+
+        ctx = RAGContext(
+            db=db,
+            tenant_id=tenant_id,
+            ollama_host=settings.ollama_host,
+            http_client=http_client,
+            embedding_model=embedding_model
+        )
+
+        # Call search with all parameters
+        results = await search_code_tool(
+            ctx,
+            query=request.query,
+            text_query=request.text_query,
+            limit=request.limit,
+            repo_filter=request.repo_filter,
+            file_path_pattern=request.file_path_pattern,
+            doc_type=request.doc_type
+        )
+
+        search_mode = "hybrid" if (request.query and request.text_query) else ("text" if request.text_query else "vector")
+
+        return {
+            "query": request.query,
+            "text_query": request.text_query,
+            "search_mode": search_mode,
+            "filters": {
+                "repo": request.repo_filter,
+                "file_path": request.file_path_pattern,
+                "doc_type": request.doc_type
+            },
+            "results": results,
+            "count": len(results)
+        }
+
+    except Exception as e:
+        logger.error(f"Search failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search failed: {str(e)}"
+        )

@@ -9,17 +9,17 @@ from typing import List, Dict, Any
 from loguru import logger
 
 # Load evaluation questions
-with open('search_eval_questions.json', 'r') as f:
+with open('tests/search_eval_questions.json', 'r') as f:
     eval_data = json.load(f)
 
 questions = eval_data['questions']
 
 async def search_via_api(query: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Call the actual chat/test API to get search results"""
+    """Call the search API to get search results (bypasses full RAG)"""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                'http://localhost:8000/api/chat/test',
+                'http://localhost:8000/api/chat/search',
                 json={'query': query}
             )
             if response.status_code == 200:
@@ -34,8 +34,8 @@ async def search_via_api(query: str, limit: int = 10) -> List[Dict[str, Any]]:
 
 def calculate_metrics(results: List[Dict], expected_files: List[str]) -> Dict:
     """Calculate search quality metrics"""
-    # Extract file paths from results
-    result_files = [r.get('file', '') for r in results]
+    # Extract file paths from results (search returns 'file_path' not 'file')
+    result_files = [r.get('file_path', r.get('file', '')) for r in results]
 
     # Find rank of first expected file
     reciprocal_rank = 0.0
@@ -92,8 +92,8 @@ async def run_evaluation():
             'expected_files': expected_files,
             'top_results': [
                 {
-                    'file': r.get('file', ''),
-                    'repo': r.get('repo', ''),
+                    'file': r.get('file_path', r.get('file', '')),
+                    'repo': r.get('repo_id', r.get('repo', '')),
                     'score': r.get('score', 0.0)
                 }
                 for r in search_results[:5]
