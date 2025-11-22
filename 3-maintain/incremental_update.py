@@ -25,32 +25,48 @@ from worker import IngestionWorker
 from loguru import logger
 
 
-def load_repos_from_file(file_path: str) -> List[str]:
+def load_repos_from_filesystem(repos_path: str) -> List[str]:
     """
-    Load repository list from repos_to_ingest.txt
-    Skips comments (#) and empty lines
+    Auto-discover repositories from filesystem
+    Converts directory names (owner_repo) back to repo_id format (owner/repo)
 
     Args:
-        file_path: Path to repos_to_ingest.txt
+        repos_path: Path to directory containing cloned repos
 
     Returns:
         List of repo_id strings
     """
     repos = []
+    repos_dir = Path(repos_path)
 
-    with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
+    if not repos_dir.exists():
+        logger.warning(f"Repos directory does not exist: {repos_path}")
+        return repos
 
-            # Skip empty lines and comments
-            if not line or line.startswith('#'):
+    # Skip test repos and special directories
+    skip_patterns = {'test/', 'octocat/', '.', '__'}
+
+    for dirname in sorted(os.listdir(repos_dir)):
+        full_path = repos_dir / dirname
+
+        # Skip non-directories and hidden files
+        if not full_path.is_dir() or dirname.startswith('.'):
+            continue
+
+        # Convert directory name back to repo_id format
+        # Format: owner_repo -> owner/repo
+        parts = dirname.split('_', 1)
+        if len(parts) == 2:
+            repo_id = f"{parts[0]}/{parts[1]}"
+
+            # Skip test repos
+            if any(repo_id.startswith(pattern) for pattern in skip_patterns):
+                logger.debug(f"Skipping test repo: {repo_id}")
                 continue
 
-            # Extract repo name (before any comment)
-            repo_id = line.split('#')[0].strip()
-
-            if repo_id:
-                repos.append(repo_id)
+            repos.append(repo_id)
+        else:
+            logger.debug(f"Skipping invalid directory name: {dirname}")
 
     return repos
 
@@ -70,6 +86,40 @@ def get_repos_in_database(db: CouchbaseClient) -> Set[str]:
     return {row['repo_id'] for row in result}
 
 
+def get_current_repo_files(repo_path: Path, repo_id: str) -> Set[str]:
+    """
+    Get all supported files currently in the repository filesystem
+
+    Args:
+        repo_path: Path to the repository directory
+        repo_id: Repository identifier
+
+    Returns:
+        Set of relative file paths
+    """
+    from config import WorkerConfig
+    from parsers.code_parser import should_skip_file
+
+    config = WorkerConfig()
+    current_files = set()
+
+    # Collect code files
+    for ext in config.supported_code_extensions:
+        for file_path in repo_path.rglob(f"*{ext}"):
+            if not should_skip_file(file_path):
+                relative_path = str(file_path.relative_to(repo_path))
+                current_files.add(relative_path)
+
+    # Collect doc files
+    for ext in config.supported_doc_extensions:
+        for file_path in repo_path.rglob(f"*{ext}"):
+            if not should_skip_file(file_path):
+                relative_path = str(file_path.relative_to(repo_path))
+                current_files.add(relative_path)
+
+    return current_files
+
+
 async def main():
     logger.info("="*70)
     logger.info("INCREMENTAL UPDATE - New Repos + Updates to Existing")
@@ -85,12 +135,12 @@ async def main():
     logger.info(f"\nInitial database state:")
     logger.info(f"  Total chunks: {initial_chunks:,}")
 
-    # Load repository list from file
-    repos_file = Path(__file__).parent.parent / "1-config" / "repos_to_ingest.txt"
-    logger.info(f"\nLoading repository list from: {repos_file}")
+    # Auto-discover repositories from filesystem
+    repos_path = os.getenv("REPOS_PATH", "/Users/kaustubh/Documents/codesmriti-repos")
+    logger.info(f"\nAuto-discovering repositories from: {repos_path}")
 
-    all_repos = load_repos_from_file(str(repos_file))
-    logger.info(f"  Found {len(all_repos)} repositories in repos_to_ingest.txt")
+    all_repos = load_repos_from_filesystem(repos_path)
+    logger.info(f"  Found {len(all_repos)} repositories in filesystem")
 
     # Get repos already in database
     existing_repos = get_repos_in_database(db)
@@ -146,13 +196,12 @@ async def main():
 
         for repo_id in new_repos:
             processed += 1
-            logger.info(f"\n[{processed}/{total_repos}] NEW REPO: {repo_id}")
-            logger.info("-"*70)
+            logger.info(f"\nIngesting new repo [{processed}/{len(new_repos)}]: {repo_id}")
 
             try:
                 await worker.process_repository(repo_id)
                 successful += 1
-                logger.success(f"✓ {repo_id} ingested successfully")
+                logger.success(f"✓ {repo_id} completed")
             except Exception as e:
                 failed += 1
                 failed_repos.append((repo_id, str(e)))
@@ -166,22 +215,69 @@ async def main():
 
         for repo_id in repos_to_update:
             processed += 1
-            logger.info(f"\n[{processed}/{total_repos}] UPDATE: {repo_id}")
-            logger.info("-"*70)
 
             try:
                 await worker.process_repository(repo_id)
                 successful += 1
-                logger.success(f"✓ {repo_id} updated successfully")
+                # Only log if verbose or if it's a milestone
+                if processed % 10 == 0 or processed == len(repos_to_update):
+                    logger.info(f"Progress: {processed}/{len(repos_to_update)} repos updated")
             except Exception as e:
                 # Check if error is because no changes detected
                 if "no changes" in str(e).lower():
                     skipped += 1
-                    logger.info(f"⊘ {repo_id} - no changes detected")
                 else:
                     failed += 1
                     failed_repos.append((repo_id, str(e)))
                     logger.error(f"✗ {repo_id} failed: {e}")
+
+    # PHASE 3: Cleanup deleted files
+    if repos_to_update:
+        logger.info(f"\n{'='*70}")
+        logger.info(f"PHASE 3: Cleanup Deleted Files for {len(repos_to_update)} Repos")
+        logger.info(f"{'='*70}")
+
+        total_deleted_files = 0
+        total_deleted_chunks = 0
+
+        for repo_id in repos_to_update:
+            try:
+                # Get files in database for this repo
+                db_file_commits = db.get_repo_file_commits(repo_id)
+                db_files = set(db_file_commits.keys())
+
+                # Get current files in filesystem
+                repo_path = Path(repos_path) / repo_id.replace("/", "_")
+                if not repo_path.exists():
+                    logger.warning(f"Repo path does not exist: {repo_path}, skipping cleanup")
+                    continue
+
+                current_files = get_current_repo_files(repo_path, repo_id)
+
+                # Find deleted files (in DB but not in filesystem)
+                deleted_files = db_files - current_files
+
+                if deleted_files:
+                    # Delete all chunks for deleted files
+                    repo_deleted_chunks = 0
+                    for file_path in deleted_files:
+                        deleted_count = db.delete_file_chunks(repo_id, file_path)
+                        repo_deleted_chunks += deleted_count
+
+                    total_deleted_files += len(deleted_files)
+                    total_deleted_chunks += repo_deleted_chunks
+
+                    # Only log if significant cleanup was done
+                    if len(deleted_files) > 0:
+                        logger.info(f"🗑  {repo_id}: Removed {len(deleted_files)} files ({repo_deleted_chunks} chunks)")
+
+            except Exception as e:
+                logger.error(f"Error during cleanup for {repo_id}: {e}")
+
+        if total_deleted_files > 0:
+            logger.info(f"\n✓ Cleanup complete: {total_deleted_files} files removed, {total_deleted_chunks} chunks deleted")
+        else:
+            logger.info(f"\n✓ Cleanup complete: No deleted files found")
 
     elapsed = datetime.now() - start_time
 
@@ -199,6 +295,8 @@ async def main():
     logger.info(f"  Successful:       {successful}")
     logger.info(f"  Failed:           {failed}")
     logger.info(f"  Skipped (no changes): {skipped}")
+    if 'total_deleted_files' in locals() and total_deleted_files > 0:
+        logger.info(f"  Deleted files:    {total_deleted_files} ({total_deleted_chunks} chunks)")
 
     logger.info(f"\nDatabase changes:")
     logger.info(f"  Initial chunks: {initial_chunks:,}")

@@ -268,7 +268,6 @@ class IngestionWorker:
 
                     if current_commit and current_commit == cached_commit:
                         # File unchanged by git - skip
-                        logger.debug(f"✓ {relative_path}: Unchanged (git commit match), skipping")
                         return None
                 else:
                     # FULL RUN MODE: Use chunk-count-based deduplication for crash recovery
@@ -277,7 +276,6 @@ class IngestionWorker:
 
                     if existing_count == expected_count:
                         # Chunk counts match - file already processed correctly, skip entirely
-                        logger.debug(f"✓ {relative_path}: Already complete ({expected_count} chunks), skipping")
                         return None
 
                     # Chunk count mismatch detected
