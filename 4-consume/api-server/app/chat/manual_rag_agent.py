@@ -63,7 +63,9 @@ async def search_code_tool(
     repo_filter: Optional[str] = None,
     doc_type: str = "code_chunk",
     text_query: Optional[str] = None,
-    file_path_pattern: Optional[str] = None
+    file_path_pattern: Optional[str] = None,
+    min_file_length: int = 100,
+    max_file_length: int = 10000
 ) -> List[Dict[str, Any]]:
     """
     Search for code/documents/commits using hybrid text+vector search.
@@ -83,6 +85,8 @@ async def search_code_tool(
         doc_type: Document type filter (code_chunk, document, commit)
         text_query: Optional text query for keyword/BM25 search on content field
         file_path_pattern: Optional file path pattern (e.g., "*.py", "src/", "test_")
+        min_file_length: Minimum file size in characters (default: 100)
+        max_file_length: Maximum file size in characters (default: 10000)
 
     Returns list of dicts (for JSON serialization to LLM).
     """
@@ -136,7 +140,10 @@ async def search_code_tool(
         # Add vector search (kNN) with pre-filtering
         if query:
             query_with_prefix = f"search_document: {query}"
-            query_embedding = ctx.embedding_model.encode(query_with_prefix).tolist()
+            query_embedding = ctx.embedding_model.encode(
+                query_with_prefix,
+                normalize_embeddings=True  # Normalize to unit vector for dot product = cosine similarity
+            ).tolist()
 
             fts_request["knn"] = [{
                 "field": "embedding",
@@ -199,8 +206,11 @@ async def search_code_tool(
                 where_clauses.append("repo_id = $repo_id")
                 query_params["repo_id"] = repo_filter
 
-            # Filter out very short content
-            where_clauses.append("LENGTH(content) > 50")
+            # Filter by file size range (using metadata.file_size)
+            where_clauses.append("metadata.file_size >= $min_file_length")
+            where_clauses.append("metadata.file_size <= $max_file_length")
+            query_params["min_file_length"] = min_file_length
+            query_params["max_file_length"] = max_file_length
 
             if file_path_pattern:
                 where_clauses.append("file_path LIKE $file_path_pattern")
@@ -319,6 +329,16 @@ TOOL_SCHEMAS = [
                         "description": "Type of document: 'code_chunk' for code, 'document' for docs/README, 'commit' for git commits",
                         "enum": ["code_chunk", "document", "commit"],
                         "default": "code_chunk"
+                    },
+                    "min_file_length": {
+                        "type": "integer",
+                        "description": "Minimum file size in characters (default: 100). Filters out very small files like empty __init__.py or config stubs.",
+                        "default": 100
+                    },
+                    "max_file_length": {
+                        "type": "integer",
+                        "description": "Maximum file size in characters (default: 10000). Set lower to focus on smaller, focused code files. Set higher to include larger files.",
+                        "default": 10000
                     }
                 },
                 "required": []
