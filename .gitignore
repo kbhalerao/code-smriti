@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
+lib/ingestion-worker/venv/
 parts/
 sdist/
 var/
