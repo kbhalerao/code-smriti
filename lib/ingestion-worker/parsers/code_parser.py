@@ -150,18 +150,22 @@ class CodeParser:
 
         # Initialize tree-sitter parsers
         self.parsers = {}
-        
-        # TODO: Load languages properly. For now, if tree-sitter-languages is missing,
-        # we might need to compile them or use a different approach.
-        # For the purpose of this verification step, we will assume parsers are not available
-        # if the library is missing, which will trigger the fallback logic (if we add it).
-        # But wait, the code RELIES on parsers.
-        
-        # MOCK for verification if real parsers fail to load
-        if not HAS_TREE_SITTER:
-             logger.warning("Tree-sitter not available, using mock parsers")
-        
-        logger.info(f"✓ Parsers loaded: {list(self.parsers.keys())}")
+
+        # Try to load tree-sitter-languages
+        try:
+            from tree_sitter_languages import get_parser
+            self.parsers = {
+                "python": get_parser("python"),
+                "javascript": get_parser("javascript"),
+                "typescript": get_parser("typescript"),
+            }
+            logger.info(f"✓ Tree-sitter parsers loaded: {list(self.parsers.keys())}")
+        except ImportError:
+            logger.warning("tree-sitter-languages not available, will use regex fallback")
+        except Exception as e:
+            logger.warning(f"Failed to load tree-sitter parsers: {e}, will use regex fallback")
+
+        logger.info(f"✓ Parsers initialized: {list(self.parsers.keys()) if self.parsers else 'regex fallback mode'}")
 
     def create_metadata_chunk(self, file_path: str, content: str, language: str, git_metadata: Dict, repo_id: str) -> CodeChunk:
         """
