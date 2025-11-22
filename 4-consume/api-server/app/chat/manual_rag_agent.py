@@ -270,6 +270,53 @@ class ManualRAGAgent:
             embedding_model=self.embedding_model
         )
 
+    def read_file_tool(self, file_path: str) -> str:
+        """
+        Read the full content of a file.
+        Useful when you need more context than what the search provided.
+        
+        Args:
+            file_path: The relative path to the file (e.g., "app/main.py")
+        """
+        # TODO: Implement file reading logic with security checks
+        # For now, returning a placeholder
+        return f"Reading file {file_path} is not yet implemented in the agent, but the tool is registered."
+
+    def list_tools(self) -> list[dict]:
+        """List available tools for the agent."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_code",
+                    "description": "Search for code snippets using vector search.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"},
+                            "limit": {"type": "integer", "description": "Max results (default 5)"},
+                            "repo_id": {"type": "string", "description": "Filter by repository ID"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "description": "Read the full content of a file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "Relative path to the file"}
+                        },
+                        "required": ["file_path"]
+                    }
+                }
+            }
+        ]
+
     async def chat(self, query: str, max_iterations: int = 5) -> str:
         """
         Process a chat query with manual tool calling loop.

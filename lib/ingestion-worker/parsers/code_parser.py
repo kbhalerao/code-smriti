@@ -640,19 +640,39 @@ class CodeParser:
             # Get git metadata
             git_metadata = self.get_git_metadata(repo_path, relative_path)
 
-            # Parse based on language
+            # 1. Create metadata chunk (for all files)
+            metadata_chunk = self.create_metadata_chunk(
+                relative_path, content, language, git_metadata, repo_id
+            )
+            chunks = [metadata_chunk]
+
+            # 2. Check file size - if small, index as one chunk
+            if len(content) < 6000:
+                chunks.append(CodeChunk(
+                    repo_id=repo_id,
+                    file_path=relative_path,
+                    chunk_type="code",
+                    code_text=self.add_context_header(content, relative_path),
+                    language=language,
+                    metadata=git_metadata
+                ))
+                return chunks
+
+            # 3. Large file: split with tree-sitter
             if language == "python":
-                return await self.parse_python_file(
+                chunks.extend(await self.parse_python_file(
                     file_path, content, repo_id, relative_path, git_metadata
-                )
+                ))
             elif language == "javascript":
-                return await self.parse_javascript_file(
+                chunks.extend(await self.parse_javascript_file(
                     file_path, content, repo_id, relative_path, git_metadata, is_typescript=False
-                )
+                ))
             elif language == "typescript":
-                return await self.parse_javascript_file(
+                chunks.extend(await self.parse_javascript_file(
                     file_path, content, repo_id, relative_path, git_metadata, is_typescript=True
-                )
+                ))
+            
+            return chunks
 
         except Exception as e:
             logger.error(f"Error parsing file {file_path}: {e}")
