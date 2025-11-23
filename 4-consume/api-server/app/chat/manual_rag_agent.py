@@ -256,18 +256,35 @@ async def search_code_tool(
         return []
 
 
-async def list_available_repos_tool(ctx: RAGContext) -> List[str]:
-    """List all repositories available in the indexed codebase."""
-    logger.warning(f"🔧 TOOL EXECUTING: list_available_repos()")
+async def list_available_repos_tool(
+    ctx: RAGContext,
+    repo_filter: Optional[str] = None
+) -> List[str]:
+    """
+    List all repositories available in the indexed codebase.
+
+    Args:
+        repo_filter: Optional filter to search for repos containing this text (e.g., 'labcore', 'farmworth')
+    """
+    logger.warning(f"🔧 TOOL EXECUTING: list_available_repos(repo_filter={repo_filter})")
 
     try:
-        query = f"""
-            SELECT DISTINCT repo_id
-            FROM `{ctx.tenant_id}`
-            WHERE repo_id IS NOT MISSING
-            ORDER BY repo_id
-            LIMIT 50
-        """
+        # Build query with optional filter
+        if repo_filter:
+            query = f"""
+                SELECT DISTINCT repo_id
+                FROM `{ctx.tenant_id}`
+                WHERE repo_id IS NOT MISSING
+                  AND LOWER(repo_id) LIKE LOWER('%{repo_filter}%')
+                ORDER BY repo_id
+            """
+        else:
+            query = f"""
+                SELECT DISTINCT repo_id
+                FROM `{ctx.tenant_id}`
+                WHERE repo_id IS NOT MISSING
+                ORDER BY repo_id
+            """
 
         result = ctx.db.cluster.query(query)
         repos = [row['repo_id'] for row in result]
@@ -295,24 +312,10 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "search_code",
             "description": (
-                "Search for code, documentation, or commits using semantic and keyword search. "
-                "Returns diverse, deduplicated results ranked by relevance. "
-                "\n\n"
-                "SEARCH MODES:\n"
-                "- Vector-only (semantic): Use 'query' alone for conceptual searches\n"
-                "- Text-only (keyword): Use 'text_query' alone for exact terms/function names\n"
-                "- Hybrid: Use both for combined semantic + keyword matching\n"
-                "\n"
-                "FILTERING (all optional - use to narrow results):\n"
-                "- repo_filter: Restrict to specific repository when user mentions project name\n"
-                "- doc_type: Choose 'code_chunk' (default), 'document' (README/docs), or 'commit'\n"
-                "- file_path_pattern: Target specific files (*.py, test_*, src/, *views*)\n"
-                "\n"
-                "BEHAVIOR:\n"
-                "- Results are automatically deduplicated for diversity\n"
-                "- Combines multiple filters with AND logic (all must match)\n"
-                "- Leave filters unset for broad, exploratory searches\n"
-                "- Set filters when user specifies a particular project/file type/location"
+                "Hybrid semantic and keyword search across code, documentation, and commits. "
+                "Returns JSON objects containing 'content', 'repo_id', 'file_path', and 'score' for citation. "
+                "Combine 'query' (semantic) with 'text_query' (keywords) when that improves precision, and apply optional filters "
+                "for repo, doc_type, or file path to focus results. Prefer one broad search before any narrow follow-ups."
             ),
             "parameters": {
                 "type": "object",
@@ -336,7 +339,7 @@ TOOL_SCHEMAS = [
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Number of results to return (default: 5, max: 10). Use higher limits for exploratory searches.",
+                        "description": "Number of results to return (default 5, max 10). Only increase above 5 when the user explicitly asks for more context.",
                         "default": 5
                     },
                     "repo_filter": {
@@ -358,12 +361,8 @@ TOOL_SCHEMAS = [
                     "doc_type": {
                         "type": "string",
                         "description": (
-                            "Type of content to search:\n"
-                            "- 'code_chunk': Source code (default, use for most queries)\n"
-                            "- 'document': Documentation, README files, markdown docs\n"
-                            "- 'commit': Git commit messages and metadata\n"
-                            "Choose 'document' when user asks about documentation or architecture. "
-                            "Choose 'commit' for git history or change information."
+                            "Content type to search. 'code_chunk' is default; switch to 'document' for docs/markdown or 'commit' for git history. "
+                            "Prefer the 'doc_type' field name (not 'type') when setting this parameter."
                         ),
                         "enum": ["code_chunk", "document", "commit"],
                         "default": "code_chunk"
@@ -377,10 +376,22 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "list_available_repos",
-            "description": "List all repositories available in the indexed codebase.",
+            "description": (
+                "List all repositories available in the indexed codebase. "
+                "Use this to discover available repositories or to search for a specific repo by name fragment."
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "repo_filter": {
+                        "type": "string",
+                        "description": (
+                            "Optional filter to search for repositories containing this text. "
+                            "Examples: 'labcore' (finds kbhalerao/labcore), 'farmworth' (finds farmworth repos). "
+                            "Leave empty to list all repositories."
+                        )
+                    }
+                },
                 "required": []
             }
         }
@@ -392,7 +403,36 @@ TOOL_SCHEMAS = [
 # Manual RAG Agent
 # ============================================================================
 
-SYSTEM_PROMPT = """You are a helpful code search assistant. Use the search_code tool to find relevant code, then provide clear answers with citations in the format: [repo_id/file_path]"""
+SYSTEM_PROMPT = """You are an efficient code search assistant tuned for Qwen3-30B. Deliver accurate, source-backed answers with the fewest tool calls necessary.
+
+KEY PRINCIPLES:
+- You may call tools at most 5 times per user query. Stop as soon as any tool returns useful evidence.
+- If two tool calls in a row are empty or low-signal, stop searching, describe what you attempted, and request clarification or offer best-effort guidance.
+- Never repeat a tool call with identical parameters. Adjust filters or conclude instead.
+- Treat tool responses as authoritative data. Each result contains "content", "repo_id", "file_path", and "score"—study them before choosing your next action.
+- Never mention internal limits, tool errors, or your reasoning process in the final answer.
+- If the query appears off-topic (e.g., non-code questions), politely decline and explain your scope.
+
+SEARCH STRATEGY:
+1. Launch with one broad semantic search (set "query", limit ≤ 8). Raise the limit only when the user clearly asks for extensive coverage.
+2. If the user references an unfamiliar repo, call list_available_repos with repo_filter once to confirm spelling.
+3. After the broad pass, use at most one targeted follow-up (keywords, repo_filter, or file_path_pattern). Use remaining calls only when they add genuinely new context.
+
+WHEN TO ANSWER:
+- As soon as you have any relevant snippets or documentation.
+- After hitting your tool budget or consecutive empty results—summarize what you learned and state any gaps.
+- If a tool fails, use the evidence already gathered and note the gap without exposing error details.
+
+OUTPUT FORMAT:
+- Provide concise, structured markdown organized for quick scanning.
+- Quote only the portions of retrieved code or docs that matter.
+- Cite every claim using [repo_id/file_path] from the tool output. If a cited path was not returned, omit it.
+- If you lack direct evidence, clearly say so and outline next steps; do not speculate.
+
+EFFICIENCY TIPS:
+- Combine semantic and keyword parameters when that meaningfully narrows results.
+- Favor broader searches over many narrow ones; do not loop on similar queries.
+- Keep language direct and professional. Avoid filler and meta commentary."""
 
 
 class ManualRAGAgent:
@@ -473,13 +513,13 @@ class ManualRAGAgent:
             }
         ]
 
-    async def chat(self, query: str, max_iterations: int = 5) -> str:
+    async def chat(self, query: str, max_iterations: int = 10) -> str:
         """
         Process a chat query with manual tool calling loop.
 
         Args:
             query: User's query
-            max_iterations: Maximum tool calling iterations
+            max_iterations: Maximum tool calling iterations (default: 10)
 
         Returns:
             Generated response as markdown
@@ -494,8 +534,8 @@ class ManualRAGAgent:
                 "Your query seems to be off-topic. Please ask about code-related topics."
             )
 
-        # Build messages (no system prompt to avoid breaking tool calling)
-        messages = []
+        # Build messages with system prompt
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
         # Track sources from tool calls
         sources_used = []
@@ -504,17 +544,25 @@ class ManualRAGAgent:
         for msg in self.conversation_history[-4:]:  # Last 2 exchanges
             messages.append({"role": msg.role, "content": msg.content})
 
-        # Add current query (citation instructions are in system prompt)
+        # Add current query
         messages.append({"role": "user", "content": query})
 
         # Tool calling loop
+        max_tool_calls = 5
+        tool_calls_made = 0
+        seen_tool_signatures = set()
+
         for iteration in range(max_iterations):
             logger.info(f"Iteration {iteration + 1}/{max_iterations}")
 
-            # Call Ollama API - force tools on first iteration
-            response = await self._call_ollama(messages, force_tools=(iteration == 0))
+            try:
+                # Call Ollama API - force tools on first iteration
+                response = await self._call_ollama(messages, force_tools=(iteration == 0))
 
-            logger.info(f"Ollama response - finish_reason: {response.get('finish_reason')}, has_tool_calls: {bool(response.get('tool_calls'))}")
+                logger.info(f"Ollama response - finish_reason: {response.get('finish_reason')}, has_tool_calls: {bool(response.get('tool_calls'))}")
+            except Exception as e:
+                logger.error(f"Error calling Ollama in iteration {iteration + 1}: {e}", exc_info=True)
+                raise
 
             # Check if we got tool calls
             if response.get("finish_reason") == "tool_calls":
@@ -530,6 +578,41 @@ class ManualRAGAgent:
 
                 # Execute each tool
                 for tool_call in tool_calls:
+                    function_name = tool_call["function"]["name"]
+                    try:
+                        raw_arguments = json.loads(tool_call["function"]["arguments"])
+                    except json.JSONDecodeError:
+                        raw_arguments = {}
+
+                    signature = f"{function_name}:{json.dumps(raw_arguments, sort_keys=True)}"
+
+                    if tool_calls_made >= max_tool_calls:
+                        logger.warning("Tool call rejected – limit reached")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "content": json.dumps({
+                                "error": "tool_call_limit_reached",
+                                "message": "Tool call limit (5) reached. Provide an answer with existing information."
+                            })
+                        })
+                        continue
+
+                    if signature in seen_tool_signatures:
+                        logger.warning("Tool call rejected – duplicate parameters")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call["id"],
+                            "content": json.dumps({
+                                "error": "duplicate_tool_call",
+                                "message": "This tool request duplicates a previous call. Proceed with the existing results."
+                            })
+                        })
+                        continue
+
+                    seen_tool_signatures.add(signature)
+                    tool_calls_made += 1
+
                     tool_result = await self._execute_tool(tool_call)
 
                     # Track sources from search_code tool
@@ -540,11 +623,15 @@ class ManualRAGAgent:
                                 if source not in sources_used:
                                     sources_used.append(source)
 
+                    # Convert tool result to JSON string
+                    tool_result_json = json.dumps(tool_result)
+                    logger.debug(f"Tool result length: {len(tool_result_json)} chars")
+
                     # Add tool result to messages
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],
-                        "content": json.dumps(tool_result)
+                        "content": tool_result_json
                     })
 
                 # Continue loop to get final response
@@ -553,6 +640,10 @@ class ManualRAGAgent:
             else:
                 # Got final text response
                 final_answer = response.get("content", "")
+
+                if not final_answer:
+                    logger.warning(f"Empty final answer! Response: {response}")
+                    logger.warning(f"finish_reason: {response.get('finish_reason')}")
 
                 # Append sources to answer if any were found
                 if sources_used:
@@ -586,24 +677,57 @@ class ManualRAGAgent:
             "tool_choice": "required" if force_tools else "auto"  # Force tool usage on first call
         }
 
-        logger.debug(f"Sending to Ollama: {len(messages)} messages, {len(TOOL_SCHEMAS)} tools, tool_choice={payload['tool_choice']}")
-        logger.debug(f"Last message: {messages[-1]}")
+        logger.info(f"Sending to Ollama: {len(messages)} messages, {len(TOOL_SCHEMAS)} tools, tool_choice={payload['tool_choice']}")
+        logger.info(f"Last 2 messages: {json.dumps(messages[-2:], indent=2) if len(messages) >= 2 else json.dumps(messages, indent=2)}")
 
-        response = await self.http_client.post(url, json=payload, timeout=60.0)
+        try:
+            response = await self.http_client.post(url, json=payload, timeout=60.0)
+        except httpx.TimeoutException as e:
+            logger.error(f"Ollama request timed out after 60s: {e}")
+            raise Exception(f"Ollama request timed out: {e}")
+        except httpx.RequestError as e:
+            logger.error(f"Ollama request failed: {e}")
+            raise Exception(f"Ollama request failed: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error calling Ollama: {type(e).__name__}: {e}")
+            raise
 
         if response.status_code != 200:
-            logger.error(f"Ollama API error: {response.status_code} - {response.text}")
-            raise Exception(f"Ollama API error: {response.status_code}")
+            logger.error(f"Ollama API error: {response.status_code}")
+            logger.error(f"Response text (first 1000 chars): {response.text[:1000]}")
+            raise Exception(f"Ollama API returned status {response.status_code}: {response.text[:200]}")
 
-        data = response.json()
-        choice = data["choices"][0]
-        message = choice["message"]
+        try:
+            data = response.json()
+            logger.debug(f"Ollama response keys: {list(data.keys())}")
 
-        return {
-            "content": message.get("content", ""),
-            "tool_calls": message.get("tool_calls", []),
-            "finish_reason": choice.get("finish_reason")
-        }
+            if "choices" not in data or not data["choices"]:
+                logger.error(f"Invalid Ollama response - no choices!")
+                logger.error(f"Response data: {json.dumps(data, indent=2)[:1000]}")
+                raise Exception(f"Invalid Ollama response - missing 'choices' field")
+
+            choice = data["choices"][0]
+            message = choice["message"]
+
+            finish_reason = choice.get("finish_reason")
+            content = message.get("content", "")
+            tool_calls = message.get("tool_calls", [])
+
+            logger.debug(f"Parsed response - finish_reason={finish_reason}, content_len={len(content)}, tool_calls={len(tool_calls)}")
+
+            return {
+                "content": content,
+                "tool_calls": tool_calls,
+                "finish_reason": finish_reason
+            }
+        except (KeyError, IndexError) as e:
+            logger.error(f"Failed to parse Ollama response structure: {type(e).__name__}: {e}")
+            logger.error(f"Response data: {json.dumps(data, indent=2)[:1000] if 'data' in locals() else 'N/A'}")
+            raise Exception(f"Failed to parse Ollama response: {type(e).__name__}: {e}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON response: {e}")
+            logger.error(f"Response text (first 1000 chars): {response.text[:1000]}")
+            raise Exception(f"Ollama returned invalid JSON: {e}")
 
     async def _execute_tool(self, tool_call: Dict) -> Any:
         """Execute a tool function and return the result."""
@@ -638,6 +762,7 @@ class ManualRAGAgent:
 
     def _is_valid_query(self, query: str) -> bool:
         """Simple heuristic to check if query is code-related."""
+        return True
         query_lower = query.lower()
 
         # Off-topic keywords

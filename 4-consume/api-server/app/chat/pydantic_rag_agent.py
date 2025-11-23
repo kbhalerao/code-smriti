@@ -276,23 +276,38 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
 
 
     @agent.tool
-    async def list_available_repos(ctx: RunContext[RAGContext]) -> List[str]:
+    async def list_available_repos(
+        ctx: RunContext[RAGContext],
+        repo_filter: Optional[str] = None
+    ) -> List[str]:
         """
         List all repositories available in the indexed codebase.
+
+        Args:
+            repo_filter: Optional filter to search for repos containing this text (e.g., 'labcore', 'farmworth')
 
         Returns:
             List of repository identifiers (format: owner/repo)
         """
-        logger.info("Tool called: list_available_repos()")
+        logger.info(f"Tool called: list_available_repos(repo_filter={repo_filter})")
 
         try:
-            query = f"""
-                SELECT DISTINCT repo_id
-                FROM `{ctx.deps.tenant_id}`
-                WHERE repo_id IS NOT MISSING
-                ORDER BY repo_id
-                LIMIT 50
-            """
+            # Build query with optional filter
+            if repo_filter:
+                query = f"""
+                    SELECT DISTINCT repo_id
+                    FROM `{ctx.deps.tenant_id}`
+                    WHERE repo_id IS NOT MISSING
+                      AND LOWER(repo_id) LIKE LOWER('%{repo_filter}%')
+                    ORDER BY repo_id
+                """
+            else:
+                query = f"""
+                    SELECT DISTINCT repo_id
+                    FROM `{ctx.deps.tenant_id}`
+                    WHERE repo_id IS NOT MISSING
+                    ORDER BY repo_id
+                """
 
             result = ctx.deps.db.cluster.query(query)
             repos = [row['repo_id'] for row in result]

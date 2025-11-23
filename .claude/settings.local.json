@@ -34,7 +34,15 @@
       "Bash(git push:*)",
       "Bash(source:*)",
       "Bash(lsof:*)",
-      "Bash(docker-compose ps:*)"
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(ollama pull:*)",
+      "Bash(ollama list:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(lms ls:*)",
+      "Bash(lms server status:*)",
+      "Bash(lms server --help:*)",
+      "Bash(lms server start:*)"
     ],
     "deny": [],
     "ask": []
