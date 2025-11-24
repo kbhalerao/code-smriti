@@ -7,7 +7,7 @@ from loguru import logger
 
 from app.dependencies import get_current_user, get_db, get_rag_agent_wrapper
 from app.database.couchbase_client import CouchbaseClient
-from app.chat.manual_rag_agent import ManualRAGAgent, ConversationMessage
+from app.chat.pydantic_rag_agent import CodeSmritiRAGAgent, ConversationMessage
 from app.config import settings
 
 
@@ -123,8 +123,8 @@ async def chat(
                 for msg in request.conversation_history
             ]
 
-        # Initialize agent (manual tool calling to bypass pydantic-ai Ollama bug)
-        agent = ManualRAGAgent(
+        # Initialize PydanticAI agent (now works with LMStudio's OpenAI-compatible endpoint)
+        agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
             ollama_host=settings.ollama_host,
@@ -212,8 +212,8 @@ async def chat_test(request: ChatRequest, db: CouchbaseClient = Depends(get_db))
                 for msg in request.conversation_history
             ]
 
-        # Initialize agent (manual tool calling to bypass pydantic-ai Ollama bug)
-        agent = ManualRAGAgent(
+        # Initialize PydanticAI agent (now works with LMStudio's OpenAI-compatible endpoint)
+        agent = CodeSmritiRAGAgent(
             db=db,
             tenant_id=tenant_id,
             ollama_host=settings.ollama_host,

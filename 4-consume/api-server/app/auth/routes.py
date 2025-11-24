@@ -1,8 +1,9 @@
 """Minimal auth routes for internal LAN access"""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from .utils import create_access_token
+from ..config import settings
 
 router = APIRouter()
 
@@ -20,18 +21,25 @@ class TokenResponse(BaseModel):
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest):
     """
-    Simple login endpoint for internal use.
+    Login endpoint with single-user authentication.
 
-    For now, accepts any username/password and returns a JWT token.
-    The token includes the username and tenant_id.
+    Verifies credentials against configured API_USERNAME and API_PASSWORD.
+    Returns a JWT token upon successful authentication.
 
     Example:
         curl -X POST http://localhost:8000/api/auth/login \
           -H "Content-Type: application/json" \
-          -d '{"username": "demo", "password": "demo"}'
+          -d '{"username": "codesmriti", "password": "your-password"}'
     """
-    # For internal use - minimal security
-    # Accept any username/password, generate token
+    # Verify credentials against configured values
+    if request.username != settings.api_username or request.password != settings.api_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Generate JWT token with user info
     token_data = {
         "sub": request.username,
         "username": request.username,

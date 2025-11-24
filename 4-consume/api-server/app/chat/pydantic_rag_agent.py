@@ -7,6 +7,7 @@ Features:
 - Tool-calling architecture for flexible search
 - Streaming response support
 - High-quality markdown narrative generation
+- OpenAI-compatible endpoint support (works with LM Studio)
 """
 
 import os
@@ -17,8 +18,6 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.ollama import OllamaProvider
 from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
@@ -146,21 +145,23 @@ Output format:
 """
 
 
-# Initialize the agent with Ollama model
+# Initialize the agent with OpenAI-compatible model (LM Studio)
 def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "llama3.1:latest") -> Agent[RAGContext, str]:
-    """Create PydanticAI agent for RAG."""
+    """Create PydanticAI agent for RAG using OpenAI-compatible endpoint (LM Studio)."""
 
-    # Use OpenAIChatModel with OllamaProvider
-    # Note: Tool calling with Ollama has known issues in pydantic-ai v1.21.0
+    # Set up environment for OpenAI provider to point to LM Studio
     base_url = ollama_host if ollama_host.endswith("/v1") or ollama_host.endswith("/v1/") else f"{ollama_host}/v1"
 
-    model = OpenAIChatModel(
-        model_name=llm_model,
-        provider=OllamaProvider(base_url=base_url)
-    )
+    # Configure environment for OpenAI provider
+    os.environ['OPENAI_BASE_URL'] = base_url
+    if 'OPENAI_API_KEY' not in os.environ:
+        os.environ['OPENAI_API_KEY'] = 'dummy'  # LM Studio doesn't require real API key
 
+    logger.info(f"Configuring PydanticAI with OpenAI provider: base_url={base_url}, model={llm_model}")
+
+    # Use simplified OpenAI model format (works with LM Studio)
     agent = Agent(
-        model=model,
+        f'openai:{llm_model}',
         system_prompt=SYSTEM_PROMPT,
         deps_type=RAGContext,
         output_type=str,

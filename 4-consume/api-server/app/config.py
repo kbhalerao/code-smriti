@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expiry_hours: int = 24
+    api_username: str
+    api_password: str
 
     # AES encryption for GitHub PATs
     aes_encryption_key: str
