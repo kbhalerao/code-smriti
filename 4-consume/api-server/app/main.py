@@ -84,7 +84,7 @@ app.include_router(users_router, prefix="/api/user", tags=["User"])
 app.include_router(repos_router, prefix="/api/repos", tags=["Repositories"])
 app.include_router(jobs_router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(search_router, prefix="/api/search", tags=["Search"])
-app.include_router(chat_router, prefix="/api", tags=["Chat"])
+app.include_router(chat_router, prefix="/api")
 
 
 @app.get("/health")
