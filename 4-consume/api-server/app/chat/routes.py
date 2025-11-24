@@ -11,7 +11,7 @@ from app.chat.pydantic_rag_agent import CodeSmritiRAGAgent, ConversationMessage
 from app.config import settings
 
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/rag", tags=["CodeSmriti RAG"])
 
 
 class ChatRequest(BaseModel):
