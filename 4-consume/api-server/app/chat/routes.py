@@ -443,6 +443,83 @@ async def search(
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 
+class RepoInfo(BaseModel):
+    """Repository information with document count"""
+
+    repo_id: str = Field(description="Repository identifier (format: owner/repo)")
+    doc_count: int = Field(description="Number of indexed documents")
+
+
+class ReposResponse(BaseModel):
+    """Response model for repos endpoint"""
+
+    repos: List[RepoInfo] = Field(description="List of repositories sorted by document count")
+    total_repos: int = Field(description="Total number of repositories")
+    total_docs: int = Field(description="Total number of documents across all repos")
+
+
+@router.get("/repos", response_model=ReposResponse)
+async def list_repos(
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db),
+    tenant_id: Optional[str] = None
+):
+    """
+    List all indexed repositories with document counts.
+
+    Returns repositories sorted by document count (descending) to help
+    MCP clients understand the codebase coverage and make better queries.
+
+    Requires authentication via JWT token in Authorization header.
+
+    Example:
+        ```bash
+        curl -X GET http://localhost:8000/api/rag/repos \\
+          -H "Authorization: Bearer YOUR_JWT_TOKEN"
+        ```
+
+    Returns:
+        ReposResponse with list of repos and their document counts
+    """
+    try:
+        tenant = tenant_id or current_user.get("tenant_id", "code_kosha")
+
+        logger.info(f"Repos list request from user={current_user.get('username')} tenant={tenant}")
+
+        # Query to get repo_id with document counts, sorted by count descending
+        n1ql = f"""
+            SELECT repo_id, COUNT(*) as doc_count
+            FROM `{tenant}`
+            WHERE repo_id IS NOT MISSING AND type = 'code_chunk'
+            GROUP BY repo_id
+            ORDER BY doc_count DESC
+        """
+
+        result = db.cluster.query(n1ql)
+
+        repos = []
+        total_docs = 0
+        for row in result:
+            repo_info = RepoInfo(
+                repo_id=row['repo_id'],
+                doc_count=row['doc_count']
+            )
+            repos.append(repo_info)
+            total_docs += row['doc_count']
+
+        logger.info(f"Found {len(repos)} repos with {total_docs} total documents")
+
+        return ReposResponse(
+            repos=repos,
+            total_repos=len(repos),
+            total_docs=total_docs
+        )
+
+    except Exception as e:
+        logger.error(f"Repos list request failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list repos: {str(e)}")
+
+
 @router.get("/health")
 async def chat_health():
     """Health check for chat service"""
