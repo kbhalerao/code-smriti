@@ -59,7 +59,7 @@ OLLAMA_CONFIG = LLMConfig(
 # MacStudio LM Studio endpoint
 LMSTUDIO_CONFIG = LLMConfig(
     provider="lmstudio",
-    model="qwen3-3b",  # Model loaded in LM Studio
+    model="qwen/qwen3-30b-a3b-2507",  # Model loaded in LM Studio
     base_url="http://macstudio.local:1234",
     temperature=0.3
 )
@@ -370,7 +370,7 @@ Write clear documentation (150-300 words)."""
 
 async def test_enricher():
     """Test the LLM enricher"""
-    enricher = LLMEnricher(OLLAMA_CONFIG)
+    enricher = LLMEnricher(LMSTUDIO_CONFIG)
 
     test_code = '''
 class FilteredQuerySetMixin(UserPrivilegeResolution):

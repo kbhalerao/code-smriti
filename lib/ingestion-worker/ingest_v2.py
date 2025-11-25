@@ -475,11 +475,20 @@ Files: {len(module['files'])}
         chunks.append(file_chunk)
 
         # For large files, also create symbol chunks
-        if len(content) > 6000 and language == "python":
+        if len(content) > 6000 and language in ("python", "sql"):
             try:
-                symbol_chunks = await self.code_parser.parse_python_file(
-                    file_path, content, repo_id, relative_path, git_metadata
-                )
+                # Dispatch to appropriate parser
+                if language == "python":
+                    symbol_chunks = await self.code_parser.parse_python_file(
+                        file_path, content, repo_id, relative_path, git_metadata
+                    )
+                elif language == "sql":
+                    symbol_chunks = await self.code_parser.parse_sql_file(
+                        file_path, content, repo_id, relative_path, git_metadata
+                    )
+                else:
+                    symbol_chunks = []
+
                 for sc in symbol_chunks:
                     enriched = EnrichedChunk(
                         chunk_id=sc.chunk_id,
@@ -560,7 +569,7 @@ Files: {len(module['files'])}
         # 4. Process all files
         logger.info("Processing files...")
         code_files = []
-        for ext in ['.py', '.js', '.ts', '.svelte', '.html', '.css']:
+        for ext in config.supported_code_extensions:
             code_files.extend(repo_path.rglob(f"*{ext}"))
 
         processed = 0

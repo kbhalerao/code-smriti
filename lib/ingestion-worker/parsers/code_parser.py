@@ -294,6 +294,7 @@ class CodeParser:
             ".css": "css",
             ".scss": "css",
             ".sass": "css",
+            ".sql": "sql",
         }
 
         return extension_map.get(file_path.suffix)
@@ -879,6 +880,121 @@ class CodeParser:
 
         return chunks
 
+    async def parse_sql_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict
+    ) -> List[CodeChunk]:
+        """
+        Parse SQL file into statement chunks.
+
+        Extracts:
+        - CREATE TABLE/VIEW/INDEX/FUNCTION/PROCEDURE statements
+        - Named queries (identified by comments)
+        - Complex SELECT statements
+        """
+        import re
+        chunks = []
+
+        # Pattern to match SQL statements
+        # Split on semicolons but preserve the statement
+        statements = re.split(r';\s*(?=\n|$)', content)
+
+        # Pattern for extracting names from CREATE statements
+        create_patterns = {
+            'table': re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+            'view': re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+            'index': re.compile(r'CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+            'function': re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+            'procedure': re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+            'trigger': re.compile(r'CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+[`"\[]?(\w+)[`"\]]?', re.IGNORECASE),
+        }
+
+        # Pattern for comment-named queries (e.g., "-- Query: GetUserById")
+        comment_name_pattern = re.compile(r'--\s*(?:Query|Name|Function):\s*(\w+)', re.IGNORECASE)
+
+        for statement in statements:
+            statement = statement.strip()
+            if not statement or len(statement) < 20:
+                continue
+
+            # Try to identify the statement type and name
+            stmt_type = None
+            stmt_name = None
+
+            # Check CREATE patterns
+            for obj_type, pattern in create_patterns.items():
+                match = pattern.search(statement)
+                if match:
+                    stmt_type = f"sql_{obj_type}"
+                    stmt_name = match.group(1)
+                    break
+
+            # Check for named query comments
+            if not stmt_name:
+                comment_match = comment_name_pattern.search(statement)
+                if comment_match:
+                    stmt_name = comment_match.group(1)
+                    stmt_type = "sql_query"
+
+            # If no name found, use line number or first keywords
+            if not stmt_name:
+                first_words = statement.split()[:3]
+                stmt_name = '_'.join(w.upper() for w in first_words if w.upper() in
+                                    ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'WITH', 'ALTER', 'DROP'])
+                if not stmt_name:
+                    stmt_name = "statement"
+                stmt_type = "sql_statement"
+
+            # Add the chunk
+            chunk_text = self.truncate_chunk_text(
+                statement,
+                f"{relative_path}::{stmt_name}"
+            )
+
+            # Calculate line numbers
+            start_line = content[:content.find(statement)].count('\n') + 1 if statement in content else 1
+
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type=stmt_type or "sql_statement",
+                code_text=self.add_context_header(chunk_text, relative_path, stmt_name),
+                language="sql",
+                metadata={
+                    "language": "sql",
+                    "statement_type": stmt_type,
+                    "symbol_name": stmt_name,
+                    "start_line": start_line,
+                    **git_metadata
+                }
+            ))
+
+        # If no statements were extracted, create a single file chunk
+        if not chunks:
+            chunks.append(CodeChunk(
+                repo_id=repo_id,
+                file_path=relative_path,
+                chunk_type="sql_file",
+                code_text=self.add_context_header(
+                    self.truncate_chunk_text(content, relative_path),
+                    relative_path
+                ),
+                language="sql",
+                metadata={
+                    "language": "sql",
+                    "symbol_name": Path(relative_path).stem,
+                    "start_line": 1,
+                    "end_line": content.count('\n') + 1,
+                    **git_metadata
+                }
+            ))
+
+        return chunks
+
     async def parse_file(
         self,
         file_path: Path,
@@ -958,7 +1074,12 @@ class CodeParser:
                 chunks.append(self.create_metadata_chunk(
                     relative_path, content, language, git_metadata, repo_id
                 ))
-            
+            elif language == "sql":
+                # Parse SQL file into statement chunks
+                chunks.extend(await self.parse_sql_file(
+                    file_path, content, repo_id, relative_path, git_metadata
+                ))
+
             return chunks
 
         except Exception as e:

@@ -3,7 +3,20 @@ name = "code-smriti"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "couchbase>=4.5.0",
+    "einops>=0.8.1",
+    "gitpython>=3.1.45",
+    "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "matplotlib>=3.10.7",
+    "pydantic-settings>=2.12.0",
+    "python-frontmatter>=1.1.0",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "scikit-learn>=1.7.2",
+    "sentence-transformers>=5.1.2",
+    "tree-sitter<0.22",
+    "tree-sitter-languages>=1.10.2",
 ]

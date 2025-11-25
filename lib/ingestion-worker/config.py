@@ -16,6 +16,9 @@ class WorkerConfig(BaseSettings):
     couchbase_password: str = os.getenv("COUCHBASE_PASSWORD", "")
     couchbase_bucket: str = os.getenv("COUCHBASE_BUCKET", "code_memory")
 
+    # Repository Storage Path
+    repos_path: str = os.getenv("REPOS_PATH", "/Users/kaustubh/Documents/codesmriti-repos")
+
     # Embedding Configuration
     embedding_backend: str = os.getenv("EMBEDDING_BACKEND", "local")  # "local" or "ollama"
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
@@ -42,7 +45,8 @@ class WorkerConfig(BaseSettings):
         ".py", ".js", ".ts", ".tsx", ".jsx",  # Python, JavaScript, TypeScript
         ".svelte", ".vue",                     # Component frameworks
         ".html", ".htm",                       # HTML
-        ".css", ".scss", ".sass"               # Stylesheets
+        ".css", ".scss", ".sass",              # Stylesheets
+        ".sql",                                # SQL
     ]
     supported_doc_extensions: list = [
         ".md", ".rst",                    # Markdown, reStructuredText (Sphinx)

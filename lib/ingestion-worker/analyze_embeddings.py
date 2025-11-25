@@ -128,7 +128,7 @@ class EmbeddingAnalyzer:
                    repo_id,
                    file_path,
                    SUBSTR(content, 0, 200) as content_preview,
-                   metadata.language as language
+                   metadata.`language` as lang
             FROM `{config.couchbase_bucket}`
             WHERE {where_clause}
             LIMIT {limit}
@@ -149,7 +149,7 @@ class EmbeddingAnalyzer:
                     "repo_id": row.get("repo_id", "unknown"),
                     "file_path": row.get("file_path", ""),
                     "content_preview": row.get("content_preview", ""),
-                    "language": row.get("language", "unknown")
+                    "language": row.get("lang", "unknown")
                 })
 
         logger.info(f"Fetched {len(embeddings)} embeddings")
