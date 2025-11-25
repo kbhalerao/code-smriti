@@ -66,8 +66,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 120s  # Allow 2 minutes for embedding model loading
 
   # Ingestion Worker - background service for processing repositories
   ingestion-worker:

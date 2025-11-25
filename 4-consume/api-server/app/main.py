@@ -14,7 +14,7 @@ from loguru import logger
 
 from .config import settings
 from .database import close_cluster
-from .chat.pydantic_rag_agent import close_shared_resources
+from .chat.pydantic_rag_agent import close_shared_resources, get_embedding_model, get_http_client
 
 
 # Configure logging
@@ -52,6 +52,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name}")
     logger.info(f"Log level: {settings.log_level}")
     logger.info(f"CORS origins: {settings.cors_origins}")
+
+    # Pre-load embedding model at startup (takes ~30s, blocks worker if done on first request)
+    logger.info("Pre-loading embedding model at startup...")
+    get_embedding_model(settings.embedding_model_name)
+    get_http_client()
+    logger.info("✓ Embedding model and HTTP client ready")
 
     yield
 

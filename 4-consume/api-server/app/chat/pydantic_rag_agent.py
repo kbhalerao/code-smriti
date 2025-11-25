@@ -85,7 +85,7 @@ def get_http_client() -> httpx.AsyncClient:
     if _http_client is None:
         logger.info("Creating shared httpx AsyncClient with connection pooling")
         _http_client = httpx.AsyncClient(
-            timeout=60.0,
+            timeout=120.0,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
         logger.info("✓ HTTP client created with max_connections=100")
