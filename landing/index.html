@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeSmriti Technical Brief | AgSci LLC</title>
+    <meta name="description" content="CodeSmriti: A semantic code memory system for engineering teams. Technical brief covering architecture, chunking strategies, and performance metrics.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #fafaf9;
+            --text: #1a1a1a;
+            --text-muted: #666;
+            --accent: #2563eb;
+            --border: #e5e5e5;
+            --code-bg: #f5f5f4;
+            --serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+            --mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 18px;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--serif);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 52rem;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            border-bottom: 2px solid var(--text);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .title {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .sanskrit {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .org {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .meta {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-family: var(--mono);
+        }
+
+        /* Navigation */
+        nav {
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+            z-index: 100;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.5rem;
+            font-size: 0.85rem;
+            font-family: var(--mono);
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        nav a:hover {
+            color: var(--accent);
+        }
+
+        /* Sections */
+        section {
+            margin-bottom: 3rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-family: var(--mono);
+            color: var(--text);
+        }
+
+        h2::before {
+            content: "§ ";
+            color: var(--text-muted);
+        }
+
+        h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        /* Abstract box */
+        .abstract {
+            background: var(--code-bg);
+            border-left: 3px solid var(--text);
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .abstract-title {
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--code-bg);
+            font-family: var(--mono);
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        td {
+            font-family: var(--mono);
+            font-size: 0.85rem;
+        }
+
+        /* Code blocks */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            padding: 1rem 1.25rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            background: var(--code-bg);
+            padding: 0.1em 0.3em;
+            border-radius: 2px;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        /* ASCII diagrams */
+        .diagram {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            line-height: 1.4;
+            white-space: pre;
+        }
+
+        /* Links */
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footnotes */
+        .footnote {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            vertical-align: super;
+        }
+
+        .references {
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            padding-top: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .references h2::before {
+            content: "";
+        }
+
+        .references ol {
+            margin-left: 1.25rem;
+        }
+
+        .references li {
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        footer {
+            border-top: 2px solid var(--text);
+            padding-top: 1.5rem;
+            margin-top: 3rem;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--text-muted);
+        }
+
+        /* Highlight box */
+        .highlight {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            html {
+                font-size: 16px;
+            }
+
+            .header-top {
+                flex-direction: column;
+            }
+
+            .meta {
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            nav ul {
+                gap: 0.25rem 1rem;
+            }
+
+            table {
+                font-size: 0.8rem;
+            }
+
+            th, td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1 class="title">CodeSmriti</h1>
+                    <div class="sanskrit">स्मृति — memory, that which is remembered</div>
+                </div>
+                <div class="org">
+                    <a href="https://agsci.com">AgSci LLC</a>
+                </div>
+            </div>
+            <div class="meta">
+                <span>Technical Brief v1.0</span>
+                <span>November 2025</span>
+                <span><a href="https://github.com/kbhalerao/code-smriti">github.com/kbhalerao/code-smriti</a></span>
+            </div>
+        </header>
+
+        <nav>
+            <ul>
+                <li><a href="#abstract">Abstract</a></li>
+                <li><a href="#problem">1. Problem</a></li>
+                <li><a href="#architecture">2. Architecture</a></li>
+                <li><a href="#chunking">3. Chunking</a></li>
+                <li><a href="#schema">4. Schema</a></li>
+                <li><a href="#performance">5. Performance</a></li>
+                <li><a href="#casestudies">6. Case Studies</a></li>
+                <li><a href="#quickstart">7. Quick Start</a></li>
+                <li><a href="#references">References</a></li>
+            </ul>
+        </nav>
+
+        <main>
+            <section id="abstract">
+                <div class="abstract">
+                    <div class="abstract-title">Abstract</div>
+                    <p style="margin-bottom: 0;">
+                        CodeSmriti is a semantic code memory system that indexes GitHub repositories
+                        into a vector database for natural language retrieval. The system employs
+                        AST-aware chunking via tree-sitter, LLM-generated summaries, and a normalized
+                        storage schema achieving <strong>85% storage reduction</strong> compared to naive approaches.
+                        Integration with Claude Desktop and VSCode is provided via the Model Context Protocol (MCP).
+                        This brief documents the architecture, chunking strategies, and performance characteristics.
+                    </p>
+                </div>
+            </section>
+
+            <section id="problem">
+                <h2>1. Problem Statement</h2>
+                <p>
+                    Engineering teams accumulate solutions across dozens of repositories over years of development.
+                    Without institutional memory, organizations face compounding inefficiencies:
+                </p>
+
+                <table>
+                    <tr>
+                        <th>Finding</th>
+                        <th>Impact</th>
+                        <th>Source</th>
+                    </tr>
+                    <tr>
+                        <td>61% of developers spend &gt;30 min/day searching</td>
+                        <td>~100 hours/year per developer</td>
+                        <td>[1]</td>
+                    </tr>
+                    <tr>
+                        <td>$47M/year lost per large enterprise</td>
+                        <td>Knowledge silos, duplication</td>
+                        <td>[2]</td>
+                    </tr>
+                    <tr>
+                        <td>3-9 months to full productivity</td>
+                        <td>Slow onboarding</td>
+                        <td>[3]</td>
+                    </tr>
+                    <tr>
+                        <td>42% of knowledge unique to individuals</td>
+                        <td>Risk when engineers depart</td>
+                        <td>[2]</td>
+                    </tr>
+                </table>
+
+                <p>
+                    Traditional code search (grep, GitHub search) operates on keywords, not semantics.
+                    Questions like <em>"How did we solve rate limiting?"</em> or <em>"What's our authentication pattern?"</em>
+                    require understanding intent, not matching strings.
+                </p>
+            </section>
+
+            <section id="architecture">
+                <h2>2. Architecture</h2>
+
+                <div class="diagram">┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
+│   GitHub     │────▶│    Ingestion    │────▶│  Couchbase   │
+│   Repos      │     │    Worker       │     │  Vector DB   │
+└──────────────┘     └────────┬────────┘     └──────┬───────┘
+                              │                      │
+                     tree-sitter parsing      768-dim embeddings
+                     + LLM summaries          (nomic-embed-text-v1.5)
+                              │                      │
+                              └──────────┬───────────┘
+                                         ▼
+                              ┌─────────────────────┐
+                              │    FastAPI Server   │
+                              │   /api/rag/search   │◀──── MCP Protocol
+                              │   /api/rag/         │      (Claude, VSCode)
+                              └─────────────────────┘</div>
+
+                <h3>Components</h3>
+                <ul>
+                    <li><strong>Ingestion Worker:</strong> Clones repos, parses with tree-sitter, generates embeddings, stores to Couchbase</li>
+                    <li><strong>Vector Database:</strong> Couchbase with FTS vector search index (768 dimensions)</li>
+                    <li><strong>API Server:</strong> FastAPI providing RAG endpoints with hybrid search (vector + FTS)</li>
+                    <li><strong>MCP Server:</strong> Model Context Protocol bridge for Claude Desktop and VSCode integration</li>
+                </ul>
+
+                <h3>Key Technologies</h3>
+                <table>
+                    <tr>
+                        <th>Component</th>
+                        <th>Technology</th>
+                        <th>Rationale</th>
+                    </tr>
+                    <tr>
+                        <td>Parsing</td>
+                        <td>tree-sitter</td>
+                        <td>40+ languages, incremental, error-tolerant [4]</td>
+                    </tr>
+                    <tr>
+                        <td>Embeddings</td>
+                        <td>nomic-embed-text-v1.5</td>
+                        <td>768-dim, 8192 token context, local inference</td>
+                    </tr>
+                    <tr>
+                        <td>Vector DB</td>
+                        <td>Couchbase</td>
+                        <td>Hybrid FTS + vector, multi-tenant, production-ready</td>
+                    </tr>
+                    <tr>
+                        <td>Integration</td>
+                        <td>MCP</td>
+                        <td>Standard protocol for LLM tool use</td>
+                    </tr>
+                </table>
+            </section>
+
+            <section id="chunking">
+                <h2>3. Chunking Strategy</h2>
+
+                <p>
+                    Research confirms that naive chunking methods struggle with code:
+                    <em>"Naive chunking methods struggle with accurately delineating meaningful segments of code,
+                    leading to issues with boundary definition and the inclusion of irrelevant or incomplete information"</em> [5].
+                </p>
+
+                <p>
+                    CodeSmriti employs AST-aware chunking, which has been shown to improve Recall@5 by 4.3 points
+                    on code retrieval benchmarks [6].
+                </p>
+
+                <h3>Core Principle: Metadata-First</h3>
+                <p>
+                    Empirically, <strong>80% of queries are answered by file-level context</strong>. Only 20% require
+                    drilling into specific functions or classes. The chunking strategy reflects this:
+                </p>
+
+                <table>
+                    <tr>
+                        <th>Chunk Type</th>
+                        <th>Content</th>
+                        <th>Purpose</th>
+                    </tr>
+                    <tr>
+                        <td>file_metadata</td>
+                        <td>Summary + signatures + git info</td>
+                        <td>Answer "what does this file do?"</td>
+                    </tr>
+                    <tr>
+                        <td>file_index</td>
+                        <td>Full file (&lt;6k tokens)</td>
+                        <td>Complete context for small files</td>
+                    </tr>
+                    <tr>
+                        <td>symbol_index</td>
+                        <td>Function/class with docstring</td>
+                        <td>Drill-down for large files</td>
+                    </tr>
+                </table>
+
+                <h3>Language-Aware Splitting</h3>
+                <p>Tree-sitter provides AST-level boundaries. Split points vary by language:</p>
+
+                <pre><code>Python:     function_definition, class_definition
+JavaScript: function_declaration, class_declaration, arrow_function
+Go:         function_declaration, type_declaration, method_declaration
+Rust:       function_item, struct_item, impl_item, trait_item
+Svelte:     &lt;script&gt;, template blocks, &lt;style&gt;</code></pre>
+
+                <h3>Junk Filtering</h3>
+                <p>Skip files that add noise without value:</p>
+                <pre><code>node_modules/    package-lock.json    *.min.js
+dist/            yarn.lock            *.min.css
+__pycache__/     Cargo.lock           *.map
+.git/            poetry.lock          *generated*</code></pre>
+            </section>
+
+            <section id="schema">
+                <h2>4. V3 Normalized Schema</h2>
+
+                <div class="highlight">
+                    <strong>Key Insight:</strong> Since we have access to the actual repository,
+                    we don't need to store code redundantly. Store <em>references + summaries</em>,
+                    fetch code on demand.
+                </div>
+
+                <h3>The Redundancy Problem</h3>
+                <p>
+                    Naive approaches store code at multiple levels: file chunk contains full code,
+                    symbol chunks duplicate subsets. A 1000-line file with 20 functions stores
+                    the same code 21+ times.
+                </p>
+
+                <h3>Normalized Approach</h3>
+                <div class="diagram">V2 (Redundant)                    V3 (Normalized)
+─────────────────                  ─────────────────
+repo_summary                       repo_summary
+└─ module_summary                  └─ module_summary
+   └─ file_chunk (FULL CODE)          └─ file_index (summary + line count)
+      └─ symbol_chunk (CODE)             └─ symbol_index (summary + line refs)
+
+Storage: ~35KB                     Storage: ~5KB
+(code duplicated 21x)              (code fetched on demand)</div>
+
+                <table>
+                    <tr>
+                        <th>Approach</th>
+                        <th>1000-line file, 20 functions</th>
+                    </tr>
+                    <tr>
+                        <td>V1 (naive)</td>
+                        <td>~30KB (redundant storage)</td>
+                    </tr>
+                    <tr>
+                        <td>V2 (hierarchical)</td>
+                        <td>~35KB (summaries + full code)</td>
+                    </tr>
+                    <tr>
+                        <td>V3 (normalized)</td>
+                        <td>~5KB (summaries + line refs)</td>
+                    </tr>
+                </table>
+
+                <p><strong>Result: 85% storage reduction</strong></p>
+
+                <h3>Embedding Strategy</h3>
+                <p>
+                    Embeddings capture both semantic meaning (from LLM summary) and code patterns
+                    (from actual code preview at index time). The summary answers <em>"what does this do?"</em>
+                    while the code preview answers <em>"how is it implemented?"</em>
+                </p>
+            </section>
+
+            <section id="performance">
+                <h2>5. Performance</h2>
+
+                <h3>Retrieval Metrics</h3>
+                <p>Evaluated on 37 questions across 5 repositories:</p>
+
+                <table>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                        <th>Notes</th>
+                    </tr>
+                    <tr>
+                        <td>Repo-level Recall@5</td>
+                        <td>90%</td>
+                        <td>Correct repo in top 5</td>
+                    </tr>
+                    <tr>
+                        <td>File-level Recall@5</td>
+                        <td>30%</td>
+                        <td>Exact file in top 5</td>
+                    </tr>
+                    <tr>
+                        <td>MRR</td>
+                        <td>0.20</td>
+                        <td>Mean Reciprocal Rank [7]</td>
+                    </tr>
+                </table>
+
+                <h3>Throughput</h3>
+                <table>
+                    <tr>
+                        <th>Operation</th>
+                        <th>Performance</th>
+                        <th>Configuration</th>
+                    </tr>
+                    <tr>
+                        <td>Embedding generation</td>
+                        <td>1,280 chunks/min</td>
+                        <td>MPS GPU, batch=128</td>
+                    </tr>
+                    <tr>
+                        <td>Search latency</td>
+                        <td>&lt;100ms</td>
+                        <td>Hybrid vector + FTS</td>
+                    </tr>
+                    <tr>
+                        <td>Small repo ingestion</td>
+                        <td>1-2 seconds</td>
+                        <td>&lt;500 files</td>
+                    </tr>
+                    <tr>
+                        <td>Large repo (55k chunks)</td>
+                        <td>10-15 minutes</td>
+                        <td>Full re-index</td>
+                    </tr>
+                </table>
+
+                <h3>Incremental Updates</h3>
+                <p>
+                    File-level change detection via git commit hash. Only modified files
+                    are re-chunked and re-embedded. Unchanged files skip processing entirely.
+                </p>
+            </section>
+
+            <section id="casestudies">
+                <h2>6. Case Studies</h2>
+
+                <p>
+                    To evaluate real-world utility, we tested CodeSmriti with intentionally vague questions
+                    that a new team member might ask about an unfamiliar codebase. Results from 6 test queries
+                    across 20+ proprietary repositories:
+                </p>
+
+                <table>
+                    <tr>
+                        <th>#</th>
+                        <th>Question</th>
+                        <th>Result</th>
+                        <th>Score</th>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>"How do we implement client-visible views?"</td>
+                        <td>Found patterns across multiple repos</td>
+                        <td>9/10</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>"How does the zone creation algorithm work?"</td>
+                        <td>Found exact geospatial implementation</td>
+                        <td>10/10</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>"How is auto-projection area calculated?"</td>
+                        <td>Found algorithm with formula details</td>
+                        <td>10/10</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>"Compare our weather graph implementations"</td>
+                        <td>Found 2 of 3 implementations (missed Svelte)</td>
+                        <td>7/10</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>"Find frontend audit principles across repos"</td>
+                        <td>Found design system, color vars, component guidelines</td>
+                        <td>8/10</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>"What are our backend design patterns?"</td>
+                        <td>Found code patterns, missed Sphinx docs</td>
+                        <td>4/10</td>
+                    </tr>
+                </table>
+
+                <h3>Strengths</h3>
+                <ul>
+                    <li>Excellent at finding <strong>code patterns</strong> across multiple repositories</li>
+                    <li>Strong at <strong>comparing implementations</strong> (e.g., weather graphs, mixins)</li>
+                    <li>Good at synthesizing answers from <strong>scattered sources</strong></li>
+                    <li>Works well with <strong>specific technical queries</strong></li>
+                </ul>
+
+                <h3>Known Limitations</h3>
+                <ul>
+                    <li><strong>SvelteKit files:</strong> Lower indexing quality for <code>.svelte</code> components</li>
+                    <li><strong>Documentation:</strong> Sphinx <code>.rst</code> and markdown docs may be under-indexed</li>
+                    <li><strong>Vague queries:</strong> May return adjacent but incorrect results initially</li>
+                </ul>
+
+                <p>
+                    <strong>Average score: 8/10</strong> for code-related queries. Documentation retrieval
+                    remains an area for improvement.
+                </p>
+            </section>
+
+            <section id="quickstart">
+                <h2>7. Quick Start</h2>
+
+                <pre><code># Clone repository
+git clone https://github.com/kbhalerao/code-smriti
+cd code-smriti
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your GitHub token and Couchbase credentials
+
+# Start services
+docker-compose up -d
+
+# Verify
+curl http://localhost/health</code></pre>
+
+                <h3>MCP Integration (Claude Desktop)</h3>
+                <p>Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:</p>
+
+                <pre><code>{
+  "mcpServers": {
+    "code-smriti": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp", "--with", "httpx",
+               "path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py"],
+      "env": {
+        "CODESMRITI_API_URL": "http://localhost",
+        "CODESMRITI_USERNAME": "your-username",
+        "CODESMRITI_PASSWORD": "your-password"
+      }
+    }
+  }
+}</code></pre>
+
+                <h3>Available Tools</h3>
+                <table>
+                    <tr>
+                        <th>Tool</th>
+                        <th>Description</th>
+                    </tr>
+                    <tr>
+                        <td><code>search_codebase</code></td>
+                        <td>Semantic search, returns raw chunks</td>
+                    </tr>
+                    <tr>
+                        <td><code>ask_codebase</code></td>
+                        <td>RAG query, returns synthesized answer</td>
+                    </tr>
+                    <tr>
+                        <td><code>list_repos</code></td>
+                        <td>List indexed repositories</td>
+                    </tr>
+                </table>
+            </section>
+
+            <section id="references" class="references">
+                <h2>References</h2>
+                <ol>
+                    <li>
+                        Stack Overflow. <em>2024 Developer Survey</em>.
+                        <a href="https://survey.stackoverflow.co/2024/">survey.stackoverflow.co/2024</a>
+                    </li>
+                    <li>
+                        Panopto. <em>Workplace Knowledge and Productivity Report</em>. 2018.
+                        <a href="https://www.prnewswire.com/news-releases/inefficient-knowledge-sharing-costs-large-businesses-47-million-per-year-300681971.html">PRNewswire</a>
+                    </li>
+                    <li>
+                        Various industry studies on engineering onboarding.
+                        <a href="https://hackernoon.com/engineer-onboarding-the-ugly-truth-about-ramp-up-time-7e323t9j">HackerNoon</a>,
+                        <a href="https://www.pluralsight.com/product/flow/flow-academy/how-to-improve-onboarding-and-decrease-your-software-engineer-ramp-time">Pluralsight</a>
+                    </li>
+                    <li>
+                        Symflower. <em>Parsing Code with Tree-sitter</em>. 2023.
+                        <a href="https://symflower.com/en/company/blog/2023/parsing-code-with-tree-sitter/">symflower.com</a>
+                    </li>
+                    <li>
+                        Qodo. <em>RAG for Large-Scale Code Repos</em>. 2024.
+                        <a href="https://www.qodo.ai/blog/rag-for-large-scale-code-repos/">qodo.ai</a>
+                    </li>
+                    <li>
+                        <em>cAST: Enhancing Code Retrieval-Augmented Generation with Structural Chunking via Abstract Syntax Tree</em>.
+                        <a href="https://arxiv.org/html/2506.15655v1">arXiv:2506.15655</a>
+                    </li>
+                    <li>
+                        Weaviate. <em>Evaluation Metrics for Search and Recommendation Systems</em>.
+                        <a href="https://weaviate.io/blog/retrieval-evaluation-metrics">weaviate.io</a>
+                    </li>
+                    <li>
+                        Chroma Research. <em>Evaluating Chunking Strategies for Retrieval</em>.
+                        <a href="https://research.trychroma.com/evaluating-chunking">research.trychroma.com</a>
+                    </li>
+                </ol>
+            </section>
+        </main>
+
+        <footer>
+            <div>
+                <a href="https://agsci.com">AgSci LLC</a> ·
+                <a href="https://github.com/kbhalerao/code-smriti">GitHub</a> ·
+                MIT License
+            </div>
+            <div>
+                Last updated: November 2025
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
