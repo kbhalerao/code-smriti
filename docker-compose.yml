@@ -112,6 +112,7 @@ services:
       - ./4-consume/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./4-consume/api-gateway/ssl:/etc/letsencrypt:ro  # Let's Encrypt certificates
       - ./4-consume/api-gateway/certbot:/var/www/certbot:ro  # ACME challenges
+      - ./landing:/usr/share/nginx/html:ro  # Landing page
     depends_on:
       api-server:
         condition: service_healthy
