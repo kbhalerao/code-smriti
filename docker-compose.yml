@@ -29,8 +29,8 @@ services:
   # API Server - FastAPI RAG chat server
   api-server:
     build:
-      context: ./4-consume/api-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./4-consume/api-server/Dockerfile
     container_name: codesmriti_api_server
     restart: unless-stopped
     ports:

@@ -205,6 +205,50 @@ async def mcp_list_tools(token: str = Depends(JWTBearer())):
                 }
             },
             {
+                "name": "get_file",
+                "description": "Retrieve entire file content from a repository",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repository in owner/repo format"
+                        },
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file in the repository"
+                        }
+                    },
+                    "required": ["repo", "file_path"]
+                }
+            },
+            {
+                "name": "get_lines",
+                "description": "Retrieve specific line range from a file (1-indexed, inclusive)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "repo": {
+                            "type": "string",
+                            "description": "Repository in owner/repo format"
+                        },
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file in the repository"
+                        },
+                        "start_line": {
+                            "type": "integer",
+                            "description": "Start line number (1-indexed)"
+                        },
+                        "end_line": {
+                            "type": "integer",
+                            "description": "End line number (1-indexed, inclusive)"
+                        }
+                    },
+                    "required": ["repo", "file_path", "start_line", "end_line"]
+                }
+            },
+            {
                 "name": "add_note",
                 "description": "Add a memory note with hashtags for organization",
                 "inputSchema": {
@@ -264,6 +308,10 @@ async def mcp_call_tool(tool_call: MCPToolCall, token: str = Depends(JWTBearer()
             result = await search_tools.find_similar(**tool_call.arguments)
         elif tool_call.name == "list_repos":
             result = await retrieval_tools.list_repos()
+        elif tool_call.name == "get_file":
+            result = await retrieval_tools.get_file(**tool_call.arguments)
+        elif tool_call.name == "get_lines":
+            result = await retrieval_tools.get_lines(**tool_call.arguments)
         elif tool_call.name == "add_note":
             result = await notes_tools.add_note(**tool_call.arguments)
         elif tool_call.name == "query_by_hashtag":

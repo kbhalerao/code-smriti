@@ -1,5 +1,7 @@
 """FastAPI routes for LLM chat endpoint with PydanticAI RAG"""
 import os
+import sys
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -17,6 +19,16 @@ from app.chat.pydantic_rag_agent import (
     get_http_client,
 )
 from app.config import settings
+
+# Add shared lib to path - works both locally and in Docker
+# Docker: /app/lib/code-fetcher, Local: ../../../lib/code-fetcher
+_lib_path_docker = Path("/app/lib/code-fetcher")
+_lib_path_local = Path(__file__).parent.parent.parent.parent.parent / "lib" / "code-fetcher"
+_lib_path = _lib_path_docker if _lib_path_docker.exists() else _lib_path_local
+if str(_lib_path) not in sys.path:
+    sys.path.insert(0, str(_lib_path))
+
+from fetcher import CodeFetcher
 
 
 router = APIRouter(prefix="/rag", tags=["CodeSmriti RAG"])
@@ -520,56 +532,17 @@ async def list_repos(
         raise HTTPException(status_code=500, detail=f"Failed to list repos: {str(e)}")
 
 
-class CodeFetcher:
-    """
-    Fetches actual code from repos using line references.
-    Standalone version for API server (no external config dependency).
-    """
-
-    def __init__(self, repos_path: str = None):
-        from pathlib import Path
-        # In Docker: /repos, locally: REPOS_PATH env or default
-        self.repos_path = Path(repos_path or os.getenv("REPOS_PATH", "/repos"))
-
-    def get_file_content(self, repo_id: str, file_path: str) -> Optional[str]:
-        """Get full file content."""
-        repo_folder = repo_id.replace("/", "_")
-        full_path = self.repos_path / repo_folder / file_path
-
-        if not full_path.exists():
-            return None
-
-        # Security check - no path traversal
-        try:
-            full_path.resolve().relative_to((self.repos_path / repo_folder).resolve())
-        except ValueError:
-            return None
-
-        try:
-            return full_path.read_text(encoding='utf-8', errors='ignore')
-        except Exception:
-            return None
-
-    def get_lines(self, repo_id: str, file_path: str, start: int, end: int) -> Optional[str]:
-        """Get specific line range (1-indexed, inclusive)."""
-        content = self.get_file_content(repo_id, file_path)
-        if content is None:
-            return None
-
-        lines = content.split('\n')
-        start = max(1, start)
-        end = min(len(lines), end)
-        return '\n'.join(lines[start - 1:end])
-
-
-# Singleton instance
+# Singleton instance using shared CodeFetcher from lib/code-fetcher
 _code_fetcher: Optional[CodeFetcher] = None
 
 
 def get_code_fetcher() -> CodeFetcher:
+    """Get or create CodeFetcher singleton with REPOS_PATH from environment."""
     global _code_fetcher
     if _code_fetcher is None:
-        _code_fetcher = CodeFetcher()
+        # In Docker: /repos, locally: REPOS_PATH env or default
+        repos_path = os.getenv("REPOS_PATH", "/repos")
+        _code_fetcher = CodeFetcher(repos_path)
     return _code_fetcher
 
 
