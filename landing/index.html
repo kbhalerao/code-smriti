@@ -354,7 +354,8 @@
                 <li><a href="#chunking">3. Chunking</a></li>
                 <li><a href="#schema">4. Schema</a></li>
                 <li><a href="#performance">5. Performance</a></li>
-                <li><a href="#quickstart">6. Quick Start</a></li>
+                <li><a href="#casestudies">6. Case Studies</a></li>
+                <li><a href="#quickstart">7. Quick Start</a></li>
                 <li><a href="#references">References</a></li>
             </ul>
         </nav>
@@ -654,8 +655,83 @@ Storage: ~35KB                     Storage: ~5KB
                 </p>
             </section>
 
+            <section id="casestudies">
+                <h2>6. Case Studies</h2>
+
+                <p>
+                    To evaluate real-world utility, we tested CodeSmriti with intentionally vague questions
+                    that a new team member might ask about an unfamiliar codebase. Results from 6 test queries
+                    across 20+ proprietary repositories:
+                </p>
+
+                <table>
+                    <tr>
+                        <th>#</th>
+                        <th>Question</th>
+                        <th>Result</th>
+                        <th>Score</th>
+                    </tr>
+                    <tr>
+                        <td>1</td>
+                        <td>"How do we implement client-visible views?"</td>
+                        <td>Found patterns across multiple repos</td>
+                        <td>9/10</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>"How does the zone creation algorithm work?"</td>
+                        <td>Found exact geospatial implementation</td>
+                        <td>10/10</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>"How is auto-projection area calculated?"</td>
+                        <td>Found algorithm with formula details</td>
+                        <td>10/10</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>"Compare our weather graph implementations"</td>
+                        <td>Found 2 of 3 implementations (missed Svelte)</td>
+                        <td>7/10</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>"Find frontend audit principles across repos"</td>
+                        <td>Found design system, color vars, component guidelines</td>
+                        <td>8/10</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>"What are our backend design patterns?"</td>
+                        <td>Found code patterns, missed Sphinx docs</td>
+                        <td>4/10</td>
+                    </tr>
+                </table>
+
+                <h3>Strengths</h3>
+                <ul>
+                    <li>Excellent at finding <strong>code patterns</strong> across multiple repositories</li>
+                    <li>Strong at <strong>comparing implementations</strong> (e.g., weather graphs, mixins)</li>
+                    <li>Good at synthesizing answers from <strong>scattered sources</strong></li>
+                    <li>Works well with <strong>specific technical queries</strong></li>
+                </ul>
+
+                <h3>Known Limitations</h3>
+                <ul>
+                    <li><strong>SvelteKit files:</strong> Lower indexing quality for <code>.svelte</code> components</li>
+                    <li><strong>Documentation:</strong> Sphinx <code>.rst</code> and markdown docs may be under-indexed</li>
+                    <li><strong>Vague queries:</strong> May return adjacent but incorrect results initially</li>
+                </ul>
+
+                <p>
+                    <strong>Average score: 8/10</strong> for code-related queries. Documentation retrieval
+                    remains an area for improvement.
+                </p>
+            </section>
+
             <section id="quickstart">
-                <h2>6. Quick Start</h2>
+                <h2>7. Quick Start</h2>
 
                 <pre><code># Clone repository
 git clone https://github.com/kbhalerao/code-smriti
