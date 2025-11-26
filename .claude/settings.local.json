@@ -72,7 +72,18 @@
       "Bash(docker inspect:*)",
       "Bash(docker-compose stop:*)",
       "Bash(chmod:*)",
-      "Bash(colima status:*)"
+      "Bash(colima status:*)",
+      "Bash(uv add:*)",
+      "Bash(pip index:*)",
+      "Bash(pip install:*)",
+      "Bash(uv venv:*)",
+      "Bash(uv python pin:*)",
+      "Bash(uv pip show:*)",
+      "Bash(ln -s:*)",
+      "Bash(uv:*)",
+      "Bash(timeout 5 uv run:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []
