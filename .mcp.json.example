@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "code-smriti": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with", "mcp",
+        "--with", "httpx",
+        "--with", "python-dotenv",
+        "4-consume/mcp-server/rag_mcp_server.py"
+      ],
+      "env": {
+        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_USERNAME": "your-username",
+        "CODESMRITI_PASSWORD": "your-password"
+      }
+    }
+  }
+}
