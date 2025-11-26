@@ -177,6 +177,74 @@ async def ask_codebase(query: str) -> str:
         return f"Error querying RAG agent: {str(e)}"
 
 @mcp.tool()
+async def get_file(
+    repo_id: str,
+    file_path: str,
+    start_line: int = None,
+    end_line: int = None
+) -> str:
+    """
+    Retrieve actual code from a repository file.
+
+    Use this tool when you need to see the full content of a specific file,
+    or a specific line range within a file. This complements search_codebase
+    by letting you fetch complete file contents after finding relevant files.
+
+    Args:
+        repo_id: Repository identifier (e.g., "kbhalerao/labcore").
+        file_path: Path to the file relative to repo root (e.g., "src/main.py").
+        start_line: Optional start line (1-indexed). Omit for entire file.
+        end_line: Optional end line (1-indexed, inclusive). Omit for entire file.
+
+    Returns:
+        The file content with metadata about line numbers.
+    """
+    try:
+        token = await get_auth_token()
+
+        payload = {"repo_id": repo_id, "file_path": file_path}
+        if start_line is not None:
+            payload["start_line"] = start_line
+        if end_line is not None:
+            payload["end_line"] = end_line
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/file",
+                headers={"Authorization": f"Bearer {token}"},
+                json=payload,
+                timeout=60.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            code = data.get("code", "")
+            start = data.get("start_line", 1)
+            end = data.get("end_line", 0)
+            total = data.get("total_lines", 0)
+            truncated = data.get("truncated", False)
+
+            header = f"## {repo_id}/{file_path}\n"
+            header += f"Lines {start}-{end} of {total}"
+            if truncated:
+                header += " (truncated)"
+            header += "\n\n"
+
+            return header + f"```\n{code}\n```"
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            global _cached_token
+            _cached_token = None
+            return "Authentication failed. Please check credentials."
+        elif e.response.status_code == 404:
+            return f"File not found: {repo_id}/{file_path}"
+        return f"Error fetching file: {str(e)}"
+    except Exception as e:
+        return f"Error fetching file: {str(e)}"
+
+
+@mcp.tool()
 async def list_repos() -> str:
     """
     List all indexed repositories available for code search.
