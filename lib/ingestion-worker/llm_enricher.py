@@ -25,6 +25,11 @@ from config import WorkerConfig
 config = WorkerConfig()
 
 
+class LLMUnavailableError(Exception):
+    """Raised when LLM is unavailable (circuit breaker open or persistent failures)"""
+    pass
+
+
 @dataclass
 class EnrichmentResult:
     """Result from LLM enrichment"""
@@ -45,6 +50,8 @@ class LLMConfig:
     base_url: str
     temperature: float = 0.3
     max_tokens: int = 2000
+    timeout_seconds: float = 60.0  # Per-request timeout
+    max_retries: int = 2  # Retries on failure
 
 
 # Default configurations
@@ -73,8 +80,10 @@ class LLMEnricher:
 
     def __init__(self, config: LLMConfig = OLLAMA_CONFIG):
         self.config = config
-        self.client = httpx.AsyncClient(timeout=120.0)
-        logger.info(f"LLM Enricher initialized: {config.provider}/{config.model}")
+        self.client = httpx.AsyncClient(timeout=config.timeout_seconds)
+        self._consecutive_failures = 0
+        self._max_consecutive_failures = 5  # Circuit breaker threshold
+        logger.info(f"LLM Enricher initialized: {config.provider}/{config.model} (timeout={config.timeout_seconds}s)")
 
     async def _call_ollama(self, prompt: str) -> str:
         """Call Ollama API"""
@@ -108,17 +117,57 @@ class LLMEnricher:
         return response.json()["choices"][0]["message"]["content"]
 
     async def generate(self, prompt: str) -> str:
-        """Generate text using configured LLM"""
-        try:
-            if self.config.provider == "ollama":
-                return await self._call_ollama(prompt)
-            elif self.config.provider == "lmstudio":
-                return await self._call_lmstudio(prompt)
-            else:
-                raise ValueError(f"Unknown provider: {self.config.provider}")
-        except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            raise
+        """
+        Generate text using configured LLM with retry logic and circuit breaker.
+
+        Raises:
+            LLMUnavailableError: If LLM is unavailable (circuit breaker open)
+            Exception: On persistent failure after retries
+        """
+        # Circuit breaker check
+        if self._consecutive_failures >= self._max_consecutive_failures:
+            logger.warning(f"LLM circuit breaker OPEN ({self._consecutive_failures} consecutive failures)")
+            raise LLMUnavailableError("LLM unavailable - circuit breaker open")
+
+        last_error = None
+
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                if self.config.provider == "ollama":
+                    result = await self._call_ollama(prompt)
+                elif self.config.provider == "lmstudio":
+                    result = await self._call_lmstudio(prompt)
+                else:
+                    raise ValueError(f"Unknown provider: {self.config.provider}")
+
+                # Success - reset failure counter
+                self._consecutive_failures = 0
+                return result
+
+            except httpx.TimeoutException as e:
+                last_error = e
+                self._consecutive_failures += 1
+                logger.warning(f"LLM timeout (attempt {attempt + 1}/{self.config.max_retries + 1}): {e}")
+                if attempt < self.config.max_retries:
+                    await asyncio.sleep(1.0 * (attempt + 1))  # Backoff
+
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                self._consecutive_failures += 1
+                logger.warning(f"LLM HTTP error {e.response.status_code} (attempt {attempt + 1}): {e}")
+                if e.response.status_code >= 500 and attempt < self.config.max_retries:
+                    await asyncio.sleep(1.0 * (attempt + 1))
+                else:
+                    break  # Client error, don't retry
+
+            except Exception as e:
+                last_error = e
+                self._consecutive_failures += 1
+                logger.error(f"LLM call failed (attempt {attempt + 1}): {e}")
+                if attempt < self.config.max_retries:
+                    await asyncio.sleep(1.0 * (attempt + 1))
+
+        raise last_error or Exception("LLM call failed")
 
     async def enrich_file(
         self,

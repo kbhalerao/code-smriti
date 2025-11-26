@@ -520,6 +520,141 @@ async def list_repos(
         raise HTTPException(status_code=500, detail=f"Failed to list repos: {str(e)}")
 
 
+class CodeFetcher:
+    """
+    Fetches actual code from repos using line references.
+    Standalone version for API server (no external config dependency).
+    """
+
+    def __init__(self, repos_path: str = None):
+        from pathlib import Path
+        # In Docker: /repos, locally: REPOS_PATH env or default
+        self.repos_path = Path(repos_path or os.getenv("REPOS_PATH", "/repos"))
+
+    def get_file_content(self, repo_id: str, file_path: str) -> Optional[str]:
+        """Get full file content."""
+        repo_folder = repo_id.replace("/", "_")
+        full_path = self.repos_path / repo_folder / file_path
+
+        if not full_path.exists():
+            return None
+
+        # Security check - no path traversal
+        try:
+            full_path.resolve().relative_to((self.repos_path / repo_folder).resolve())
+        except ValueError:
+            return None
+
+        try:
+            return full_path.read_text(encoding='utf-8', errors='ignore')
+        except Exception:
+            return None
+
+    def get_lines(self, repo_id: str, file_path: str, start: int, end: int) -> Optional[str]:
+        """Get specific line range (1-indexed, inclusive)."""
+        content = self.get_file_content(repo_id, file_path)
+        if content is None:
+            return None
+
+        lines = content.split('\n')
+        start = max(1, start)
+        end = min(len(lines), end)
+        return '\n'.join(lines[start - 1:end])
+
+
+# Singleton instance
+_code_fetcher: Optional[CodeFetcher] = None
+
+
+def get_code_fetcher() -> CodeFetcher:
+    global _code_fetcher
+    if _code_fetcher is None:
+        _code_fetcher = CodeFetcher()
+    return _code_fetcher
+
+
+class CodeFetchRequest(BaseModel):
+    """Request model for code fetch endpoint"""
+
+    repo_id: str = Field(description="Repository identifier (format: owner/repo)")
+    file_path: str = Field(description="File path relative to repo root")
+    start_line: Optional[int] = Field(default=None, ge=1, description="Start line (1-indexed). Omit for whole file.")
+    end_line: Optional[int] = Field(default=None, ge=1, description="End line (1-indexed). Omit for whole file.")
+
+
+class CodeFetchResponse(BaseModel):
+    """Response model for code fetch endpoint"""
+
+    code: str = Field(description="Fetched code content")
+    repo_id: str = Field(description="Repository identifier")
+    file_path: str = Field(description="File path")
+    start_line: int = Field(description="Actual start line returned")
+    end_line: int = Field(description="Actual end line returned")
+    total_lines: int = Field(description="Total lines in file")
+    truncated: bool = Field(default=False, description="Whether content was truncated")
+
+
+@router.post("/file", response_model=CodeFetchResponse)
+async def fetch_code(
+    request: CodeFetchRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Fetch actual code from repository using line references.
+
+    Complements V3 normalized chunks which store only summaries and line refs.
+    When start_line/end_line omitted, returns entire file.
+
+    Examples:
+        Fetch function (lines 45-89):
+        ```json
+        {"repo_id": "kbhalerao/labcore", "file_path": "associates/models.py", "start_line": 45, "end_line": 89}
+        ```
+
+        Fetch entire file:
+        ```json
+        {"repo_id": "kbhalerao/labcore", "file_path": "associates/models.py"}
+        ```
+    """
+    fetcher = get_code_fetcher()
+
+    content = fetcher.get_file_content(request.repo_id, request.file_path)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"File not found: {request.repo_id}/{request.file_path}")
+
+    lines = content.split('\n')
+    total_lines = len(lines)
+
+    # Determine line range
+    start = request.start_line or 1
+    end = request.end_line or total_lines
+
+    # Clamp to valid range
+    start = max(1, min(start, total_lines))
+    end = max(start, min(end, total_lines))
+
+    # Extract lines
+    code = '\n'.join(lines[start - 1:end])
+
+    # Truncate if too large (>100KB)
+    max_size = 100_000
+    truncated = len(code) > max_size
+    if truncated:
+        code = code[:max_size] + f"\n\n... [truncated, {len(code) - max_size} chars omitted]"
+
+    logger.info(f"Code fetch: {request.repo_id}/{request.file_path} lines {start}-{end}/{total_lines} ({len(code)} chars)")
+
+    return CodeFetchResponse(
+        code=code,
+        repo_id=request.repo_id,
+        file_path=request.file_path,
+        start_line=start,
+        end_line=end,
+        total_lines=total_lines,
+        truncated=truncated
+    )
+
+
 @router.get("/health")
 async def chat_health():
     """Health check for chat service"""
