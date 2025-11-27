@@ -323,23 +323,24 @@ async def cos_stats() -> str:
 
         output = ["## Stats\n"]
         output.append(f"**Total:** {stats.get('total_docs', 0)}")
+        output.append(f" | **Done/Archived:** {stats.get('done_count', 0)}")
 
-        by_type = stats.get("by_type", {})
+        by_type = stats.get("by_doc_type", {})
         if by_type:
-            output.append("\n**By Type:**")
+            output.append("\n\n**Active Items by Type:**")
             for t, count in by_type.items():
                 emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯"}.get(t, "•")
                 output.append(f"  {emoji} {t}: {count}")
 
         by_status = stats.get("by_status", {})
         if by_status:
-            output.append("\n**By Status:**")
+            output.append("\n**Active Items by Status:**")
             for s, count in by_status.items():
                 output.append(f"  - {s}: {count}")
 
         by_priority = stats.get("by_priority", {})
         if by_priority:
-            output.append("\n**By Priority:**")
+            output.append("\n**Active Items by Priority:**")
             for p, count in by_priority.items():
                 emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(p, "")
                 output.append(f"  {emoji} {p}: {count}")

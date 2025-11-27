@@ -456,34 +456,49 @@ class CosDatabase:
     # --- Stats ---
 
     async def get_stats(self, user_id: str) -> dict:
-        """Get statistics."""
+        """Get statistics.
+
+        Breakdowns (by_type, by_status, by_priority) exclude done/archived items.
+        Done/archived items are counted separately in done_count.
+        """
         fqn = self._get_fqn(user_id)
+        active_filter = 'd.status NOT IN ["done", "archived"]'
 
         # Total count
         total_query = f"SELECT COUNT(*) as total FROM {fqn}"
         total = list(self.cluster.query(total_query))[0]["total"]
 
-        # By doc_type
+        # Done + archived count (separate, not broken down)
+        done_query = f"""
+            SELECT COUNT(*) as count
+            FROM {fqn} d
+            WHERE d.status IN ["done", "archived"]
+        """
+        done_count = list(self.cluster.query(done_query))[0]["count"]
+
+        # By doc_type (active items only)
         type_query = f"""
             SELECT d.doc_type, COUNT(*) as count
             FROM {fqn} d
+            WHERE {active_filter}
             GROUP BY d.doc_type
         """
         by_type = {row["doc_type"]: row["count"] for row in self.cluster.query(type_query)}
 
-        # By status
+        # By status (active items only)
         status_query = f"""
             SELECT d.status, COUNT(*) as count
             FROM {fqn} d
+            WHERE {active_filter}
             GROUP BY d.status
         """
         by_status = {row["status"]: row["count"] for row in self.cluster.query(status_query)}
 
-        # By priority
+        # By priority (active items only)
         priority_query = f"""
             SELECT d.priority, COUNT(*) as count
             FROM {fqn} d
-            WHERE d.priority IS NOT NULL
+            WHERE d.priority IS NOT NULL AND {active_filter}
             GROUP BY d.priority
         """
         by_priority = {row["priority"]: row["count"] for row in self.cluster.query(priority_query)}
@@ -498,7 +513,8 @@ class CosDatabase:
 
         return {
             "total_docs": total,
-            "by_type": by_type,
+            "done_count": done_count,
+            "by_doc_type": by_type,
             "by_status": by_status,
             "by_priority": by_priority,
             "recent_activity": recent,

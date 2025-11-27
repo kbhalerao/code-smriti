@@ -147,9 +147,10 @@ class StatsResponse(BaseModel):
     """Statistics response."""
 
     total_docs: int
-    by_doc_type: dict[str, int]
-    by_status: dict[str, int]
-    by_priority: dict[str, int]
+    done_count: int  # done + archived items (not broken down further)
+    by_doc_type: dict[str, int]  # active items only (excludes done/archived)
+    by_status: dict[str, int]  # active items only (excludes done/archived)
+    by_priority: dict[str, int]  # active items only (excludes done/archived)
     recent_activity: int  # docs updated in last 24h
 
 
