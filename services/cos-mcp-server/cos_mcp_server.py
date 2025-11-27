@@ -3,10 +3,11 @@ Chief of Staff MCP Server
 
 Personal productivity tools for capturing tasks, ideas, notes, and context.
 Integrates with CodeSmriti's Chief of Staff API.
+
+Tools: cos_create, cos_list, cos_get, cos_update, cos_delete, cos_stats
 """
 
 import os
-from typing import Optional
 import httpx
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -86,176 +87,53 @@ async def cos_request(method: str, endpoint: str, json_data: dict = None) -> dic
 
 
 # =============================================================================
-# Capture Tools - Quick capture of tasks, ideas, notes
+# Core Tools (6 total)
 # =============================================================================
 
 @mcp.tool()
-async def cos_capture(
+async def cos_create(
     content: str,
-    doc_type: str = "idea",
+    doc_type: str = "task",
+    status: str = "inbox",
     priority: str = "medium",
     tags: list[str] = None,
     project: str = None,
+    due_date: str = None,
 ) -> str:
     """
-    Quickly capture a task, idea, or note to your Chief of Staff inbox.
-
-    Use this as your PRIMARY tool for capturing anything you want to remember,
-    do later, or think about. This is your second brain for the current project.
-
-    The captured item goes to your inbox for later processing/prioritization.
+    Create a new item (task, idea, note, or context).
 
     Args:
-        content: What you want to capture. Can be a task, idea, note, or any thought.
-        doc_type: Type of capture - "task", "idea", "note", or "message". Default: "idea"
-        priority: Priority level - "high", "medium", or "low". Default: "medium"
-        tags: Optional list of tags for organization (e.g., ["auth", "refactor"])
-        project: Optional project name to associate with (e.g., "code-smriti")
-
-    Examples:
-        - "Remember to add rate limiting to the API" -> task
-        - "What if we used Redis for caching?" -> idea
-        - "JWT tokens expire after 24 hours" -> note
+        content: The content/description of the item
+        doc_type: Type - "task", "idea", "note", "context". Default: "task"
+        status: Status - "inbox", "todo", "in-progress", "blocked", "done". Default: "inbox"
+        priority: Priority - "high", "medium", "low". Default: "medium"
+        tags: Optional list of tags (e.g., ["auth", "refactor"])
+        project: Optional project name (e.g., "code-smriti")
+        due_date: Optional due date in ISO format (e.g., "2025-01-15")
     """
     try:
         payload = {
             "doc_type": doc_type,
             "content": content,
+            "status": status,
             "priority": priority,
-            "status": "inbox",
         }
         if tags:
             payload["tags"] = tags
         if project:
             payload["source"] = {"project": project}
-
-        result = await cos_request("POST", "/api/cos/docs", payload)
-
-        doc_id = result.get("id", "unknown")[:8]
-        return f"✓ Captured {doc_type}: \"{content[:50]}{'...' if len(content) > 50 else ''}\" (id: {doc_id})"
-
-    except Exception as e:
-        return f"Error capturing: {str(e)}"
-
-
-@mcp.tool()
-async def cos_task(
-    content: str,
-    priority: str = "medium",
-    due_date: str = None,
-    tags: list[str] = None,
-    project: str = None,
-) -> str:
-    """
-    Create a task - something actionable that needs to be done.
-
-    Use this when you identify something that needs action. Tasks are
-    actionable items with clear outcomes.
-
-    Args:
-        content: What needs to be done. Be specific and actionable.
-        priority: "high", "medium", or "low". Default: "medium"
-        due_date: Optional due date in ISO format (e.g., "2025-01-15")
-        tags: Optional tags for organization
-        project: Optional project name
-
-    Examples:
-        - "Add input validation to the login endpoint"
-        - "Write tests for the auth module"
-        - "Review PR #123"
-    """
-    try:
-        payload = {
-            "doc_type": "task",
-            "content": content,
-            "priority": priority,
-            "status": "todo",
-        }
         if due_date:
             payload["due_date"] = due_date
-        if tags:
-            payload["tags"] = tags
-        if project:
-            payload["source"] = {"project": project}
 
         result = await cos_request("POST", "/api/cos/docs", payload)
 
         doc_id = result.get("id", "unknown")[:8]
         priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "")
-        return f"✓ Task created {priority_emoji}: \"{content[:60]}{'...' if len(content) > 60 else ''}\" (id: {doc_id})"
+        return f"✓ Created {doc_type} {priority_emoji}: \"{content[:50]}{'...' if len(content) > 50 else ''}\" (id: {doc_id})"
 
     except Exception as e:
-        return f"Error creating task: {str(e)}"
-
-
-# =============================================================================
-# Query Tools - Retrieve and search captured items
-# =============================================================================
-
-@mcp.tool()
-async def cos_next(limit: int = 5) -> str:
-    """
-    Get your next actions - what should you work on now?
-
-    Returns a prioritized list of tasks: high priority first, then by due date.
-    Use this when you need to decide what to work on next.
-
-    Args:
-        limit: Number of items to return (default: 5)
-    """
-    try:
-        result = await cos_request("GET", f"/api/cos/docs/next?limit={limit}")
-
-        items = result.get("items", [])
-        if not items:
-            return "No pending tasks. Your inbox is clear! 🎉"
-
-        output = ["## Next Actions\n"]
-        for i, item in enumerate(items, 1):
-            priority = item.get("priority", "medium")
-            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "")
-            content = item.get("content", "")[:80]
-            doc_id = item.get("id", "")[:8]
-            tags = item.get("tags", [])
-            tag_str = f" [{', '.join(tags)}]" if tags else ""
-            output.append(f"{i}. {emoji} {content}{tag_str} `{doc_id}`")
-
-        return "\n".join(output)
-
-    except Exception as e:
-        return f"Error getting next actions: {str(e)}"
-
-
-@mcp.tool()
-async def cos_inbox(limit: int = 10) -> str:
-    """
-    View your inbox - items captured but not yet processed.
-
-    These are items you've quickly captured that need to be reviewed,
-    prioritized, or converted to actionable tasks.
-
-    Args:
-        limit: Number of items to return (default: 10)
-    """
-    try:
-        result = await cos_request("GET", f"/api/cos/docs/inbox?limit={limit}")
-
-        items = result.get("items", [])
-        if not items:
-            return "Inbox is empty. Nothing to process! ✓"
-
-        output = [f"## Inbox ({len(items)} items)\n"]
-        for item in items:
-            doc_type = item.get("doc_type", "idea")
-            content = item.get("content", "")[:70]
-            doc_id = item.get("id", "")[:8]
-            emoji = {"task": "☐", "idea": "💡", "note": "📝", "message": "💬"}.get(doc_type, "•")
-            output.append(f"{emoji} {content} `{doc_id}`")
-
-        return "\n".join(output)
-
-    except Exception as e:
-        return f"Error getting inbox: {str(e)}"
+        return f"Error creating: {str(e)}"
 
 
 @mcp.tool()
@@ -269,21 +147,24 @@ async def cos_list(
     include_done: bool = False,
 ) -> str:
     """
-    List and filter your captured items.
-
-    Use this to find specific items or browse your captured knowledge.
+    List and filter items.
 
     Args:
-        doc_type: Filter by type - "task", "idea", "note", "context", "message"
+        doc_type: Filter by type - "task", "idea", "note", "context"
         status: Filter by status - "inbox", "todo", "in-progress", "blocked", "done", "archived"
         priority: Filter by priority - "high", "medium", "low"
-        tags: Filter by tags (items must have ALL specified tags)
+        tags: Filter by tags (prefix match, e.g., "cos" matches "cos-api")
         project: Filter by project name
         limit: Max items to return (default: 20)
         include_done: Include done/archived items (default: False)
+
+    Examples:
+        - cos_list(status="inbox") - view inbox
+        - cos_list(priority="high") - high priority items
+        - cos_list(tags=["cos"]) - items with cos* tags
+        - cos_list(doc_type="context", project="code-smriti", limit=1) - latest context
     """
     try:
-        # Build query params - server handles exclude_done filtering
         params = [f"limit={limit}"]
         if doc_type:
             params.append(f"doc_type={doc_type}")
@@ -303,35 +184,30 @@ async def cos_list(
         result = await cos_request("GET", f"/api/cos/docs?{query}")
 
         items = result.get("items", [])
-        total = result.get("total", 0)
-
         if not items:
-            return "No items found matching your filters."
+            return "No items found."
 
-        output = [f"## Found {len(items)} active items\n"]
+        output = [f"## {len(items)} items\n"]
         for item in items:
             dt = item.get("doc_type", "")
             content = item.get("content", "")[:60]
             doc_id = item.get("id", "")[:8]
             item_status = item.get("status", "")
-            emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯", "message": "💬"}.get(dt, "•")
-            output.append(f"{emoji} [{item_status}] {content} `{doc_id}`")
-
-        if not include_done and not status:
-            output.append(f"\n_Use include_done=True to see completed items_")
+            item_priority = item.get("priority", "")
+            emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯"}.get(dt, "•")
+            p_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(item_priority, "")
+            output.append(f"{emoji} {p_emoji} [{item_status}] {content} `{doc_id}`")
 
         return "\n".join(output)
 
     except Exception as e:
-        return f"Error listing items: {str(e)}"
+        return f"Error listing: {str(e)}"
 
 
 @mcp.tool()
 async def cos_get(doc_id: str) -> str:
     """
-    Get a single document by ID.
-
-    Use this to view full details of a specific item.
+    Get a single item by ID.
 
     Args:
         doc_id: The ID of the item (can be partial, e.g., "abc123")
@@ -339,7 +215,6 @@ async def cos_get(doc_id: str) -> str:
     try:
         result = await cos_request("GET", f"/api/cos/docs/{doc_id}")
 
-        # Format output
         doc_type = result.get("doc_type", "unknown")
         content = result.get("content", "")
         status = result.get("status", "")
@@ -350,13 +225,13 @@ async def cos_get(doc_id: str) -> str:
         full_id = result.get("id", doc_id)
 
         emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯"}.get(doc_type, "•")
-        priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "")
+        p_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "")
 
         output = [f"## {emoji} {doc_type.title()} `{full_id[:8]}`\n"]
         output.append(f"**Content:** {content}\n")
         output.append(f"**Status:** {status}")
         if priority:
-            output.append(f" {priority_emoji} | **Priority:** {priority}")
+            output.append(f" {p_emoji} | **Priority:** {priority}")
         if tags:
             output.append(f"\n**Tags:** {', '.join(tags)}")
         if project:
@@ -370,100 +245,7 @@ async def cos_get(doc_id: str) -> str:
             return f"Item not found: {doc_id}"
         return f"Error: {str(e)}"
     except Exception as e:
-        return f"Error getting item: {str(e)}"
-
-
-@mcp.tool()
-async def cos_search_tags(tags: list[str] = None) -> str:
-    """
-    Get all your tags with counts, or search for items by tags.
-
-    Use this to explore how your knowledge is organized and find
-    related items across different captures.
-
-    Args:
-        tags: If provided, search for items with these tags.
-              If omitted, returns all tags with counts.
-    """
-    try:
-        if tags:
-            # Search by tags
-            tag_params = "&".join(f"tags={t}" for t in tags)
-            result = await cos_request("GET", f"/api/cos/docs?{tag_params}&limit=20")
-
-            items = result.get("items", [])
-            if not items:
-                return f"No items found with tags: {', '.join(tags)}"
-
-            output = [f"## Items tagged [{', '.join(tags)}]\n"]
-            for item in items:
-                content = item.get("content", "")[:60]
-                doc_id = item.get("id", "")[:8]
-                output.append(f"- {content} `{doc_id}`")
-            return "\n".join(output)
-        else:
-            # List all tags
-            result = await cos_request("GET", "/api/cos/tags")
-
-            tags_list = result.get("tags", [])
-            if not tags_list:
-                return "No tags found. Start tagging your captures!"
-
-            output = ["## Your Tags\n"]
-            for t in tags_list:
-                output.append(f"- **{t['tag']}** ({t['count']} items)")
-            return "\n".join(output)
-
-    except Exception as e:
-        return f"Error with tags: {str(e)}"
-
-
-# =============================================================================
-# Update Tools - Modify captured items
-# =============================================================================
-
-@mcp.tool()
-async def cos_done(doc_id: str) -> str:
-    """
-    Mark a task or item as done.
-
-    Args:
-        doc_id: The ID of the item to mark done (can be partial, e.g., "abc123")
-    """
-    try:
-        result = await cos_request("PATCH", f"/api/cos/docs/{doc_id}", {"status": "done"})
-        content = result.get("content", "")[:50]
-        return f"✓ Marked as done: \"{content}\""
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return f"Item not found: {doc_id}"
         return f"Error: {str(e)}"
-    except Exception as e:
-        return f"Error marking done: {str(e)}"
-
-
-@mcp.tool()
-async def cos_delete(doc_id: str, hard: bool = False) -> str:
-    """
-    Delete an item.
-
-    Args:
-        doc_id: The ID of the item to delete (can be partial, e.g., "abc123")
-        hard: If True, permanently delete. If False (default), archive the item.
-    """
-    try:
-        endpoint = f"/api/cos/docs/{doc_id}"
-        if hard:
-            endpoint += "?hard=true"
-        await cos_request("DELETE", endpoint)
-        action = "Permanently deleted" if hard else "Archived"
-        return f"✓ {action} item: {doc_id}"
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            return f"Item not found: {doc_id}"
-        return f"Error: {str(e)}"
-    except Exception as e:
-        return f"Error deleting: {str(e)}"
 
 
 @mcp.tool()
@@ -475,12 +257,12 @@ async def cos_update(
     tags: list[str] = None,
 ) -> str:
     """
-    Update an existing item.
+    Update an item.
 
     Args:
-        doc_id: The ID of the item to update
+        doc_id: The ID of the item (can be partial)
         content: New content (optional)
-        status: New status - "inbox", "todo", "in-progress", "blocked", "done", "archived"
+        status: New status - "inbox", "todo", "in-progress", "blocked", "done"
         priority: New priority - "high", "medium", "low"
         tags: Replace tags with this list
     """
@@ -496,7 +278,7 @@ async def cos_update(
             payload["tags"] = tags
 
         if not payload:
-            return "Nothing to update. Provide at least one field to change."
+            return "Nothing to update. Provide at least one field."
 
         result = await cos_request("PATCH", f"/api/cos/docs/{doc_id}", payload)
         return f"✓ Updated: \"{result.get('content', '')[:50]}\""
@@ -506,142 +288,72 @@ async def cos_update(
             return f"Item not found: {doc_id}"
         return f"Error: {str(e)}"
     except Exception as e:
-        return f"Error updating: {str(e)}"
-
-
-# =============================================================================
-# Context Tools - Save and retrieve project context
-# =============================================================================
-
-@mcp.tool()
-async def cos_save_context(
-    summary: str,
-    project: str = None,
-    key_topics: list[str] = None,
-    files_modified: list[str] = None,
-    open_questions: list[str] = None,
-) -> str:
-    """
-    Save a context snapshot - capture the current state of your work.
-
-    Use this at the end of a work session to remember:
-    - What you were working on
-    - Key decisions made
-    - Files changed
-    - Open questions for next time
-
-    This is invaluable for picking up where you left off.
-
-    Args:
-        summary: Summary of current work state and progress
-        project: Project name (e.g., "code-smriti")
-        key_topics: Main topics/areas being worked on
-        files_modified: List of files changed in this session
-        open_questions: Questions or uncertainties to resolve
-    """
-    try:
-        payload = {
-            "summary": summary,
-        }
-        if project:
-            payload["project"] = project
-        if key_topics:
-            payload["key_topics"] = key_topics
-        if files_modified:
-            payload["files_modified"] = files_modified
-        if open_questions:
-            payload["open_questions"] = open_questions
-
-        result = await cos_request("POST", "/api/cos/context", payload)
-
-        ctx_id = result.get("id", "")[:8]
-        return f"✓ Context saved for {project or 'general'} (id: {ctx_id})"
-
-    except Exception as e:
-        return f"Error saving context: {str(e)}"
+        return f"Error: {str(e)}"
 
 
 @mcp.tool()
-async def cos_get_context(project: str = None) -> str:
+async def cos_delete(doc_id: str) -> str:
     """
-    Retrieve the latest context snapshot.
-
-    Use this at the START of a work session to remember where you left off.
+    Archive an item (soft delete).
 
     Args:
-        project: Optional project name. If omitted, returns most recent context.
+        doc_id: The ID of the item to archive (can be partial)
     """
     try:
-        endpoint = f"/api/cos/context/{project}" if project else "/api/cos/context"
-        result = await cos_request("GET", endpoint)
-
-        if not result:
-            return f"No context saved{f' for {project}' if project else ''}. Start fresh!"
-
-        output = [f"## Last Context{f' - {project}' if project else ''}\n"]
-        output.append(f"**Summary:** {result.get('summary', 'N/A')}\n")
-
-        topics = result.get("key_topics", [])
-        if topics:
-            output.append(f"**Key Topics:** {', '.join(topics)}\n")
-
-        files = result.get("files_modified", [])
-        if files:
-            output.append(f"**Files Modified:** {', '.join(files)}\n")
-
-        questions = result.get("open_questions", [])
-        if questions:
-            output.append("**Open Questions:**")
-            for q in questions:
-                output.append(f"  - {q}")
-
-        output.append(f"\n_Saved: {result.get('created_at', 'unknown')}_")
-
-        return "\n".join(output)
-
+        await cos_request("DELETE", f"/api/cos/docs/{doc_id}")
+        return f"✓ Archived: {doc_id}"
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return f"Item not found: {doc_id}"
+        return f"Error: {str(e)}"
     except Exception as e:
-        return f"Error getting context: {str(e)}"
+        return f"Error: {str(e)}"
 
 
 @mcp.tool()
 async def cos_stats() -> str:
     """
-    Get statistics about your captured items.
-
-    Shows counts by type, status, and recent activity.
+    Get statistics and tag counts.
     """
     try:
-        result = await cos_request("GET", "/api/cos/stats")
+        # Get stats
+        stats = await cos_request("GET", "/api/cos/stats")
+        # Get tags
+        tags_result = await cos_request("GET", "/api/cos/tags")
 
-        output = ["## Chief of Staff Stats\n"]
-        output.append(f"**Total Items:** {result.get('total_docs', 0)}\n")
+        output = ["## Stats\n"]
+        output.append(f"**Total:** {stats.get('total_docs', 0)}")
 
-        by_type = result.get("by_type", {})
+        by_type = stats.get("by_type", {})
         if by_type:
-            output.append("**By Type:**")
+            output.append("\n**By Type:**")
             for t, count in by_type.items():
                 emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯"}.get(t, "•")
                 output.append(f"  {emoji} {t}: {count}")
-            output.append("")
 
-        by_status = result.get("by_status", {})
+        by_status = stats.get("by_status", {})
         if by_status:
-            output.append("**By Status:**")
+            output.append("\n**By Status:**")
             for s, count in by_status.items():
                 output.append(f"  - {s}: {count}")
-            output.append("")
 
-        by_priority = result.get("by_priority", {})
+        by_priority = stats.get("by_priority", {})
         if by_priority:
-            output.append("**By Priority:**")
+            output.append("\n**By Priority:**")
             for p, count in by_priority.items():
                 emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(p, "")
                 output.append(f"  {emoji} {p}: {count}")
 
+        tags_list = tags_result.get("tags", [])
+        if tags_list:
+            output.append("\n**Tags:**")
+            for t in tags_list[:10]:  # Top 10 tags
+                output.append(f"  - {t['tag']} ({t['count']})")
+
         return "\n".join(output)
 
     except Exception as e:
-        return f"Error getting stats: {str(e)}"
+        return f"Error: {str(e)}"
 
 
 if __name__ == "__main__":

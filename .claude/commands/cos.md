@@ -3,26 +3,16 @@
 You have access to the **Chief of Staff (CoS)** MCP tools for personal productivity.
 Use these tools to capture and manage tasks, ideas, notes, and context.
 
-## Available Tools
+## Tools (6 total)
 
-### Quick Capture
-- `cos_capture` - Quickly capture anything (task, idea, note) to inbox
-- `cos_task` - Create a specific task with priority and due date
-
-### Retrieve & Search
-- `cos_next` - Get your prioritized next actions (what to work on now)
-- `cos_inbox` - View items waiting to be processed
-- `cos_list` - List/filter items by type, status, priority, tags, project
-- `cos_search_tags` - Browse tags or find items by tags
-
-### Update
-- `cos_done` - Mark an item as complete
-- `cos_update` - Modify an existing item
-
-### Context Management
-- `cos_save_context` - Save a snapshot of current work state (end of session)
-- `cos_get_context` - Retrieve last context (start of session)
-- `cos_stats` - Get statistics about your captured items
+| Tool | Purpose |
+|------|---------|
+| `cos_create` | Create item (task, idea, note, context) |
+| `cos_list` | List/filter items by type, status, priority, tags, project |
+| `cos_get` | Get single item by ID (supports partial IDs) |
+| `cos_update` | Update item fields (content, status, priority, tags) |
+| `cos_delete` | Archive item |
+| `cos_stats` | Stats + tag counts |
 
 ## User Request
 
@@ -32,15 +22,19 @@ $ARGUMENTS
 
 Based on the user's request above, use the appropriate CoS tool(s).
 
-**Quick patterns:**
-- "remind me to..." / "don't forget..." / "todo:" → `cos_task` or `cos_capture`
-- "idea:" / "what if..." / "maybe we should..." → `cos_capture` with doc_type="idea"
-- "note:" / "remember that..." → `cos_capture` with doc_type="note"
-- "what should I work on" / "next" → `cos_next`
-- "show inbox" / "what's pending" → `cos_inbox`
-- "mark X done" / "complete X" → `cos_done`
-- "save context" / "end session" → `cos_save_context`
-- "where was I" / "resume" / "start session" → `cos_get_context`
+**Patterns:**
+- "remind me..." / "todo:" / "task:" → `cos_create(content, doc_type="task")`
+- "idea:" / "what if..." → `cos_create(content, doc_type="idea")`
+- "note:" → `cos_create(content, doc_type="note")`
+- "list" / "show" → `cos_list()`
+- "inbox" → `cos_list(status="inbox")`
+- "next" / "priority" → `cos_list(priority="high")` or `cos_list(status="todo")`
+- "#tag" / "tagged" → `cos_list(tags=["tag"])`
+- "get X" / "show X" → `cos_get(doc_id)`
+- "done X" / "complete X" → `cos_update(doc_id, status="done")`
+- "delete X" / "archive X" → `cos_delete(doc_id)`
+- "stats" → `cos_stats()`
+- "context" / "where was I" → `cos_list(doc_type="context", limit=1)`
 
-If the request is ambiguous, use `cos_capture` with your best guess at doc_type.
-Always tag items with relevant context from the current project when possible.
+If ambiguous, use `cos_create` with best guess at doc_type.
+Tag items with relevant project context when possible.
