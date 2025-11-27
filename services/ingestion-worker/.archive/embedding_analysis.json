@@ -1,0 +1,1231 @@
+{
+  "total_chunks": 10000,
+  "embedding_dim": 768,
+  "effective_dimensions": 1,
+  "pca_variance_explained": [
+    0.09624654294804266,
+    0.0722069717446329,
+    0.04102448743709178,
+    0.03435064215377955,
+    0.03028174608974744,
+    0.025292639846197885,
+    0.021853031785293044,
+    0.02070512058266154,
+    0.019289909153071272,
+    0.016972225174280365,
+    0.016284970353956346,
+    0.015406257817126248,
+    0.013371269542324754,
+    0.012766872170964212,
+    0.011974560200566248,
+    0.010820238157812464,
+    0.010221571331496046,
+    0.009818943906679194,
+    0.009690674952841006,
+    0.009036750775928463
+  ],
+  "n_clusters": 15,
+  "silhouette_score": 0.07669751751658194,
+  "cluster_sizes": [
+    1169,
+    1056,
+    1051,
+    955,
+    876,
+    627,
+    599,
+    598,
+    596,
+    553,
+    542,
+    475,
+    467,
+    265,
+    171
+  ],
+  "clusters": [
+    {
+      "cluster_id": 4,
+      "size": 1169,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil_frontend",
+      "dominant_language": "javascript",
+      "keywords": [
+        "const",
+        "import",
+        "from",
+        "export",
+        "return",
+        "function",
+        "async",
+        "default",
+        "await",
+        "data"
+      ],
+      "avg_similarity": 0.647131586166423,
+      "sample_chunks": [
+        {
+          "chunk_id": "0a747e7f8787162a7a9550d53701811ff13011a1e220121d118e58619e1b4c0f",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Insights.svelte <script>",
+          "content_preview": "# Context: src/lib/components/Insights.svelte <script>\n(farmInsights) => {\n        console.log(\"farmInsights\", farmInsights);\n        loading = false;\n        if (\"message\" in farmInsights) {\n        ",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "18294c4bd47c97e057c3cdf4b9c70b7a8a2d31d4c521c83fff0e8237450735f8",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Insights.svelte <script>",
+          "content_preview": "# Context: src/lib/components/Insights.svelte <script>\n(\n    /** @type {number} */ statefp,\n    /** @type {number} */ countyfp\n  ) => {\n    fetch(\n      `${PUBLIC_BACKEND_URL}/insights/api/v1/census/?",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "18fb0e6c2b7988a42bd82fe00ca305fdff45994035627334fb68f63c8c742d2c",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Insights.svelte <script>",
+          "content_preview": "# Context: src/lib/components/Insights.svelte <script>\n(\n    /** @type {{ [x: string]: string; }} */ crop\n  ) => {\n    let expectedYield = \"\";\n    let trendAdjustment = \"\";\n    if (\"non irrigated expe",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "1c7bf27679d7d1e8abc20bebf16588294d77f112b37826c9e38a4d0bae69bdf8",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/CapRate.svelte <script>",
+          "content_preview": "# Context: src/lib/components/CapRate.svelte <script>\n(assessmentData) => {\n    if (Browser && assessmentData) {\n      const reordered = process_assessment_data(\n        flush(\n          assessmentDat",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "1f7a51c1cd3e69b22e6209b36198d37e1adb21fce655f45b29fbe3f1dd57d98c",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Insights.svelte <script>",
+          "content_preview": "# Context: src/lib/components/Insights.svelte <script>\n(d) => {\n        if (!d.length) {\n          return;\n        }\n        let latestCountyRent = d[d.length - 1];\n        County_Cash_Rent = Math.rou",
+          "language": "javascript"
+        }
+      ]
+    },
+    {
+      "cluster_id": 9,
+      "size": 1056,
+      "dominant_type": "commit",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "added",
+        "data",
+        "changes",
+        "profile",
+        "farm",
+        "link",
+        "crop",
+        "fields",
+        "some",
+        "small"
+      ],
+      "avg_similarity": 0.5730338792595367,
+      "sample_chunks": [
+        {
+          "chunk_id": "22588fe2282a82c7bbaf25d80f9cd5a3ab62a73e499a7c006ab976174cddc164",
+          "type": "commit",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "",
+          "content_preview": "Added disclaimer.",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "2398ec1206aa464a85125ec1c9ee3024cc58eb1bcaf1c3a45f244d88027e178a",
+          "type": "document",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": ".vscode/extensions.json",
+          "content_preview": "{\n  \"recommendations\": [\n    \"svelte.svelte-vscode\"\n  ]\n}",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "2c09f43657ac029e8765fc2cfa5b8a6af8c4d2ff6b77dfa18a1458669ad944ac",
+          "type": "commit",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "",
+          "content_preview": "made cap rate component fir properly.",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "3ebe8a68d73973ff7c1920813b34a68b823332e661dbcf1156e4184cdd6a4b74",
+          "type": "commit",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "",
+          "content_preview": "style changes.",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "59ab2652e3a3037ec4a156db7f0b58d768cea15c61b38183e86dab072f6dfdeb",
+          "type": "commit",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "",
+          "content_preview": "added url for details insights page.",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 10,
+      "size": 1051,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "return",
+        "client",
+        "field",
+        "none",
+        "import",
+        "from",
+        "null",
+        "user",
+        "else",
+        "clientadminupdate"
+      ],
+      "avg_similarity": 0.6449465464718885,
+      "sample_chunks": [
+        {
+          "chunk_id": "000455b7a13fa24bc50a7aae25070f010bca1d4c2b432211636fa0c7a2678f89",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "products/serializers.py",
+          "content_preview": "# Context: products/serializers.py\n# Inside: TestParameterSerializer\ndef get_unit(self, obj):\n        return str(obj.unit)",
+          "language": "python"
+        },
+        {
+          "chunk_id": "0021339c97d1d6ca5ef2a92ebaf6043b660bce5cf1a82c9365dc70b3b19d0eac",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/admin.py",
+          "content_preview": "# Context: utils/admin.py\n# Inside: ClientAdminUpdate\ndef create_or_update_hubspot_contact(self, request, queryset):\n        if not settings.BLOCK_HUBSPOT_IN_TESTING:\n            for client in queryse",
+          "language": "python"
+        },
+        {
+          "chunk_id": "00f2822add8b6ed1d89e0d5b18869d6be05ec9f5c61706c18c6a86bc8041fb5e",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "associates/models.py",
+          "content_preview": "# Context: associates/models.py\n# Inside: Organization\ndef save(self, *args, **kwargs):\n\n        if not self.pk:\n            # if this object is not yet created\n            self.name = self.company.na",
+          "language": "python"
+        },
+        {
+          "chunk_id": "0113da12399e8cb8b9f5fac5bb5e53b049f9aec5e0035387449827d839029ef1",
+          "type": "document",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "inventory/fixtures/inventory.yaml",
+          "content_preview": "- model: inventory.itemtemplate\n  pk: 1\n  fields:\n    description: Tractor\n    brand: null\n    model: null\n    part_number: null\n    notes: ''\n    owner: null\n    suppliers: []\n- model: inventory.item",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "01153b407e8d3f628607dafbdc67930c472c25bcc939d98d393fb012c0e93ee9",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "products/models/products.py",
+          "content_preview": "# Context: products/models/products.py\n# Inside: ProductManager\ndef get_optimized_queryset(self):\n        return Product.objects.filter(active=True).select_related('category', 'created_by__company',\n ",
+          "language": "python"
+        }
+      ]
+    },
+    {
+      "cluster_id": 7,
+      "size": 955,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "import",
+        "from",
+        "data",
+        "await",
+        "created",
+        "clientviewtests",
+        "field",
+        "inventoryviewtests",
+        "test",
+        "return"
+      ],
+      "avg_similarity": 0.6787009277173793,
+      "sample_chunks": [
+        {
+          "chunk_id": "477f7506f58335b9c33cdb957e2c1609d3273299a9620298d6a4dfd427eb94ad",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/rabo_topsoil",
+          "file_path": "tests/auth/test.js",
+          "content_preview": "# Context: tests/auth/test.js\nimport { expect, test } from '@playwright/test';\n\ntest('login', async ({ page }) => {\n\tawait page.goto('/');\n\tawait expect(page.getByRole('button', { name: 'Login' })).to",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "ea9df2904144e831eab63df54b459141bc4123f7e88f1997dfad853bfae258ac",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/rabo_topsoil",
+          "file_path": "tests/globalSearch/test.js",
+          "content_preview": "# Context: tests/globalSearch/test.js\nimport { expect, test } from '@playwright/test';\n\ntest('globalsearch', async ({ page }) => {\n\tawait page.goto('/');\n\tawait expect(page.getByRole('button', { name:",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "fefc3bf02cb8d413bc1ecaad1fa455f03916da7e1a884776590d811a140345f0",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/rabo_topsoil",
+          "file_path": "tests/client/test.js",
+          "content_preview": "# Context: tests/client/test.js\nimport { expect, test } from '@playwright/test';\n\ntest('createclient', async ({ page }) => {\n\tawait page.goto('/');\n\tawait expect(page.getByRole('button', { name: 'Logi",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0043530417d126f1e2fc44076d6035636cf8ac09aa95e093ce149fa8e6362962",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "svx/tests/tests_apiviews.py",
+          "content_preview": "# Context: svx/tests/tests_apiviews.py\nfrom django.test.testcases import TestCase\nfrom django.urls import reverse\nfrom rest_framework.test import APIClient\n\nfrom associates.models import Organization\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0090d18c934d3560eae80ee50bc46caa2c0ef5c11927eee51ead97b319cbb68b",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/tests/test_api.py",
+          "content_preview": "# Context: utils/tests/test_api.py\ndef put_response():\n    data = get_response().json()\n    data['preferences']['client_profile']['progress'] = {'test': 'value'}\n    return data",
+          "language": "python"
+        }
+      ]
+    },
+    {
+      "cluster_id": 12,
+      "size": 876,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "class",
+        "lass",
+        "from",
+        "import",
+        "ordering",
+        "econmodelrun",
+        "serializers"
+      ],
+      "avg_similarity": 0.6530089584700889,
+      "sample_chunks": [
+        {
+          "chunk_id": "00a0ffb1ca7689dc281040c75c26ef601a199ce67940445ed11693de3d30f71c",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "deprecated/fertisaverN/models.py",
+          "content_preview": "# Context: deprecated/fertisaverN/models.py\nclass SensorCheckJar(Jar):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "00db18098ec760ce5c634cf4cd30337a21bfd187d50f6cccfa20f6a7912a9519",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "contact/admin.py",
+          "content_preview": "# Context: contact/admin.py\nclass PersonInline(admin.StackedInline):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "01c27a69cc8bb50b54ae857fbfa96249185c0b8dc0c6ea6a51e832104c3fbeb1",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "clients/views/views_gis.py",
+          "content_preview": "# Context: clients/views/views_gis.py\nclass UpdateSamplePoints(DealershipRequiredMixin, UpdateView):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "01caab852e24763560809fc7b526340c5e1597e91a488286109aa01b5667be3d",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "deprecated/fieldhistory-deprecated/migrations/0001_initial.py",
+          "content_preview": "# Context: deprecated/fieldhistory-deprecated/migrations/0001_initial.py\nclass Migration(migrations.Migration):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "023589f50f7cc9ccc62b1b5f193c2e723cef629d8c8ef0c7f39691af00120910",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "recommendations/templatetags/__init__.py",
+          "content_preview": "# Context: recommendations/templatetags/__init__.py\n",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 14,
+      "size": 627,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "import",
+        "const",
+        "from",
+        "function",
+        "async",
+        "feature",
+        "multipolygon",
+        "this",
+        "return",
+        "geojson"
+      ],
+      "avg_similarity": 0.6384097378788987,
+      "sample_chunks": [
+        {
+          "chunk_id": "02a2bf222fc40b483ffeabb9e8df8fd005897e44e9da967166ea68a16e138cb9",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/components/map/helpers.js",
+          "content_preview": "# Context: src/lib/components/map/helpers.js\nimport area from \"@turf/area\";\nimport L from \"leaflet\";\nexport const addFieldsToFeatureGroup = (\n  /** @type {any[]} */ fields,\n  /** @type {any} */ cluFea",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "182de16682387abd0cce59174f011379511b1222e304b5b570c69d0ad679aed3",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/components/helpers.js",
+          "content_preview": "# Context: src/lib/components/helpers.js\n(soildat) => {\n  // Reads in soil geojson and assembles an object containing soil properties in the following structure:\n  // { XXX: { muname: YYY, iacornsr: Z",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "2158de70505e8cbaf7569162015636ffc8308019bb4677c31f9ee947ed3ceb7d",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/js/datalayer_helpers.js",
+          "content_preview": "# Context: src/lib/js/datalayer_helpers.js\n// FEMA flood plain color styling.\n// Here's the 'standard' coloring\n// https://msc.fema.gov/portal/search?AddressQuery=danville%2C%20IL#searchresultsanchor\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "c316e2c143ffc28c828a78e9a457690ecf905fa6122929ba18f28729b13c8c73",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/components/helpers.js",
+          "content_preview": "# Context: src/lib/components/helpers.js\n(\n  /** @type {{ geometry: { type: string; coordinates: any[]; }; }} */ feature\n) => {\n  let coordinates = [];\n  if (feature.geometry.type == \"Polygon\") {\n    ",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "c4167aafa13e17a771519f2cf878f594570c72a2432b472f6166ee55c5b9fb39",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/components/helpers.js",
+          "content_preview": "# Context: src/lib/components/helpers.js\nasync (dat, map, lyrctrl) => {\n  // This extracts and fits the field boundary\n  if (map && dat) {\n    let L = await import(\"leaflet\");\n    let boundary = L.geo",
+          "language": "javascript"
+        }
+      ]
+    },
+    {
+      "cluster_id": 6,
+      "size": 599,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "import",
+        "from",
+        "generated",
+        "django",
+        "models",
+        "migrations",
+        "settings",
+        "uuid",
+        "decimal",
+        "geometrycollection"
+      ],
+      "avg_similarity": 0.7994575444856559,
+      "sample_chunks": [
+        {
+          "chunk_id": "0059091ac7937311f23c95e8d2542fc0e486700a5f8ec6d463e1932b1bb6162e",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "tsdocuments/migrations/0016_fieldlog_tags.py",
+          "content_preview": "# Generated by Django 4.1.3 on 2025-06-05 19:12\n\nfrom django.db import migrations\nimport tagging.fields\n\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "008fd6e1a9148c2a734908d5197f670a33e96c5531bd48c04c670f0e70248403",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "samples/migrations/0029_auto_20181231_0052.py",
+          "content_preview": "# Generated by Django 2.1.4 on 2018-12-31 06:52\n\nfrom django.db import migrations, models\n\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "00bebbb5d2ac5a410e844e9faff2069a4c2e63a1b8ec2fde1025ebe1e354c1be",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "customnotes/migrations/0011_alter_customfield_field_type.py",
+          "content_preview": "# Generated by Django 4.1.3 on 2023-07-05 21:49\n\nfrom django.db import migrations, models\n\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "01425d2eecae7a8ab04a378c84b8ba276c60a2b119d6501bd75ee71f05b86f36",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "common/migrations/0002_announcement_css.py",
+          "content_preview": "# Generated by Django 2.1.5 on 2020-03-21 16:24\n\nfrom django.db import migrations, models\n\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "01c7397fdcffa479baf664d85c7b15cb1b279ea1076227382fb06000cfde52bd",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "products/migrations/0023_auto_20181025_2250.py",
+          "content_preview": "# Generated by Django 2.1.1 on 2018-10-26 03:50\n\nfrom django.db import migrations, models\n\n",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 0,
+      "size": 598,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/rabo_topsoil",
+      "dominant_language": "unknown",
+      "keywords": [
+        "import",
+        "from",
+        "export",
+        "const",
+        "getcontext",
+        "onmount",
+        "tilelayers",
+        "default",
+        "function",
+        "svelte"
+      ],
+      "avg_similarity": 0.6345409631427235,
+      "sample_chunks": [
+        {
+          "chunk_id": "030c3f4e13811234378f97dff775b229fde9f5fe40a8c8fbb463a37faa484c4d",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "vite.config.js",
+          "content_preview": "import { defineConfig } from \"vite\";\nimport { svelte } from \"@sveltejs/vite-plugin-svelte\";\n\n// https://vitejs.dev/config/\nexport default defineConfig({\n  plugins: [svelte()],\n  server: {\n    port: 51",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0712b5c2c049b64c390d5cb097da8e00aa8968036af0c359e97e8cc12d87b18a",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Insights.svelte",
+          "content_preview": "<script>\n  import { onMount } from \"svelte\";\n  import CropYieldChart from \"./CropYieldChart.svelte\";\n  import { states } from \"./helpers\";\n  import Disclaimer from \"./Disclaimer.svelte\";\n\n  export let",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "1c7927e611d231ab63fbacab29548407c5b5e4bc136b53c5f04a575596e07289",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/App.svelte",
+          "content_preview": "<script>\n  import Insights from \"./lib/components/Insights.svelte\";\n  import Tabs from \"./lib/components/Tabs.svelte\";\n  import { set_global_methods } from \"./lib/utils\";\n  import CapRate from \"./lib/",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "2c2d7fdda62ded6d4c9bfe00a8a77fd5af4a7af675b1922805ced3f3f4492f54",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/CropYieldChart.svelte",
+          "content_preview": "<script>\n  import { Chart, plugins } from \"chart.js/auto\";\n  import { onMount } from \"svelte\";\n  import chartTrendline from \"chartjs-plugin-trendline\";\n  import FarmWorthLogomark from \"../../assets/Fa",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "4c34f9b30a2ab0c0e967dda03d43a1ae9e3bb258f2141bb933a905b548f3dc32",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/helpers.js",
+          "content_preview": "export const process_assessment_data = (\n  /** @type {any[]} */ assessmentData\n) => {\n  /**\n   * @type {{ apn: any; historicalData: {}; }[]}\n   */\n  let result = [];\n  assessmentData.forEach(\n    (\n  ",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 3,
+      "size": 596,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "import",
+        "from",
+        "django",
+        "generated",
+        "class",
+        "models",
+        "migrations",
+        "dependencies",
+        "depende",
+        "uuid"
+      ],
+      "avg_similarity": 0.7492580530886207,
+      "sample_chunks": [
+        {
+          "chunk_id": "0073ac34b0f810639fca64507bb0fa8d3184fa85c45170854baff2728b04918f",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "econmodel/migrations/0011_econmodelsubitem_name.py",
+          "content_preview": "# Context: econmodel/migrations/0011_econmodelsubitem_name.py\n# Generated by Django 3.1.1 on 2021-11-09 18:07\n\nfrom django.db import migrations, models\n\n\nclass Migration(migrations.Migration):\n\n    de",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0082d9043acc38e2fdb2209d597a10fd7fd56e61615dc2fe4b8a5d1348ecf521",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "clients/migrations/0026_variabilityreport_file.py",
+          "content_preview": "# Context: clients/migrations/0026_variabilityreport_file.py\n# Generated by Django 2.1.3 on 2018-12-14 19:14\n\nfrom django.db import migrations, models\n\n\nclass Migration(migrations.Migration):\n\n    dep",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "009995b847d7755707a732479a42727c805abd38b555180d8ea0aa71748e7e53",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "clients/migrations/0031_add_pg_trgm_extension.py",
+          "content_preview": "# Context: clients/migrations/0031_add_pg_trgm_extension.py\n# Generated by Django 2.1.3 on 2019-01-14 20:43\n\nfrom django.contrib.postgres.operations import TrigramExtension\nfrom django.db import migra",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "011516ecfee4d4def78e0b3d593e1ed1d2d3f0a001a0ecc1889bb552c442ff4e",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "greet/migrations/0003_alter_cipaymentlink_payment_type.py",
+          "content_preview": "# Context: greet/migrations/0003_alter_cipaymentlink_payment_type.py\n# Generated by Django 4.1.3 on 2025-01-13 20:00\n\nfrom django.db import migrations, models\n\n\nclass Migration(migrations.Migration):\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "016cbd97e65de98a2d7094ddb3a5d743f5b5837a0345c85635f5b27edb3353c7",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "econmodel/migrations/0004_auto_20211025_1426.py",
+          "content_preview": "# Context: econmodel/migrations/0004_auto_20211025_1426.py\n# Generated by Django 3.1.1 on 2021-10-25 19:26\n\nfrom django.db import migrations, models\nimport django.db.models.deletion\n\n\nclass Migration(",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 13,
+      "size": 553,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "load",
+        "block",
+        "extends",
+        "static",
+        "endblock",
+        "content",
+        "organization",
+        "export",
+        "const",
+        "light"
+      ],
+      "avg_similarity": 0.6184895400074556,
+      "sample_chunks": [
+        {
+          "chunk_id": "2f06924375d34e411104e9e3131ef490a7bd2de71f12f4a7e9947aaf8d410a7c",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "index.html",
+          "content_preview": "# Context: index.html\n<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Farmland Insights</",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "4c8c525e678dda1e0b81d753ee57353b43d905ab20aa84dee4123dfc01311b0e",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/Disclaimer.svelte",
+          "content_preview": "<script>\n  export let include_fw_logo = false;\n  const farmWorthLogo =\n    \"https://farmworthdb.s3.amazonaws.com/media/contactimages/FarmWorth_Logo_black.jpg\";\n</script>\n\n<div class=\"disclaimer\">\n  {#",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "79f86e49ed873f477cb53f4664761d23033fa0e544d44bd388de2aa3bb6c5915",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/app.css",
+          "content_preview": "# Context: src/app.css\n:root {\n  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;\n  line-height: 1.5;\n  font-weight: 400;\n\n  color-scheme: light dark;\n  color: rgba(255, 255, 255, ",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "7b0954f4b923f1127b6c269a09efe53b6461ed440b262ccb93cce3b4f842528f",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "src/lib/components/CapRate.svelte",
+          "content_preview": "<div class=\"cap-rate-container\">\n  <div>\n    <div>\n      <h3>Capitalization rate estimator</h3>\n\n      <div class=\"top-section\">\n        <div>\n          <div>\n            <table>\n              <tr>\n  ",
+          "language": "svelte"
+        },
+        {
+          "chunk_id": "7f64213346a8e497ae0200038debad6426ca31b58a3447e2f2cb444d5313b2a1",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmlandinsights",
+          "file_path": "index.html",
+          "content_preview": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>Farmland Insights</title>\n    <link href=",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 5,
+      "size": 542,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "import",
+        "from",
+        "testcase",
+        "json",
+        "datetime",
+        "basecommand",
+        "settings",
+        "zipfile",
+        "client",
+        "serializers"
+      ],
+      "avg_similarity": 0.6490051020852428,
+      "sample_chunks": [
+        {
+          "chunk_id": "006f1e5cc411078ff2d0a347addc91bf06724ecd3df995cdc357605bceda4143",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "attestations/tests/test_apiviews.py",
+          "content_preview": "from django.test import TestCase\nfrom django.urls import reverse\nfrom rest_framework.authtoken.models import Token\nfrom rest_framework.test import APIClient\n\nfrom attestations.models import Attestatio",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "00a652d07071c69b00ded92994e8304cf1dce6ae5dfeb53f8029e59f41714d32",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "tsdocuments/apiviews.py",
+          "content_preview": "import copy\nimport datetime\nimport json\nimport logging\nimport re\nfrom collections import OrderedDict\n\nfrom django.core.cache import cache\nfrom django.core.exceptions import ObjectDoesNotExist\nfrom dja",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "00bd82988aec87221d63dcd7f24846e19d07961e16ef2ace4cc730b6953b4eb3",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "layernomenclature/admin.py",
+          "content_preview": "from django.contrib import admin\nfrom products.models import TestParameter\nfrom .models import Layer, LayerKey, LayerGroup, LayerCandidate\n# Register your models here.\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "025fba0265b06c45337c455d2ce100a8da55e9a5d0156f7ada3d872130659f17",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "orders/templatetags/order_render.py",
+          "content_preview": "import json\n\nfrom django import template\n\nfrom clients.models import SubfieldLayer\nfrom samples.models import SampleRegistry, LabMeasurement\nregister = template.Library()\n\n@register.filter",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "03bce93948de91e9c86657661527fba9bcbd2d8026e487637f9771d2bb3e36e5",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/management/commands/migrate_johncarrol_us.py",
+          "content_preview": "import time, csv, traceback\nfrom urllib import parse\nfrom zipfile import ZipFile\n\nfrom associates.models import Organization, Role\nfrom clients.models import Client, Farm, Field, SubfieldLayer\nfrom cl",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 8,
+      "size": 475,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "class",
+        "import",
+        "from",
+        "return",
+        "apipath",
+        "client",
+        "instance",
+        "urlpatterns",
+        "except",
+        "apibugdetail"
+      ],
+      "avg_similarity": 0.6818697714218317,
+      "sample_chunks": [
+        {
+          "chunk_id": "0016e5cabb997c3196d3473eb125810e336b278448c5034a0f4f839131902baf",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "clients/apiviews/apiviews.py",
+          "content_preview": "# Context: clients/apiviews/apiviews.py\nclass APIGetClient(DealershipRequiredMixin, APIView):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "01e0a0cc589eaeb3b7646e3750f5e4265a974677c6641ba08e0d3e59fb96897e",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "associates/apiviews.py",
+          "content_preview": "# Context: associates/apiviews.py\nclass APINewOrganization(generics.CreateAPIView):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "0200ffc6bdc1eede51cf45dd6f808373d7e1a102c46d911d7c408959cc72d997",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "fieldcalendar/apiviews/apiviews_mobile.py",
+          "content_preview": "# Context: fieldcalendar/apiviews/apiviews_mobile.py\nimport json\n\nimport boto3\nfrom botocore.client import Config\nfrom botocore.exceptions import ClientError\nfrom django.conf import settings\nfrom djan",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0203d795fc113dc8b73083e103218c8444e9b447cb9d7ca373bfa77d014137bb",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/apiviews.py",
+          "content_preview": "# Context: utils/apiviews.py\nclass APITopsoilListFieldLocations(APIListFieldLocations):",
+          "language": "python"
+        },
+        {
+          "chunk_id": "02232ebd2e0c217b269e3dae34eae4397be1bb132e97bbc918af3bbb923037f0",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "common/views/generic_document_api_views.py",
+          "content_preview": "# Context: common/views/generic_document_api_views.py\n# Inside: GenericJSONDocListCreateAPIView\ndef get_data(self):\n        try:\n            model_class, objid = self.verify_post(self.kwargs.get('app'",
+          "language": "python"
+        }
+      ]
+    },
+    {
+      "cluster_id": 2,
+      "size": 467,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "unknown",
+      "keywords": [
+        "from",
+        "import",
+        "class",
+        "models",
+        "your",
+        "create",
+        "testcase",
+        "basecommand",
+        "appconfig",
+        "name"
+      ],
+      "avg_similarity": 0.6575589400792188,
+      "sample_chunks": [
+        {
+          "chunk_id": "004fb6206f30744883960c35e074c9ed468b6604f739378861dcac035587e074",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "bugs/views.py",
+          "content_preview": "# Context: bugs/views.py\nfrom django.conf import settings\nfrom django.contrib import messages\nfrom django.http import HttpResponseRedirect\nfrom django.urls import reverse, reverse_lazy\nfrom django.vie",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "0113d20ad4bfb79cd9b6e45cae0a4cf91b05c42c57145cfb3d7f713975fbdbb9",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "labcore_signals/admin.py",
+          "content_preview": "# Context: labcore_signals/admin.py\nfrom collections import OrderedDict\nfrom datetime import date\n\nfrom django.contrib import admin, messages\nfrom django.http import HttpResponse\nfrom orders.admin imp",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "02276690029d7f75042e5a0280f95d67d735d1c14038b529df13f45ba616c577",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "deprecated/fieldhistory-deprecated/apps.py",
+          "content_preview": "# Context: deprecated/fieldhistory-deprecated/apps.py\n# from django.apps import AppConfig\n#\n#\n# class FieldhistoryConfig(AppConfig):\n#     name = 'fieldhistory'\n",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "024a68bc2c9e5270981a50a25027823fba391cb6db3672feb7319f04f2f3a4d8",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "contact/admin.py",
+          "content_preview": "# -*- coding: utf-8 -*-\nfrom __future__ import unicode_literals\n\nfrom address.forms import AddressWidget\nfrom address.models import AddressField\nfrom django import forms\nfrom django.contrib import adm",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "024aa1232de8c13d929af5696ee75860b6da25e49ef9366a0be81b4e8b512bef",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "invoices/models/invoices.py",
+          "content_preview": "# Context: invoices/models/invoices.py\nfrom django.db import models\n\n# Create your models here.\nfrom djmoney.money import Money\n\nfrom clients.models import Client\nfrom common.models import AccessContr",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 11,
+      "size": 265,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/rabo_topsoil",
+      "dominant_language": "unknown",
+      "keywords": [
+        "import",
+        "from",
+        "export",
+        "async",
+        "function",
+        "json",
+        "cookies",
+        "const",
+        "await",
+        "error"
+      ],
+      "avg_similarity": 0.7100227772643295,
+      "sample_chunks": [
+        {
+          "chunk_id": "7a0e8fd2c92a33318f08bd7bdbd7972d581ba197717a862b4e65a8556032f7dc",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/js/api.js",
+          "content_preview": "# Context: src/lib/js/api.js\n/**\n * @param {string} url\n * @param {RequestInit | undefined} opts\n */\nasync function fetch_helper(url, opts) {\n  const response = await fetch(url, opts);\n  if (!response",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "b3189f618f2713cd245397c180dc9afeda60bd91dc3617f0662296b55cdb4dc0",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/farmsoils",
+          "file_path": "src/lib/js/api.js",
+          "content_preview": "/**\n * @param {string} url\n * @param {RequestInit | undefined} opts\n */\nasync function fetch_helper(url, opts) {\n  const response = await fetch(url, opts);\n  if (!response.ok) {\n    console.warn(\"Serv",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "1fa57cdda7b47bbe081f95fea402d1fae6237a1e841aa1d20c46f20e9a3bd871",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/global_error_handler",
+          "file_path": "src/hooks.server.js",
+          "content_preview": "/** @type {import('@sveltejs/kit').HandleServerError} */\nexport async function handleError({ error, event }) {\n\tconsole.error('Server Error:', error);\n\treturn {\n\t\tmessage: error.message,\n\t\tstack: erro",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "4aa2254619adb548e5b8aa113a80afcc9df385c0e077888bae729f22dc372acc",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/global_error_handler",
+          "file_path": "src/routes/error-test/+page.js",
+          "content_preview": "import { error } from '@sveltejs/kit';\n\nexport async function load({ fetch }) {\n\tconst response = await fetch('/api/error-test');\n\n\tif (!response.ok) {\n\t\t// throw error(403, { message: 'Not allowed' }",
+          "language": "unknown"
+        },
+        {
+          "chunk_id": "8cc7e638269882a48225ebe4b1bd2b678e9889bd74e1f31ebfc188f401dccbde",
+          "type": "code_chunk",
+          "repo_id": "CHETANECINFOSOLUTIONS/global_error_handler",
+          "file_path": "src/hooks.server.js",
+          "content_preview": "# Context: src/hooks.server.js\n/** @type {import('@sveltejs/kit').HandleServerError} */\nexport async function handleError({ error, event }) {\n\tconsole.error('Server Error:', error);\n\treturn {\n\t\tmessag",
+          "language": "unknown"
+        }
+      ]
+    },
+    {
+      "cluster_id": 1,
+      "size": 171,
+      "dominant_type": "code_chunk",
+      "dominant_repo": "ContinuumAgInc/topsoil2.0",
+      "dominant_language": "python",
+      "keywords": [
+        "data",
+        "resp",
+        "headers",
+        "components",
+        "assert",
+        "files",
+        "parse",
+        "with",
+        "result",
+        "name"
+      ],
+      "avg_similarity": 0.678820294202993,
+      "sample_chunks": [
+        {
+          "chunk_id": "8bb32a3d909ef2b82b7e7ad59222b459faa0e2d077755548445aded6b4401a0e",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/rabo_topsoil",
+          "file_path": "src/routes/(app)/farmprofile/[id]/+page.svelte <script>",
+          "content_preview": "# Context: src/routes/(app)/farmprofile/[id]/+page.svelte <script>\nasync function getFarmProfile() {\n\t\tloading = true;\n\t\tawait fetch(`/api/farmprofile/${$page.params.id}`)\n\t\t\t.then((r) => r.json())\n\t\t",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "b74abd65abc18f9f082b2c6abcf4e3acafc0257ad92298216274d66d42491048",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/rabo_topsoil",
+          "file_path": "src/routes/(app)/fielddistribution/[id]/+page.svelte <script>",
+          "content_preview": "# Context: src/routes/(app)/fielddistribution/[id]/+page.svelte <script>\nasync function getFields() {\n\t\tawait fetch(`/api/search/clients/${$page.params.id}/farms/`)\n\t\t\t.then((r) => r.json())\n\t\t\t.then(",
+          "language": "javascript"
+        },
+        {
+          "chunk_id": "00877c12d2a9219865bc554d9e5f08acff4123f0f4d8e7b52d166fb767ccd923",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/management/commands/migrate_davisbros_farms.py",
+          "content_preview": "# Context: utils/management/commands/migrate_davisbros_farms.py\ndef create_field(farm_id, fieldname, token):\n    data = {\n        \"name\": fieldname,\n        \"boundary\": \"\",\n        \"projection\": 2791,",
+          "language": "python"
+        },
+        {
+          "chunk_id": "009e0cacb0cd7f82b0c627804d4c72d8cdf02146e2dd00f48971717a0d062a02",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/management/commands/migrate_topsoil_fields_boundaries.py",
+          "content_preview": "# Context: utils/management/commands/migrate_topsoil_fields_boundaries.py\ndef find(pattern, path):\n    result = []\n    for root, dirs, files in os.walk(path):\n        for name in files:\n            if",
+          "language": "python"
+        },
+        {
+          "chunk_id": "01fee2579328a371448159e92754f3425127a2b17a0e61952ba302e1c091af94",
+          "type": "code_chunk",
+          "repo_id": "ContinuumAgInc/topsoil2.0",
+          "file_path": "utils/management/commands/migrate_GetterBdy.py",
+          "content_preview": "# Context: utils/management/commands/migrate_GetterBdy.py\ndef create_field(farm_id, fieldname, token, notes=\"\"):\n    data = {\n        \"name\": fieldname,\n        \"boundary\": \"\",\n        \"projection\": 2",
+          "language": "python"
+        }
+      ]
+    }
+  ],
+  "diversity": {
+    "avg_pairwise_distance": 0.8987293322206248,
+    "coverage_radius": 0.7752183780010257
+  },
+  "near_duplicates": [
+    {
+      "chunk1": "f9e6fea8e88986f51a69466293c9817bdf212c3481f5c5bcb62753cd92602ce8",
+      "chunk2": "2a5807e5eebfc1a56e7a5d36827bb8519538f39064e1d9f17153aaa6384d4161",
+      "similarity": 0.9999999998000002
+    },
+    {
+      "chunk1": "73942969fddf5c06f3bc75e9ee7a7dc869e6c4a3fbb1c729619e9fcf3dbfdb51",
+      "chunk2": "f1de6a6d510f22ec5cdfc172b989a156b967e860a3134db5d9f9a0a0ba1a1929",
+      "similarity": 0.9999999998000001
+    },
+    {
+      "chunk1": "dbad74f3b88bf86ac615f4ea1d00d6d504e581cfca364515aa8cde415df15acb",
+      "chunk2": "65fa2cfad5562602ba34770d7059ae248fa9f4968399fb26fca0859d88737b9d",
+      "similarity": 0.9999999998
+    },
+    {
+      "chunk1": "a734463936548c46a671ece21ca0bb9de889b8ae1479e4778118f06e991ec06b",
+      "chunk2": "74d87d53d92c81fbb57df20185b01ca1cdb475a129d94229410815614855f2b3",
+      "similarity": 0.9999999997999998
+    },
+    {
+      "chunk1": "5ca8f51399d609810a6d432b34411b7867e5b5c22539259c6d86831e1449e40a",
+      "chunk2": "0af91565799c398df813f24c179e675b081b3d36708a9eb9baf29c447833a898",
+      "similarity": 0.9999999997999998
+    },
+    {
+      "chunk1": "6c44006ed83319e3f5821831c7f97e960069828e028b64eaf5d4b35785f9f088",
+      "chunk2": "0c1ee9ec45deec195c9b4bf026d6e7eb6755b5761c184b769c268344a73d0023",
+      "similarity": 0.9999999997999984
+    },
+    {
+      "chunk1": "0dba6d59e6f3aa650d9e6dd54aa8c17641c8454cceebb7d030acac9a1abd7e5c",
+      "chunk2": "dc72b71c2c598103822850f2bfc16d0b089283d33ca54c1b742d36f87530e19c",
+      "similarity": 0.9998001973930898
+    },
+    {
+      "chunk1": "a30bbaa090ee4dffd817a6266f4eadd680ab842d41e079c7b4ab276b42a36758",
+      "chunk2": "52e2d4d5d61d700496936b191eef82035cbfb8aabe429850b262b1f4ca49c579",
+      "similarity": 0.9995474815033384
+    },
+    {
+      "chunk1": "008fd6e1a9148c2a734908d5197f670a33e96c5531bd48c04c670f0e70248403",
+      "chunk2": "397db1aef6e51e9847a0816e8671cb9c0382ebd5df65076c7ecdbbf09c870970",
+      "similarity": 0.9994867014745943
+    },
+    {
+      "chunk1": "df3eb22afe8923d8316f8b8ab70fc6ec5ead32f28e61b756fedd69d9d110e04d",
+      "chunk2": "6bbfc36fe232533ea2b6c1e872673a46b1809abc544ee57bae55f1bd8ca9a107",
+      "similarity": 0.9994858594881055
+    },
+    {
+      "chunk1": "4622b16e0ee8c897061f3d33cd26d985d4a3f9f834450f0d4521e4a4094a3c3d",
+      "chunk2": "32253c63fa1d90b5da3f46c71eaaa7c5cfb4023dfc87de129cf175aa26f8b014",
+      "similarity": 0.9994669682629466
+    },
+    {
+      "chunk1": "0a5c342b7cb11c66a7b72927a798aa8a9dcd9ef752aee5a01371737ed3439c5d",
+      "chunk2": "c6e601062195641aba249a5f588639373715fafedc9ef7e66d0d8af9159269d8",
+      "similarity": 0.9992596033041702
+    },
+    {
+      "chunk1": "b8bba894f479b864347199b0bf7cae1793c4c50ba119bb47b86444b216b557f1",
+      "chunk2": "7527627a8b0050c9d369f74ba9b108d88c3087bffa4f83aba7da169d1b07d59d",
+      "similarity": 0.9991862928368782
+    },
+    {
+      "chunk1": "10287bd3f331a82ef147f73cc33ff64cadb594434e4b15910bdb437878eb335d",
+      "chunk2": "bfdc36cf19d0bb0ae6b75c8a7b48bb3a48b7b70aad3850d4b0c8f5a15392c130",
+      "similarity": 0.9989838930629508
+    },
+    {
+      "chunk1": "d9bfd4cdcc122370b0a2e56e9df53a3b4198de9891c054e5d856afb074fe96e6",
+      "chunk2": "0d2151c1e49f78270d6d3f48a5fdac61ed66c3a745314a333ed43e87d0887caf",
+      "similarity": 0.9987891066872614
+    },
+    {
+      "chunk1": "00bebbb5d2ac5a410e844e9faff2069a4c2e63a1b8ec2fde1025ebe1e354c1be",
+      "chunk2": "ab4974ad5b8955c75c805974ef49182e501c833a3ed8b0e382f4e8f0cfae356b",
+      "similarity": 0.998775860557024
+    },
+    {
+      "chunk1": "34a49eccdaa39a4015e7cbdb878a8ce6991b2308813af609502788d93ab3a120",
+      "chunk2": "612cd5a38cbe8ce59289d6eb4169f458d9dd875dfeca8c1ad6d2d6a82e1dd251",
+      "similarity": 0.9986287623927437
+    },
+    {
+      "chunk1": "d5d70ab6a56ec0f87e40967f907f2a4f54cf08accbc81b18a989f43c8227158f",
+      "chunk2": "998a79af2ab14ea15307aecc1c6eda30d2907c3ad0979cda32ff39157e45f938",
+      "similarity": 0.9986280743553676
+    },
+    {
+      "chunk1": "2c156b9fcfa9fe8d76bef120bc081791ef5b4a7d9197a3773e7fe60676ecb951",
+      "chunk2": "c11633223e48cf4813294a51c076c2c089113b9cbeba49a0d2965182edbcb421",
+      "similarity": 0.9986070891335356
+    },
+    {
+      "chunk1": "7527627a8b0050c9d369f74ba9b108d88c3087bffa4f83aba7da169d1b07d59d",
+      "chunk2": "af1391db3e4fbb21e31e12ea14ecc5bbac64993b3bcbe557cc69464813a30d6a",
+      "similarity": 0.998587570244552
+    },
+    {
+      "chunk1": "af1391db3e4fbb21e31e12ea14ecc5bbac64993b3bcbe557cc69464813a30d6a",
+      "chunk2": "eb4e0f49c2d807610b0f0ea50c3495612a78360b888446df12c1f307e6c8010e",
+      "similarity": 0.9984532729536146
+    },
+    {
+      "chunk1": "c00ae038ef7a993a91ef3dc05b30fa6976a141221fb4f3435a5d55ffa4590a61",
+      "chunk2": "272504f8653a6c87d165b5fc48befaebd0f4fef360dc0eaf243bd2e829674b3d",
+      "similarity": 0.9984236696240805
+    },
+    {
+      "chunk1": "7f952dbce51c5bc883f10645846a568b2421e735653c0a1f9538cc54cb9b5ca9",
+      "chunk2": "8ac600ec498e924ff9bb4bf3c80cfcfea8e9c931653519301b5655ad49038df8",
+      "similarity": 0.998423067142165
+    },
+    {
+      "chunk1": "eb0c692c40b54d0f9ca27da283a374fa3f87c0713c54e7a3d6596ef23230a585",
+      "chunk2": "d5d70ab6a56ec0f87e40967f907f2a4f54cf08accbc81b18a989f43c8227158f",
+      "similarity": 0.9983333939150546
+    },
+    {
+      "chunk1": "1bdfdb7e4044196ec07b4e7e9b159e69bd27ee9270eafd87edaaada6393a2afa",
+      "chunk2": "bfdc36cf19d0bb0ae6b75c8a7b48bb3a48b7b70aad3850d4b0c8f5a15392c130",
+      "similarity": 0.998332309370838
+    },
+    {
+      "chunk1": "10287bd3f331a82ef147f73cc33ff64cadb594434e4b15910bdb437878eb335d",
+      "chunk2": "1bdfdb7e4044196ec07b4e7e9b159e69bd27ee9270eafd87edaaada6393a2afa",
+      "similarity": 0.9983187815870377
+    },
+    {
+      "chunk1": "797c63012e1571411e6dba4b3b6e34f6d8f97a96731c7cbeb97a95e96c99497f",
+      "chunk2": "e5ddc2e883db9e5be29ff5b22997f1de2e01ec6121c9bfce8f8feae810f478ff",
+      "similarity": 0.9982161262517701
+    },
+    {
+      "chunk1": "6f96a175a4cd91d7ade98189f261aafdbdd4474ce19cf19816e132623f01d011",
+      "chunk2": "8d7e2a24b6e52eb517e63258190cbecab9cc801fdb787220799babd8d37c133d",
+      "similarity": 0.9980906720333372
+    },
+    {
+      "chunk1": "b4939c3e2b71bb73bfaeef1ad5339b016f861dd33e1bb672f43c2bbada1e4da2",
+      "chunk2": "a16404824f527431feb99fd82c97247206ad899fae7642689148fdb755f392a8",
+      "similarity": 0.9978426014686508
+    },
+    {
+      "chunk1": "b8bba894f479b864347199b0bf7cae1793c4c50ba119bb47b86444b216b557f1",
+      "chunk2": "af1391db3e4fbb21e31e12ea14ecc5bbac64993b3bcbe557cc69464813a30d6a",
+      "similarity": 0.9978230535987915
+    },
+    {
+      "chunk1": "cf262d9a1accadc66bae1a7a47d6ad078dba101ce189708fa68299e291bed262",
+      "chunk2": "b2c876ab4e01850d9671574d41a61eadbd111758c7f8af891b4d208bfb5c1aff",
+      "similarity": 0.9978102186422457
+    },
+    {
+      "chunk1": "266ebf01380442b564fa83abd2aba5f8355981c7091386561d13d681e4cf712e",
+      "chunk2": "eb4e0f49c2d807610b0f0ea50c3495612a78360b888446df12c1f307e6c8010e",
+      "similarity": 0.9976730724683001
+    },
+    {
+      "chunk1": "0dba6d59e6f3aa650d9e6dd54aa8c17641c8454cceebb7d030acac9a1abd7e5c",
+      "chunk2": "c977a3ed8fca1b4e83bd38be7f7fde07c0b409760eb5a3bedba09cab24293934",
+      "similarity": 0.9976373533434
+    },
+    {
+      "chunk1": "dc72b71c2c598103822850f2bfc16d0b089283d33ca54c1b742d36f87530e19c",
+      "chunk2": "c977a3ed8fca1b4e83bd38be7f7fde07c0b409760eb5a3bedba09cab24293934",
+      "similarity": 0.9974595934887375
+    },
+    {
+      "chunk1": "6cd417552195d67cf474aef09a06ba369b5dd334a4057d6f08eeb20110bc50bf",
+      "chunk2": "95608784bad6dfb91c2c93932ef42963cd59580522c621eac7c869ea85e0c002",
+      "similarity": 0.9974434085790436
+    },
+    {
+      "chunk1": "af1391db3e4fbb21e31e12ea14ecc5bbac64993b3bcbe557cc69464813a30d6a",
+      "chunk2": "266ebf01380442b564fa83abd2aba5f8355981c7091386561d13d681e4cf712e",
+      "similarity": 0.9973358035283763
+    },
+    {
+      "chunk1": "ae2b237fae17d3aeac922e49e7d7bf5b0b4211ff6dc766e71c0eaf2fa0d8ab54",
+      "chunk2": "272504f8653a6c87d165b5fc48befaebd0f4fef360dc0eaf243bd2e829674b3d",
+      "similarity": 0.9971865408021998
+    },
+    {
+      "chunk1": "104305c4a0c15e9124e8e4c88210c8d446864e9b5b0d53bef9e209c9bc7f3ca1",
+      "chunk2": "c20c866d7fdf64a426baa746db9341cfe934e512c173336433f0c57f3562a3c3",
+      "similarity": 0.9969766092918647
+    },
+    {
+      "chunk1": "95dd665a9071183683112bff2b7042b4935808abd33d9eff77f29ea9e0a99a55",
+      "chunk2": "1ac4295dc84fe99b221c35d57e94f13fbaa6d37798b36842f8864b01dc9222d8",
+      "similarity": 0.9969699347095888
+    },
+    {
+      "chunk1": "95a9d6342329d199af555874ec6b3c47c7dbd019cc0c1a4e8deccd0e59142fe3",
+      "chunk2": "97d44d26d4db654ad0aece59841ba7399bbc883fa23f4337a01b1d2784f5853b",
+      "similarity": 0.9965564837784653
+    },
+    {
+      "chunk1": "a618b3e21c2e51e06c5e29254a37c9db5e372016501d615c52801c33cb5e2dee",
+      "chunk2": "370867e4288e40b0d59d16126f611ebd1d1d10fde69317a005d48d2ea665956d",
+      "similarity": 0.9963161049150919
+    },
+    {
+      "chunk1": "ae2b237fae17d3aeac922e49e7d7bf5b0b4211ff6dc766e71c0eaf2fa0d8ab54",
+      "chunk2": "c00ae038ef7a993a91ef3dc05b30fa6976a141221fb4f3435a5d55ffa4590a61",
+      "similarity": 0.9962783826006989
+    },
+    {
+      "chunk1": "95a9d6342329d199af555874ec6b3c47c7dbd019cc0c1a4e8deccd0e59142fe3",
+      "chunk2": "a30bbaa090ee4dffd817a6266f4eadd680ab842d41e079c7b4ab276b42a36758",
+      "similarity": 0.9950474296547457
+    },
+    {
+      "chunk1": "62ee5cd51feb124a3a97e6b85948caa6aac9485850b7b9a006a9c7d9f7c01937",
+      "chunk2": "f1847663b9f313f792ef70daf7856d282a53a1b3dcc16fa743ce1c22c40d1d5a",
+      "similarity": 0.9945943017562235
+    },
+    {
+      "chunk1": "714d915262803423a1e82ddf671f19291429cb6eefadc5e82af7173f2ee6c5c6",
+      "chunk2": "62ee5cd51feb124a3a97e6b85948caa6aac9485850b7b9a006a9c7d9f7c01937",
+      "similarity": 0.9943440518991801
+    },
+    {
+      "chunk1": "73942969fddf5c06f3bc75e9ee7a7dc869e6c4a3fbb1c729619e9fcf3dbfdb51",
+      "chunk2": "eb4e0f49c2d807610b0f0ea50c3495612a78360b888446df12c1f307e6c8010e",
+      "similarity": 0.9942834561151345
+    },
+    {
+      "chunk1": "f1de6a6d510f22ec5cdfc172b989a156b967e860a3134db5d9f9a0a0ba1a1929",
+      "chunk2": "eb4e0f49c2d807610b0f0ea50c3495612a78360b888446df12c1f307e6c8010e",
+      "similarity": 0.9942834561151345
+    },
+    {
+      "chunk1": "edd2ab6174c85f935380098fd5b41e1e4f4f3cdf6433edc1b1063ea3d819ab34",
+      "chunk2": "545167a0053d518acf9c1a8333878a0fce46ac21d400b25c9b9be7866dd5d87f",
+      "similarity": 0.9941543723928212
+    },
+    {
+      "chunk1": "7f952dbce51c5bc883f10645846a568b2421e735653c0a1f9538cc54cb9b5ca9",
+      "chunk2": "b00c1db5352a3e51259c02b111180149fb89f9f8da5d58b2d8d6bd549e23229a",
+      "similarity": 0.9941231078572575
+    },
+    {
+      "chunk1": "595e323f6c4b37a19854cd9678ee3ed50119f24fe38f365295af20b3fcb460ff",
+      "chunk2": "a8cdfeb545f714619691ed3e1232ef857ceaa91c89e06bcc146dc3e96afa224b",
+      "similarity": 0.9940883686388398
+    }
+  ]
+}

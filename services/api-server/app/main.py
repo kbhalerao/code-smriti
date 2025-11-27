@@ -43,6 +43,7 @@ from .repos.routes import router as repos_router
 from .jobs.routes import router as jobs_router
 from .search.routes import router as search_router
 from .chat.routes import router as chat_router
+from .cos.routes import router as cos_router
 
 
 @asynccontextmanager
@@ -81,7 +82,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=settings.cors_allow_credentials,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-User-ID"],
 )
 
 # Register routers
@@ -91,6 +92,7 @@ app.include_router(repos_router, prefix="/api/repos", tags=["Repositories"])
 app.include_router(jobs_router, prefix="/api/jobs", tags=["Jobs"])
 app.include_router(search_router, prefix="/api/search", tags=["Search"])
 app.include_router(chat_router, prefix="/api")
+app.include_router(cos_router, prefix="/api")  # Chief of Staff - personal productivity
 
 
 @app.get("/health")

@@ -8,16 +8,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY ./4-consume/api-server/requirements.txt .
+COPY ./services/api-server/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy shared lib
+# Copy shared lib (code-fetcher is now in lib/)
 COPY ./lib/code-fetcher /app/lib/code-fetcher
 
 # Copy application code
-COPY ./4-consume/api-server/app/ ./app/
+COPY ./services/api-server/app/ ./app/
 
 # Create logs directory
 RUN mkdir -p logs

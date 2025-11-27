@@ -1,0 +1,1363 @@
+{
+  "total_repos": 98,
+  "total_chunks": 7774,
+  "global_type_distribution": {
+    "code_chunk": 6140,
+    "commit": 650,
+    "document": 984
+  },
+  "global_quality_distribution": {
+    "high": 4949,
+    "medium": 2340,
+    "low": 463,
+    "critical": 22
+  },
+  "repos_with_issues": 98,
+  "top_issues": {
+    "missing_language": 3361,
+    "minimal_content": 638,
+    "missing_git_metadata": 650,
+    "truncated_content": 37,
+    "empty_content": 22
+  },
+  "worst_repos": [
+    {
+      "repo_id": "kbhalerao/svelte-command-palette",
+      "critical_chunks": 4,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "1a3301be00ffe610...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 7"
+        },
+        {
+          "chunk_id": "28768f3356de21ae...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 9"
+        },
+        {
+          "chunk_id": "6597efa734c871cf...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 7"
+        },
+        {
+          "chunk_id": "aa25d937c545e06d...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 9"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/Social-Metabolomics",
+      "critical_chunks": 2,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "23235f6a34a08861...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 9"
+        },
+        {
+          "chunk_id": "565f1a7fdc531c6c...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 8"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/prismuserv",
+      "critical_chunks": 2,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "18524023ac86b51d...",
+          "file_path": "soilmoisture/grace_fo_helper.py",
+          "issue": "empty_content",
+          "details": "Content length: 0"
+        },
+        {
+          "chunk_id": "4fc9e40d3b64b2c6...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 7"
+        }
+      ]
+    },
+    {
+      "repo_id": "JessiePBhalerao/django-seed-elastic",
+      "critical_chunks": 1,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "cc5d2edcb40ed0f0...",
+          "file_path": "seed_es/utils.py",
+          "issue": "empty_content",
+          "details": "Content length: 0"
+        }
+      ]
+    },
+    {
+      "repo_id": "PeoplesCompany/farmworthdash",
+      "critical_chunks": 1,
+      "total_chunks": 37,
+      "sample_issues": [
+        {
+          "chunk_id": "a2201063a4301b3d...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 3"
+        }
+      ]
+    },
+    {
+      "repo_id": "jayp-eci/landrecords-frontend",
+      "critical_chunks": 1,
+      "total_chunks": 26,
+      "sample_issues": [
+        {
+          "chunk_id": "003bc92dae4310b2...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 4"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/agkitui",
+      "critical_chunks": 1,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "09b157be08bf15a0...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 3"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/ai-utils",
+      "critical_chunks": 1,
+      "total_chunks": 65,
+      "sample_issues": [
+        {
+          "chunk_id": "1349c295ca900581...",
+          "file_path": "src/logger.ts",
+          "issue": "empty_content",
+          "details": "Content length: 0"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/ask-kev-2026",
+      "critical_chunks": 1,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "08690b4016fe609b...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 3"
+        }
+      ]
+    },
+    {
+      "repo_id": "kbhalerao/atlaspmp-backend-poc",
+      "critical_chunks": 1,
+      "total_chunks": 100,
+      "sample_issues": [
+        {
+          "chunk_id": "3de6537949e418ba...",
+          "file_path": "unknown",
+          "issue": "empty_content",
+          "details": "Content length: 8"
+        }
+      ]
+    }
+  ],
+  "repo_reports": {
+    "CHETANECINFOSOLUTIONS/farmlandinsights": {
+      "total_chunks": 70,
+      "quality_distribution": {
+        "high": 44,
+        "medium": 14,
+        "low": 12,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 54
+    },
+    "CHETANECINFOSOLUTIONS/farmsoils": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 77,
+        "medium": 12,
+        "low": 11,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 88
+    },
+    "CHETANECINFOSOLUTIONS/global_error_handler": {
+      "total_chunks": 41,
+      "quality_distribution": {
+        "high": 30,
+        "medium": 8,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 42
+    },
+    "CHETANECINFOSOLUTIONS/lsbdata": {
+      "total_chunks": 12,
+      "quality_distribution": {
+        "high": 10,
+        "medium": 0,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 12
+    },
+    "ContinuumAgInc/rabo_topsoil": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 32,
+        "low": 10,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 69
+    },
+    "ContinuumAgInc/topsoil2.0": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 59,
+        "medium": 35,
+        "low": 6,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 56
+    },
+    "ContinuumAgInc/topsoil_frontend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 73,
+        "medium": 22,
+        "low": 5,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 49
+    },
+    "GMSLab/drawtools": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 73,
+        "medium": 17,
+        "low": 10,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 72
+    },
+    "JessiePBhalerao/django-seed-elastic": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 53,
+        "medium": 40,
+        "low": 6,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 33
+    },
+    "JessiePBhalerao/firstpwa": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 69,
+        "medium": 31,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 63
+    },
+    "JessiePBhalerao/firstseedtests": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 40,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 39
+    },
+    "JessiePBhalerao/pinion-nrcs": {
+      "total_chunks": 98,
+      "quality_distribution": {
+        "high": 26,
+        "medium": 69,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 38
+    },
+    "JessiePBhalerao/uilevents": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 62,
+        "medium": 30,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 81
+    },
+    "PeoplesCompany/farmland_insights": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 62,
+        "medium": 30,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 38
+    },
+    "PeoplesCompany/farmworth_frontend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 63,
+        "medium": 31,
+        "low": 6,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 47
+    },
+    "PeoplesCompany/farmworthdash": {
+      "total_chunks": 37,
+      "quality_distribution": {
+        "high": 26,
+        "medium": 7,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 40
+    },
+    "PeoplesCompany/farmworthdb": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 38,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 42
+    },
+    "PeoplesCompany/insights-state-map": {
+      "total_chunks": 64,
+      "quality_distribution": {
+        "high": 47,
+        "medium": 15,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 36
+    },
+    "PeoplesCompany/landgate": {
+      "total_chunks": 25,
+      "quality_distribution": {
+        "high": 12,
+        "medium": 9,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 22
+    },
+    "PeoplesCompany/landrecords.ai": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 39,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 56
+    },
+    "PeoplesCompany/listings-map": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 71,
+        "medium": 24,
+        "low": 5,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 59
+    },
+    "PeoplesCompany/public-farmworth": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 69,
+        "medium": 23,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 63
+    },
+    "bmwyman/uilevents": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 29,
+        "low": 13,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 85
+    },
+    "ecinfo/Atlas-PMP_backend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 51,
+        "medium": 40,
+        "low": 9,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 60
+    },
+    "ecinfo/Atlas-PMP_frontend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 55,
+        "medium": 45,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 38
+    },
+    "jayp-eci/labcore": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 47,
+        "medium": 41,
+        "low": 12,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 74
+    },
+    "jayp-eci/labcoredemo": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 70,
+        "medium": 19,
+        "low": 11,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 76
+    },
+    "jayp-eci/landrecords-frontend": {
+      "total_chunks": 26,
+      "quality_distribution": {
+        "high": 17,
+        "medium": 7,
+        "low": 1,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 26
+    },
+    "jayp-eci/pinionfe": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 30,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 47
+    },
+    "jayp-eci/sdxweather": {
+      "total_chunks": 39,
+      "quality_distribution": {
+        "high": 22,
+        "medium": 14,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 41
+    },
+    "kbhalerao/508hCoverCrop": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 53,
+        "medium": 42,
+        "low": 5,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 59
+    },
+    "kbhalerao/BlueFeatherAD5933Driver": {
+      "total_chunks": 2,
+      "quality_distribution": {
+        "high": 0,
+        "medium": 1,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 3
+    },
+    "kbhalerao/CropProfits": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 62,
+        "medium": 38,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 19
+    },
+    "kbhalerao/Social-Metabolomics": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 54,
+        "medium": 38,
+        "low": 6,
+        "critical": 2
+      },
+      "empty_chunks": 2,
+      "missing_embeddings": 0,
+      "issue_count": 65
+    },
+    "kbhalerao/adm_browser": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 89,
+        "medium": 6,
+        "low": 5,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 102
+    },
+    "kbhalerao/agkit.io": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 93,
+        "medium": 6,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 98
+    },
+    "kbhalerao/agkit.io-backend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 59,
+        "medium": 41,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 13
+    },
+    "kbhalerao/agkit.io-ui": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 70,
+        "medium": 29,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 29
+    },
+    "kbhalerao/agkitui": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 48,
+        "medium": 48,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 38
+    },
+    "kbhalerao/agwx": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 51,
+        "medium": 40,
+        "low": 9,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 75
+    },
+    "kbhalerao/ai-utils": {
+      "total_chunks": 65,
+      "quality_distribution": {
+        "high": 36,
+        "medium": 25,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 29
+    },
+    "kbhalerao/ask-kev-2026": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 59,
+        "medium": 37,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 25
+    },
+    "kbhalerao/asktom-chatbot": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 70,
+        "medium": 22,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 67
+    },
+    "kbhalerao/atlaspmp-backend-poc": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 53,
+        "medium": 42,
+        "low": 4,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 76
+    },
+    "kbhalerao/atlaspmp-mini": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 89,
+        "medium": 9,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 82
+    },
+    "kbhalerao/basecamp-mcp": {
+      "total_chunks": 17,
+      "quality_distribution": {
+        "high": 14,
+        "medium": 1,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 15
+    },
+    "kbhalerao/bookworm": {
+      "total_chunks": 61,
+      "quality_distribution": {
+        "high": 41,
+        "medium": 13,
+        "low": 7,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 49
+    },
+    "kbhalerao/cdl_api": {
+      "total_chunks": 17,
+      "quality_distribution": {
+        "high": 12,
+        "medium": 2,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 11
+    },
+    "kbhalerao/channels_decorators": {
+      "total_chunks": 33,
+      "quality_distribution": {
+        "high": 21,
+        "medium": 12,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 32
+    },
+    "kbhalerao/claude-idea": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 48,
+        "medium": 51,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 10
+    },
+    "kbhalerao/claudegram": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 58,
+        "medium": 42,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 19
+    },
+    "kbhalerao/code-smriti": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 33,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 16
+    },
+    "kbhalerao/cropProfit": {
+      "total_chunks": 71,
+      "quality_distribution": {
+        "high": 42,
+        "medium": 28,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 76
+    },
+    "kbhalerao/cropProfitApp": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 86,
+        "medium": 11,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 82
+    },
+    "kbhalerao/customfield_svelte_components": {
+      "total_chunks": 78,
+      "quality_distribution": {
+        "high": 52,
+        "medium": 11,
+        "low": 15,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 79
+    },
+    "kbhalerao/devanand": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 57,
+        "medium": 43,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 2
+    },
+    "kbhalerao/devops_reference": {
+      "total_chunks": 7,
+      "quality_distribution": {
+        "high": 3,
+        "medium": 2,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 6
+    },
+    "kbhalerao/django-address": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 49,
+        "medium": 44,
+        "low": 6,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 63
+    },
+    "kbhalerao/evolvechiro": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 52,
+        "medium": 48,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 20
+    },
+    "kbhalerao/evolvefrontend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 85,
+        "medium": 7,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 99
+    },
+    "kbhalerao/farmdoc-insurance": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 32,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 23
+    },
+    "kbhalerao/fastapi-skeleton": {
+      "total_chunks": 14,
+      "quality_distribution": {
+        "high": 9,
+        "medium": 3,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 15
+    },
+    "kbhalerao/feldspar": {
+      "total_chunks": 68,
+      "quality_distribution": {
+        "high": 52,
+        "medium": 16,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 45
+    },
+    "kbhalerao/fema_regen": {
+      "total_chunks": 20,
+      "quality_distribution": {
+        "high": 14,
+        "medium": 3,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 12
+    },
+    "kbhalerao/fertisavern": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 51,
+        "medium": 49,
+        "low": 0,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 57
+    },
+    "kbhalerao/flyingfingers": {
+      "total_chunks": 8,
+      "quality_distribution": {
+        "high": 5,
+        "medium": 2,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 8
+    },
+    "kbhalerao/gdal3.js": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 76,
+        "medium": 20,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 67
+    },
+    "kbhalerao/geolocate-cloudflare-worker": {
+      "total_chunks": 7,
+      "quality_distribution": {
+        "high": 3,
+        "medium": 1,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 9
+    },
+    "kbhalerao/gmslab": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 15,
+        "low": 18,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 96
+    },
+    "kbhalerao/ironlifts": {
+      "total_chunks": 45,
+      "quality_distribution": {
+        "high": 34,
+        "medium": 4,
+        "low": 7,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 50
+    },
+    "kbhalerao/labcore": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 70,
+        "medium": 27,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 25
+    },
+    "kbhalerao/labcoredemo": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 24,
+        "low": 8,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 69
+    },
+    "kbhalerao/labcoreui": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 85,
+        "medium": 11,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 86
+    },
+    "kbhalerao/landrecords-frontend": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 64,
+        "medium": 29,
+        "low": 7,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 56
+    },
+    "kbhalerao/landrecords.ai": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 60,
+        "medium": 36,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 43
+    },
+    "kbhalerao/lcdraw": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 69,
+        "medium": 23,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 71
+    },
+    "kbhalerao/leaflet_components": {
+      "total_chunks": 73,
+      "quality_distribution": {
+        "high": 54,
+        "medium": 7,
+        "low": 12,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 82
+    },
+    "kbhalerao/manobodh": {
+      "total_chunks": 2,
+      "quality_distribution": {
+        "high": 0,
+        "medium": 1,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 3
+    },
+    "kbhalerao/nass_quickstats": {
+      "total_chunks": 54,
+      "quality_distribution": {
+        "high": 38,
+        "medium": 8,
+        "low": 7,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 58
+    },
+    "kbhalerao/pdf-filler": {
+      "total_chunks": 17,
+      "quality_distribution": {
+        "high": 10,
+        "medium": 5,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 9
+    },
+    "kbhalerao/pinionbe": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 41,
+        "medium": 54,
+        "low": 5,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 50
+    },
+    "kbhalerao/pinionfe": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 65,
+        "medium": 34,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 37
+    },
+    "kbhalerao/prismuserv": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 48,
+        "medium": 43,
+        "low": 7,
+        "critical": 2
+      },
+      "empty_chunks": 2,
+      "missing_embeddings": 0,
+      "issue_count": 72
+    },
+    "kbhalerao/qrurl": {
+      "total_chunks": 11,
+      "quality_distribution": {
+        "high": 7,
+        "medium": 2,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 11
+    },
+    "kbhalerao/rma_adm": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 56,
+        "medium": 42,
+        "low": 2,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 91
+    },
+    "kbhalerao/sdxweather": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 16,
+        "low": 16,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 101
+    },
+    "kbhalerao/slithytoves": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 82,
+        "medium": 17,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 12
+    },
+    "kbhalerao/smartbarn2025": {
+      "total_chunks": 5,
+      "quality_distribution": {
+        "high": 1,
+        "medium": 3,
+        "low": 1,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 2
+    },
+    "kbhalerao/soildxnanoservices": {
+      "total_chunks": 87,
+      "quality_distribution": {
+        "high": 56,
+        "medium": 20,
+        "low": 11,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 69
+    },
+    "kbhalerao/ssurgo": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 59,
+        "medium": 37,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 28
+    },
+    "kbhalerao/svelte-command-palette": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 70,
+        "medium": 17,
+        "low": 9,
+        "critical": 4
+      },
+      "empty_chunks": 4,
+      "missing_embeddings": 0,
+      "issue_count": 88
+    },
+    "kbhalerao/svelte-image-viewer": {
+      "total_chunks": 49,
+      "quality_distribution": {
+        "high": 27,
+        "medium": 14,
+        "low": 8,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 45
+    },
+    "kbhalerao/topsoil": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 60,
+        "medium": 34,
+        "low": 6,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 57
+    },
+    "kbhalerao/uofi_labcore": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 67,
+        "medium": 27,
+        "low": 6,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 76
+    },
+    "kbhalerao/yieldguide-kev": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 76,
+        "medium": 15,
+        "low": 8,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 84
+    },
+    "kbhalerao/yieldguide-kev-durable-object": {
+      "total_chunks": 51,
+      "quality_distribution": {
+        "high": 35,
+        "medium": 13,
+        "low": 3,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 12
+    },
+    "policy-design-lab/farmdoc-service": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 57,
+        "medium": 39,
+        "low": 3,
+        "critical": 1
+      },
+      "empty_chunks": 1,
+      "missing_embeddings": 0,
+      "issue_count": 24
+    },
+    "woodardjoshua/508hCoverCrop": {
+      "total_chunks": 100,
+      "quality_distribution": {
+        "high": 62,
+        "medium": 34,
+        "low": 4,
+        "critical": 0
+      },
+      "empty_chunks": 0,
+      "missing_embeddings": 0,
+      "issue_count": 60
+    }
+  }
+}

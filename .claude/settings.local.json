@@ -83,7 +83,11 @@
       "Bash(uv:*)",
       "Bash(timeout 5 uv run:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjb2Rlc21yaXRpIiwidXNlcm5hbWUiOiJjb2Rlc21yaXRpIiwidGVuYW50X2lkIjoiY29kZV9rb3NoYSIsImV4cCI6MTc2NDExMzIzMH0.F-i_bf1_O3t3dAjXvMOD2M0uWMNXETyeMq3rNS9Sc6U\" curl -s -X POST http://localhost:80/api/rag/file -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -d '{\"\"\"\"repo_id\"\"\"\": \"\"\"\"kbhalerao/labcore\"\"\"\", \"\"\"\"file_path\"\"\"\": \"\"\"\"README.md\"\"\"\"}')",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

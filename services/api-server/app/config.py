@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     couchbase_bucket_code: str = "code_kosha"
     couchbase_bucket_users: str = "users"
     couchbase_bucket_jobs: str = "ingestion_jobs"
+    couchbase_bucket_cos: str = "chief_of_staff"  # Chief of Staff (personal productivity)
+
+    # Chief of Staff settings
+    cos_default_user: str = ""  # Default user for development (email)
 
     # Authentication & Security
     jwt_secret: str
