@@ -93,12 +93,28 @@ class CosDatabase:
             self._create_indexes_for_user(user_id)
 
     def _create_indexes_for_user(self, user_id: str) -> None:
-        """Create indexes for a user's documents collection."""
+        """Create indexes for a user's documents collection.
+
+        Index strategy:
+        - Primary index for ad-hoc queries (deferred for manual build)
+        - Composite indexes for common query patterns:
+          - status + updated_at: list queries with exclude_done filter
+          - doc_type + status: filtered lists by type
+          - priority + due_date: next actions query
+          - source.project: project-scoped queries
+        """
         fqn = self._get_fqn(user_id)
         indexes = [
-            f"CREATE INDEX IF NOT EXISTS idx_doc_type ON {fqn}(doc_type)",
-            f"CREATE INDEX IF NOT EXISTS idx_status ON {fqn}(status)",
-            f"CREATE INDEX IF NOT EXISTS idx_updated ON {fqn}(updated_at)",
+            # Composite: status filtering with sort by updated_at (most common query)
+            f"CREATE INDEX IF NOT EXISTS idx_status_updated ON {fqn}(status, updated_at DESC)",
+            # Composite: type + status for filtered lists
+            f"CREATE INDEX IF NOT EXISTS idx_type_status ON {fqn}(doc_type, status)",
+            # Composite: priority + due_date for next actions
+            f"CREATE INDEX IF NOT EXISTS idx_priority_due ON {fqn}(priority, due_date)",
+            # Project-scoped queries
+            f"CREATE INDEX IF NOT EXISTS idx_project ON {fqn}(source.project)",
+            # Tags array index for tag filtering
+            f"CREATE INDEX IF NOT EXISTS idx_tags ON {fqn}(DISTINCT ARRAY t FOR t IN tags END)",
         ]
         for idx_query in indexes:
             try:
@@ -286,6 +302,7 @@ class CosDatabase:
         limit: int = 50,
         offset: int = 0,
         sort: str = "updated_at:desc",
+        exclude_done: bool = True,
     ) -> DocsListResponse:
         """List documents with filters."""
         fqn = self._get_fqn(user_id)
@@ -293,6 +310,10 @@ class CosDatabase:
         # Build WHERE clause
         conditions = []
         params: dict[str, Any] = {}
+
+        # Exclude done/archived by default (unless status filter is explicit)
+        if exclude_done and status is None:
+            conditions.append('d.status NOT IN ["done", "archived"]')
 
         if doc_type:
             conditions.append("d.doc_type = $doc_type")

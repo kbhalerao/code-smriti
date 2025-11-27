@@ -96,6 +96,7 @@ async def list_documents(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str, Query()] = "updated_at:desc",
+    exclude_done: Annotated[bool, Query(description="Exclude done/archived items")] = True,
 ) -> DocsListResponse:
     """List documents with filters."""
     return await db.list_documents(
@@ -108,6 +109,7 @@ async def list_documents(
         limit=limit,
         offset=offset,
         sort=sort,
+        exclude_done=exclude_done,
     )
 
 
