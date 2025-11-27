@@ -44,7 +44,7 @@ class CaptureMode(str, Enum):
 class SourceInfo(BaseModel):
     """Source metadata for document."""
 
-    client: str = Field(description="Client: claude-code, cli, telegram, api")
+    client: str = Field(default="self", description="Client: claude-code, cli, telegram, api, self")
     project: Optional[str] = Field(None, description="Auto-detected project name")
     branch: Optional[str] = Field(None, description="Git branch")
     files: Optional[list[str]] = Field(None, description="Files touched")

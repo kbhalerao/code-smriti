@@ -388,6 +388,30 @@ async def cos_done(doc_id: str) -> str:
 
 
 @mcp.tool()
+async def cos_delete(doc_id: str, hard: bool = False) -> str:
+    """
+    Delete an item.
+
+    Args:
+        doc_id: The ID of the item to delete (can be partial, e.g., "abc123")
+        hard: If True, permanently delete. If False (default), archive the item.
+    """
+    try:
+        endpoint = f"/api/cos/docs/{doc_id}"
+        if hard:
+            endpoint += "?hard=true"
+        await cos_request("DELETE", endpoint)
+        action = "Permanently deleted" if hard else "Archived"
+        return f"✓ {action} item: {doc_id}"
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return f"Item not found: {doc_id}"
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"Error deleting: {str(e)}"
+
+
+@mcp.tool()
 async def cos_update(
     doc_id: str,
     content: str = None,

@@ -173,23 +173,59 @@ class CosDatabase:
 
         return self._doc_to_response(doc_id, doc)
 
+    async def resolve_doc_id(self, user_id: str, partial_id: str) -> Optional[str]:
+        """Resolve a partial ID to full document ID.
+
+        If partial_id is a full UUID, returns it directly.
+        Otherwise, searches for documents whose ID starts with partial_id.
+        Returns None if no match or multiple matches found.
+        """
+        # If it looks like a full UUID, return as-is
+        if len(partial_id) == 36 and partial_id.count("-") == 4:
+            return partial_id
+
+        # Search for documents with matching ID prefix
+        fqn = self._get_fqn(user_id)
+        query = f"""
+            SELECT META(d).id
+            FROM {fqn} d
+            WHERE META(d).id LIKE $pattern
+            LIMIT 2
+        """
+        pattern = f"{partial_id}%"
+        result = list(self.cluster.query(query, QueryOptions(named_parameters={"pattern": pattern})))
+
+        if len(result) == 1:
+            return result[0]["id"]
+        return None  # No match or ambiguous
+
     async def get_document(self, user_id: str, doc_id: str) -> Optional[DocResponse]:
-        """Get a single document by ID."""
+        """Get a single document by ID (supports partial IDs)."""
+        # Resolve partial ID
+        full_id = await self.resolve_doc_id(user_id, doc_id)
+        if not full_id:
+            return None
+
         collection = self._get_collection(user_id)
         try:
-            result = collection.get(doc_id)
-            return self._doc_to_response(doc_id, result.content_as[dict])
+            result = collection.get(full_id)
+            return self._doc_to_response(full_id, result.content_as[dict])
         except DocumentNotFoundException:
             return None
 
     async def update_document(
         self, user_id: str, doc_id: str, request: UpdateDocRequest
     ) -> Optional[DocResponse]:
-        """Update an existing document."""
+        """Update an existing document (supports partial IDs)."""
+        # Resolve partial ID
+        full_id = await self.resolve_doc_id(user_id, doc_id)
+        if not full_id:
+            return None
+
         collection = self._get_collection(user_id)
 
         try:
-            result = collection.get(doc_id)
+            result = collection.get(full_id)
             doc = result.content_as[dict]
         except DocumentNotFoundException:
             return None
@@ -212,22 +248,27 @@ class CosDatabase:
 
         doc["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-        collection.replace(doc_id, doc)
-        return self._doc_to_response(doc_id, doc)
+        collection.replace(full_id, doc)
+        return self._doc_to_response(full_id, doc)
 
     async def delete_document(self, user_id: str, doc_id: str, hard: bool = False) -> bool:
-        """Delete a document (soft by default - sets status to archived)."""
+        """Delete a document (soft by default - sets status to archived). Supports partial IDs."""
+        # Resolve partial ID
+        full_id = await self.resolve_doc_id(user_id, doc_id)
+        if not full_id:
+            return False
+
         collection = self._get_collection(user_id)
 
         try:
             if hard:
-                collection.remove(doc_id)
+                collection.remove(full_id)
             else:
-                result = collection.get(doc_id)
+                result = collection.get(full_id)
                 doc = result.content_as[dict]
                 doc["status"] = Status.archived.value
                 doc["updated_at"] = datetime.now(timezone.utc).isoformat()
-                collection.replace(doc_id, doc)
+                collection.replace(full_id, doc)
             return True
         except DocumentNotFoundException:
             return False
