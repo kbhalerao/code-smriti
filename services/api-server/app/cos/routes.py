@@ -5,8 +5,9 @@ Personal productivity endpoints: tasks, ideas, notes, context snapshots.
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..dependencies import get_current_user
 from .db import CosDatabase, get_cos_db
 from .models import (
     ContextResponse,
@@ -27,19 +28,17 @@ router = APIRouter(prefix="/cos", tags=["Chief of Staff"])
 
 
 def get_user_id(
-    x_user_id: Annotated[Optional[str], Header()] = None,
+    current_user: Annotated[dict, Depends(get_current_user)],
     db: CosDatabase = Depends(get_cos_db),
 ) -> str:
-    """Extract user ID (email) from header, validate against users bucket."""
-    from ..config import settings
-
-    # Use header or default (for development)
-    user_id = x_user_id or getattr(settings, 'cos_default_user', None)
+    """Extract user ID (email) from JWT token, validate against users bucket."""
+    # Get email from JWT payload
+    user_id = current_user.get("email")
 
     if not user_id:
         raise HTTPException(
             status_code=401,
-            detail="X-User-ID header required"
+            detail="Invalid token: missing email claim"
         )
 
     # Validate user exists and ensure their scope is provisioned
