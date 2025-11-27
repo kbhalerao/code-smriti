@@ -327,6 +327,53 @@ async def cos_list(
 
 
 @mcp.tool()
+async def cos_get(doc_id: str) -> str:
+    """
+    Get a single document by ID.
+
+    Use this to view full details of a specific item.
+
+    Args:
+        doc_id: The ID of the item (can be partial, e.g., "abc123")
+    """
+    try:
+        result = await cos_request("GET", f"/api/cos/docs/{doc_id}")
+
+        # Format output
+        doc_type = result.get("doc_type", "unknown")
+        content = result.get("content", "")
+        status = result.get("status", "")
+        priority = result.get("priority", "")
+        tags = result.get("tags", [])
+        project = result.get("source", {}).get("project") if result.get("source") else None
+        created = result.get("created_at", "")[:10]
+        full_id = result.get("id", doc_id)
+
+        emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯"}.get(doc_type, "•")
+        priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "")
+
+        output = [f"## {emoji} {doc_type.title()} `{full_id[:8]}`\n"]
+        output.append(f"**Content:** {content}\n")
+        output.append(f"**Status:** {status}")
+        if priority:
+            output.append(f" {priority_emoji} | **Priority:** {priority}")
+        if tags:
+            output.append(f"\n**Tags:** {', '.join(tags)}")
+        if project:
+            output.append(f"\n**Project:** {project}")
+        output.append(f"\n**Created:** {created}")
+
+        return "".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return f"Item not found: {doc_id}"
+        return f"Error: {str(e)}"
+    except Exception as e:
+        return f"Error getting item: {str(e)}"
+
+
+@mcp.tool()
 async def cos_search_tags(tags: list[str] = None) -> str:
     """
     Get all your tags with counts, or search for items by tags.
@@ -582,6 +629,14 @@ async def cos_stats() -> str:
             output.append("**By Status:**")
             for s, count in by_status.items():
                 output.append(f"  - {s}: {count}")
+            output.append("")
+
+        by_priority = result.get("by_priority", {})
+        if by_priority:
+            output.append("**By Priority:**")
+            for p, count in by_priority.items():
+                emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(p, "")
+                output.append(f"  {emoji} {p}: {count}")
 
         return "\n".join(output)
 

@@ -193,9 +193,10 @@ async def get_project_docs(
     db: Annotated[CosDatabase, Depends(get_cos_db)],
     user_id: Annotated[str, Depends(get_user_id)],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    exclude_done: Annotated[bool, Query(description="Exclude done/archived items")] = True,
 ) -> DocsListResponse:
     """Get all docs for a project."""
-    return await db.get_project_docs(user_id, project_name, limit=limit)
+    return await db.list_documents(user_id, project=project_name, limit=limit, exclude_done=exclude_done)
 
 
 @router.get("/projects/{project_name}/recent", response_model=DocsListResponse)
@@ -204,9 +205,12 @@ async def get_project_recent(
     db: Annotated[CosDatabase, Depends(get_cos_db)],
     user_id: Annotated[str, Depends(get_user_id)],
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    exclude_done: Annotated[bool, Query(description="Exclude done/archived items")] = True,
 ) -> DocsListResponse:
     """Get recent activity for a project."""
-    return await db.get_project_recent(user_id, project_name, limit=limit)
+    return await db.list_documents(
+        user_id, project=project_name, limit=limit, sort="updated_at:desc", exclude_done=exclude_done
+    )
 
 
 # --- Tags ---

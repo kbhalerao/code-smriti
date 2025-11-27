@@ -328,10 +328,11 @@ class CosDatabase:
             params["priority"] = priority.value
 
         if tags:
-            # All tags must be present
+            # All tags must be present (with partial/prefix matching)
             for i, tag in enumerate(tags):
-                conditions.append(f"${f'tag{i}'} IN d.tags")
-                params[f"tag{i}"] = tag
+                # Use ANY with LIKE for partial matching within array
+                conditions.append(f"ANY t IN d.tags SATISFIES t LIKE ${f'tag{i}'} END")
+                params[f"tag{i}"] = f"{tag}%"  # Prefix match
 
         if project:
             conditions.append("d.source.project = $project")
@@ -444,7 +445,7 @@ class CosDatabase:
             SELECT t AS tag, COUNT(*) AS count
             FROM {fqn} d
             UNNEST d.tags t
-            WHERE d.status NOT IN ["archived"]
+            WHERE d.status NOT IN ["done", "archived"]
             GROUP BY t
             ORDER BY count DESC
         """
@@ -497,7 +498,7 @@ class CosDatabase:
 
         return {
             "total_docs": total,
-            "by_doc_type": by_type,
+            "by_type": by_type,
             "by_status": by_status,
             "by_priority": by_priority,
             "recent_activity": recent,
