@@ -266,6 +266,7 @@ async def cos_list(
     tags: list[str] = None,
     project: str = None,
     limit: int = 20,
+    include_done: bool = False,
 ) -> str:
     """
     List and filter your captured items.
@@ -279,8 +280,10 @@ async def cos_list(
         tags: Filter by tags (items must have ALL specified tags)
         project: Filter by project name
         limit: Max items to return (default: 20)
+        include_done: Include done/archived items (default: False)
     """
     try:
+        # Build query params - server handles exclude_done filtering
         params = [f"limit={limit}"]
         if doc_type:
             params.append(f"doc_type={doc_type}")
@@ -293,6 +296,8 @@ async def cos_list(
         if tags:
             for tag in tags:
                 params.append(f"tags={tag}")
+        if include_done:
+            params.append("exclude_done=false")
 
         query = "&".join(params)
         result = await cos_request("GET", f"/api/cos/docs?{query}")
@@ -303,14 +308,17 @@ async def cos_list(
         if not items:
             return "No items found matching your filters."
 
-        output = [f"## Found {total} items (showing {len(items)})\n"]
+        output = [f"## Found {len(items)} active items\n"]
         for item in items:
             dt = item.get("doc_type", "")
             content = item.get("content", "")[:60]
             doc_id = item.get("id", "")[:8]
-            status = item.get("status", "")
+            item_status = item.get("status", "")
             emoji = {"task": "☐", "idea": "💡", "note": "📝", "context": "🎯", "message": "💬"}.get(dt, "•")
-            output.append(f"{emoji} [{status}] {content} `{doc_id}`")
+            output.append(f"{emoji} [{item_status}] {content} `{doc_id}`")
+
+        if not include_done and not status:
+            output.append(f"\n_Use include_done=True to see completed items_")
 
         return "\n".join(output)
 
