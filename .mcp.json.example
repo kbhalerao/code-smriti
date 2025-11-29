@@ -3,16 +3,28 @@
     "code-smriti": {
       "command": "uv",
       "args": [
+        "--directory", "/path/to/code-smriti",
         "run",
-        "--with", "mcp",
-        "--with", "httpx",
-        "--with", "python-dotenv",
-        "4-consume/mcp-server/rag_mcp_server.py"
+        "python", "-m", "services.mcp-server.rag_mcp_server"
       ],
       "env": {
         "CODESMRITI_API_URL": "https://smriti.agsci.com",
         "CODESMRITI_USERNAME": "your-username",
         "CODESMRITI_PASSWORD": "your-password"
+      }
+    },
+    "chief-of-staff": {
+      "command": "uv",
+      "args": [
+        "--directory", "/path/to/chief-of-staff",
+        "run",
+        "python", "-m", "mcp_server.cos_mcp_server"
+      ],
+      "env": {
+        "COS_API_URL": "http://localhost:8001",
+        "CODESMRITI_API_URL": "http://localhost",
+        "COS_EMAIL": "your-email@example.com",
+        "COS_PASSWORD": "your-password"
       }
     }
   }
