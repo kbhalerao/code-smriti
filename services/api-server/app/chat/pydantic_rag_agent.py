@@ -69,6 +69,15 @@ _http_client: Optional[httpx.AsyncClient] = None
 _rag_agent: Optional[Agent] = None
 
 
+async def close_shared_resources():
+    """Close shared resources on shutdown."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+        logger.info("Closed shared HTTP client")
+
+
 def get_embedding_model(model_name: str = "nomic-ai/nomic-embed-text-v1.5") -> SentenceTransformer:
     """Get or create the embedding model (singleton)."""
     global _embedding_model
