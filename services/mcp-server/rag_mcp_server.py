@@ -80,9 +80,9 @@ async def search_codebase(
 
         payload = {"query": query, "limit": min(limit, 20)}
         if repo_filter:
-            payload["repo"] = repo_filter
+            payload["repo_filter"] = repo_filter
         if file_pattern:
-            payload["file_pattern"] = file_pattern
+            payload["file_path_pattern"] = file_pattern
 
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.post(
