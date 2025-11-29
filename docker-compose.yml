@@ -26,7 +26,7 @@ services:
       retries: 5
       start_period: 60s
 
-  # API Server - FastAPI server (RAG chat + Chief of Staff)
+  # API Server - FastAPI server (RAG chat)
   api-server:
     build:
       context: .
@@ -44,7 +44,6 @@ services:
       - COUCHBASE_BUCKET_USERS=users
       - COUCHBASE_BUCKET_JOBS=ingestion_jobs
       - COUCHBASE_BUCKET_COS=chief_of_staff
-      - COS_DEFAULT_USER=${COS_DEFAULT_USER:-}
       - OLLAMA_HOST=http://host.docker.internal:1234
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-qwen/qwen3-30b-a3b-2507}
       - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-nomic-ai/nomic-embed-text-v1.5}
@@ -71,6 +70,38 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s  # Allow 2 minutes for embedding model loading
+
+  # Chief of Staff - Personal productivity service
+  cos-server:
+    build:
+      context: ../chief-of-staff
+      dockerfile: Dockerfile
+    container_name: chief_of_staff_api
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - COUCHBASE_HOST=couchbase
+      - COUCHBASE_PORT=8091
+      - COUCHBASE_USER=Administrator
+      - COUCHBASE_PASSWORD=${COUCHBASE_PASSWORD}
+      - COUCHBASE_BUCKET_COS=chief_of_staff
+      - COUCHBASE_BUCKET_USERS=users
+      - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      couchbase:
+        condition: service_healthy
+    networks:
+      - codesmriti_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # Ingestion Worker - background service for processing repositories
   ingestion-worker:
@@ -117,6 +148,8 @@ services:
       - ./landing:/usr/share/nginx/html:ro  # Landing page
     depends_on:
       api-server:
+        condition: service_healthy
+      cos-server:
         condition: service_healthy
     networks:
       - codesmriti_network
