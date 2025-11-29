@@ -103,18 +103,31 @@ class LLMEnricher:
         return response.json()["response"]
 
     async def _call_lmstudio(self, prompt: str) -> str:
-        """Call LM Studio OpenAI-compatible API"""
+        """Call LM Studio using /v1/responses API (better performance with thinking models)"""
         response = await self.client.post(
-            f"{self.config.base_url}/v1/chat/completions",
+            f"{self.config.base_url}/v1/responses",
             json={
                 "model": self.config.model,
-                "messages": [{"role": "user", "content": prompt}],
+                "input": prompt,
                 "temperature": self.config.temperature,
-                "max_tokens": self.config.max_tokens
+                "max_output_tokens": self.config.max_tokens
             }
         )
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        data = response.json()
+        # Extract text from the responses API format
+        # Response structure: {"output": [{"type": "message", "content": [{"type": "output_text", "text": "..."}]}]}
+        output = data.get("output", [])
+        for item in output:
+            if item.get("type") == "message":
+                content = item.get("content", [])
+                for block in content:
+                    if block.get("type") == "output_text":
+                        return block.get("text", "")
+        # Fallback: try to get text directly if format differs
+        if "text" in data:
+            return data["text"]
+        raise ValueError(f"Could not extract text from responses API: {data}")
 
     async def generate(self, prompt: str) -> str:
         """

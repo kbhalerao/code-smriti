@@ -290,22 +290,34 @@ class LLMChunker:
         logger.info(f"LLM Chunker initialized: {model}")
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call LLM Studio API"""
+        """Call LM Studio using /v1/responses API (better performance with thinking models)"""
         try:
+            # Combine system and user content for responses API
+            full_prompt = "You are a code analysis expert. Respond only with valid JSON.\n\n" + prompt
             response = await self.client.post(
-                f"{self.base_url}/v1/chat/completions",
+                f"{self.base_url}/v1/responses",
                 json={
                     "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": "You are a code analysis expert. Respond only with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
+                    "input": full_prompt,
                     "temperature": self.temperature,
-                    "max_tokens": 4000
+                    "max_output_tokens": 4000
                 }
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            data = response.json()
+            # Extract text from responses API format
+            output = data.get("output", [])
+            for item in output:
+                if item.get("type") == "message":
+                    content = item.get("content", [])
+                    for block in content:
+                        if block.get("type") == "output_text":
+                            return block.get("text", "")
+            # Fallback
+            if "text" in data:
+                return data["text"]
+            logger.warning(f"Unexpected responses API format: {data}")
+            return "[]"
         except httpx.HTTPStatusError as e:
             # Log the response body for debugging
             try:

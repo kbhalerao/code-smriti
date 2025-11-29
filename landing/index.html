@@ -368,8 +368,10 @@
                     <p style="margin-bottom: 0;">
                         CodeSmriti is a semantic code memory system that indexes GitHub repositories
                         into a vector database for natural language retrieval. The system employs
-                        AST-aware chunking via tree-sitter, LLM-generated summaries, and a normalized
-                        storage schema achieving <strong>85% storage reduction</strong> compared to naive approaches.
+                        a <strong>bottom-up aggregation pipeline</strong>: symbols are summarized first, then
+                        aggregated into file summaries, folder modules, and finally repository overviews.
+                        Hybrid chunking combines tree-sitter AST parsing with LLM-assisted semantic chunking
+                        for languages that resist static analysis (Svelte, embedded SQL, templating).
                         Integration with Claude Desktop and VSCode is provided via the Model Context Protocol (MCP).
                         This brief documents the architecture, chunking strategies, and performance characteristics.
                     </p>
@@ -421,25 +423,27 @@
             <section id="architecture">
                 <h2>2. Architecture</h2>
 
-                <div class="diagram">┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
-│   GitHub     │────▶│    Ingestion    │────▶│  Couchbase   │
-│   Repos      │     │    Worker       │     │  Vector DB   │
-└──────────────┘     └────────┬────────┘     └──────┬───────┘
-                              │                      │
-                     tree-sitter parsing      768-dim embeddings
-                     + LLM summaries          (nomic-embed-text-v1.5)
-                              │                      │
-                              └──────────┬───────────┘
-                                         ▼
-                              ┌─────────────────────┐
-                              │    FastAPI Server   │
-                              │   /api/rag/search   │◀──── MCP Protocol
-                              │   /api/rag/         │      (Claude, VSCode)
-                              └─────────────────────┘</div>
+                <div class="diagram">┌──────────────┐     ┌─────────────────────────────────────┐     ┌──────────────┐
+│   GitHub     │────▶│         Ingestion Pipeline          │────▶│  Couchbase   │
+│   Repos      │     │                                     │     │  Vector DB   │
+└──────────────┘     │  1. Parse files (tree-sitter)       │     └──────┬───────┘
+                     │  2. LLM chunk underchunked files    │            │
+                     │  3. Summarize symbols → files       │     768-dim embeddings
+                     │  4. Aggregate files → modules       │     (nomic-embed-text-v1.5)
+                     │  5. Aggregate modules → repo        │            │
+                     └─────────────────────────────────────┘            │
+                                                                        │
+                              ┌──────────────────────────────────────────┘
+                              ▼
+                     ┌─────────────────────┐
+                     │    FastAPI Server   │
+                     │   /api/rag/search   │◀──── MCP Protocol
+                     │   /api/rag/         │      (Claude, VSCode)
+                     └─────────────────────┘</div>
 
                 <h3>Components</h3>
                 <ul>
-                    <li><strong>Ingestion Worker:</strong> Clones repos, parses with tree-sitter, generates embeddings, stores to Couchbase</li>
+                    <li><strong>Ingestion Pipeline:</strong> Bottom-up processor: tree-sitter parsing → LLM chunking → symbol summarization → file aggregation → module aggregation → repo summary</li>
                     <li><strong>Vector Database:</strong> Couchbase with FTS vector search index (768 dimensions)</li>
                     <li><strong>API Server:</strong> FastAPI providing RAG endpoints with hybrid search (vector + FTS)</li>
                     <li><strong>MCP Server:</strong> Model Context Protocol bridge for Claude Desktop and VSCode integration</li>
@@ -456,6 +460,11 @@
                         <td>Parsing</td>
                         <td>tree-sitter</td>
                         <td>40+ languages, incremental, error-tolerant [4]</td>
+                    </tr>
+                    <tr>
+                        <td>LLM Enrichment</td>
+                        <td>Local LLM (Qwen/Llama)</td>
+                        <td>Summary generation, semantic chunking, aggregation</td>
                     </tr>
                     <tr>
                         <td>Embeddings</td>
@@ -485,47 +494,69 @@
                 </p>
 
                 <p>
-                    CodeSmriti employs AST-aware chunking, which has been shown to improve Recall@5 by 4.3 points
-                    on code retrieval benchmarks [6].
+                    CodeSmriti employs a hybrid approach: AST-aware chunking via tree-sitter as the primary method,
+                    with LLM-assisted semantic chunking as a fallback for files that resist static analysis.
+                    This has been shown to improve Recall@5 by 4.3 points on code retrieval benchmarks [6].
                 </p>
 
-                <h3>Core Principle: Metadata-First</h3>
+                <h3>Core Principle: Bottom-Up Aggregation</h3>
                 <p>
-                    Empirically, <strong>80% of queries are answered by file-level context</strong>. Only 20% require
-                    drilling into specific functions or classes. The chunking strategy reflects this:
+                    Summaries are built from the ground up: individual symbols (functions, classes) are summarized first,
+                    then aggregated into file-level summaries, then into folder-based module summaries, and finally
+                    into a repository overview. This ensures <strong>every level has meaningful, accurate context</strong>
+                    rather than relying on top-down inference.
                 </p>
 
+                <h3>Hierarchical Document Types</h3>
                 <table>
                     <tr>
-                        <th>Chunk Type</th>
+                        <th>Document Type</th>
                         <th>Content</th>
                         <th>Purpose</th>
                     </tr>
                     <tr>
-                        <td>file_metadata</td>
-                        <td>Summary + signatures + git info</td>
-                        <td>Answer "what does this file do?"</td>
+                        <td>repo_summary</td>
+                        <td>Aggregated from module summaries</td>
+                        <td>Repository-level overview and tech stack</td>
+                    </tr>
+                    <tr>
+                        <td>module_summary</td>
+                        <td>Aggregated from file summaries</td>
+                        <td>Folder/package-level context</td>
                     </tr>
                     <tr>
                         <td>file_index</td>
-                        <td>Full file (&lt;6k tokens)</td>
-                        <td>Complete context for small files</td>
+                        <td>Aggregated from symbol summaries</td>
+                        <td>File purpose, key components, imports</td>
                     </tr>
                     <tr>
                         <td>symbol_index</td>
-                        <td>Function/class with docstring</td>
-                        <td>Drill-down for large files</td>
+                        <td>LLM summary of function/class</td>
+                        <td>Detailed symbol documentation (≥5 lines)</td>
                     </tr>
                 </table>
 
-                <h3>Language-Aware Splitting</h3>
-                <p>Tree-sitter provides AST-level boundaries. Split points vary by language:</p>
+                <h3>Hybrid Chunking: AST + LLM</h3>
+                <p>
+                    Tree-sitter provides AST-level symbol extraction for most languages.
+                    However, some files resist static analysis—Svelte components with complex template logic,
+                    SQL embedded in Python strings, or domain-specific patterns.
+                </p>
 
-                <pre><code>Python:     function_definition, class_definition
-JavaScript: function_declaration, class_declaration, arrow_function
-Go:         function_declaration, type_declaration, method_declaration
-Rust:       function_item, struct_item, impl_item, trait_item
-Svelte:     &lt;script&gt;, template blocks, &lt;style&gt;</code></pre>
+                <p>
+                    For these <strong>"underchunked" files</strong> (high line count but few detected symbols),
+                    CodeSmriti invokes an LLM semantic chunker to identify logical boundaries:
+                </p>
+
+                <pre><code>Primary (tree-sitter):     function_definition, class_definition, method_definition
+Fallback (LLM chunker):    SQL queries, business logic blocks, configuration sections,
+                           template event handlers, data transformations</code></pre>
+
+                <p>
+                    The LLM chunker identifies semantic units like <code>user_subscription_data_fetch</code>
+                    or <code>zone_calculation_algorithm</code> that tree-sitter cannot detect, ensuring
+                    comprehensive coverage even for unconventional code patterns.
+                </p>
 
                 <h3>Junk Filtering</h3>
                 <p>Skip files that add noise without value:</p>
@@ -536,58 +567,77 @@ __pycache__/     Cargo.lock           *.map
             </section>
 
             <section id="schema">
-                <h2>4. V3 Normalized Schema</h2>
+                <h2>4. Document Schema</h2>
 
                 <div class="highlight">
                     <strong>Key Insight:</strong> Since we have access to the actual repository,
-                    we don't need to store code redundantly. Store <em>references + summaries</em>,
-                    fetch code on demand.
+                    we don't need to store code redundantly. Store <em>summaries + line references</em>,
+                    fetch code on demand. Content-based hashing ensures deduplication across re-indexes.
                 </div>
 
-                <h3>The Redundancy Problem</h3>
+                <h3>Hierarchical Document Structure</h3>
+                <div class="diagram">repo_summary ─────────────────────────────────────────────────────────
+│   Aggregated from module summaries. Tech stack, total files/lines.
+│   document_id: hash(repo:{repo_id}:{commit})
+│
+└─ module_summary ────────────────────────────────────────────────────
+   │   Folder-based. Aggregated from file summaries.
+   │   document_id: hash(module:{repo_id}:{path}:{commit})
+   │
+   └─ file_index ─────────────────────────────────────────────────────
+      │   Aggregated from symbol summaries. Imports, language, all symbols.
+      │   document_id: hash(file:{repo_id}:{path}:{commit})
+      │
+      └─ symbol_index ────────────────────────────────────────────────
+            Individual function/class with LLM summary. ≥5 lines only.
+            document_id: hash(symbol:{repo_id}:{path}:{name}:{commit})</div>
+
+                <h3>Quality Tracking</h3>
                 <p>
-                    Naive approaches store code at multiple levels: file chunk contains full code,
-                    symbol chunks duplicate subsets. A 1000-line file with 20 functions stores
-                    the same code 21+ times.
+                    Each document carries quality metadata indicating its enrichment level:
                 </p>
-
-                <h3>Normalized Approach</h3>
-                <div class="diagram">V2 (Redundant)                    V3 (Normalized)
-─────────────────                  ─────────────────
-repo_summary                       repo_summary
-└─ module_summary                  └─ module_summary
-   └─ file_chunk (FULL CODE)          └─ file_index (summary + line count)
-      └─ symbol_chunk (CODE)             └─ symbol_index (summary + line refs)
-
-Storage: ~35KB                     Storage: ~5KB
-(code duplicated 21x)              (code fetched on demand)</div>
 
                 <table>
                     <tr>
-                        <th>Approach</th>
-                        <th>1000-line file, 20 functions</th>
+                        <th>Enrichment Level</th>
+                        <th>Description</th>
+                        <th>Fallback Behavior</th>
                     </tr>
                     <tr>
-                        <td>V1 (naive)</td>
-                        <td>~30KB (redundant storage)</td>
+                        <td><code>llm_summary</code></td>
+                        <td>Full LLM-generated summary</td>
+                        <td>—</td>
                     </tr>
                     <tr>
-                        <td>V2 (hierarchical)</td>
-                        <td>~35KB (summaries + full code)</td>
+                        <td><code>basic</code></td>
+                        <td>Docstring + structure only</td>
+                        <td>LLM unavailable or timed out</td>
                     </tr>
                     <tr>
-                        <td>V3 (normalized)</td>
-                        <td>~5KB (summaries + line refs)</td>
+                        <td><code>none</code></td>
+                        <td>No summary available</td>
+                        <td>Parsing failed</td>
                     </tr>
                 </table>
 
-                <p><strong>Result: 85% storage reduction</strong></p>
+                <p>
+                    A circuit breaker pattern prevents cascading failures: if LLM calls fail repeatedly,
+                    the system gracefully degrades to basic enrichment without blocking ingestion.
+                </p>
+
+                <h3>Content-Based Deduplication</h3>
+                <p>
+                    Document IDs are SHA256 hashes of content keys (repo, path, symbol name, commit).
+                    Re-indexing the same commit produces identical IDs, enabling efficient upserts
+                    without duplicate detection logic.
+                </p>
 
                 <h3>Embedding Strategy</h3>
                 <p>
                     Embeddings capture both semantic meaning (from LLM summary) and code patterns
-                    (from actual code preview at index time). The summary answers <em>"what does this do?"</em>
-                    while the code preview answers <em>"how is it implemented?"</em>
+                    (from actual code at index time). For symbols, the embedding combines the summary
+                    with a code snippet. This answers both <em>"what does this do?"</em> and
+                    <em>"how is it implemented?"</em>
                 </p>
             </section>
 
@@ -718,9 +768,15 @@ Storage: ~35KB                     Storage: ~5KB
                     <li>Works well with <strong>specific technical queries</strong></li>
                 </ul>
 
+                <h3>Handling Complex Files</h3>
+                <ul>
+                    <li><strong>SvelteKit files:</strong> LLM semantic chunker identifies template logic, event handlers, and reactive statements that tree-sitter misses</li>
+                    <li><strong>Embedded SQL:</strong> Django ORM queries, raw SQL strings, and database migrations are detected as semantic chunks</li>
+                    <li><strong>Configuration files:</strong> Complex YAML/JSON configs with business logic are semantically chunked</li>
+                </ul>
+
                 <h3>Known Limitations</h3>
                 <ul>
-                    <li><strong>SvelteKit files:</strong> Lower indexing quality for <code>.svelte</code> components</li>
                     <li><strong>Documentation:</strong> Sphinx <code>.rst</code> and markdown docs may be under-indexed</li>
                     <li><strong>Vague queries:</strong> May return adjacent but incorrect results initially</li>
                 </ul>
