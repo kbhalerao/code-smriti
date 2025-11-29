@@ -1,17 +1,18 @@
 """
-Production-quality RAG agent using PydanticAI for code-smriti.
+PydanticAI RAG Agent (V4)
+
+LLM-driven RAG agent using PydanticAI for code-smriti.
+Uses shared tool layer with V4 hierarchical document structure.
 
 Features:
-- Intent classification with conversation context
-- Vector search using Couchbase FTS + kNN
+- Progressive disclosure via search levels (symbol, file, module, repo)
 - Tool-calling architecture for flexible search
 - Streaming response support
-- High-quality markdown narrative generation
 - OpenAI-compatible endpoint support (works with LM Studio)
 """
 
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 
 import httpx
@@ -21,21 +22,24 @@ from pydantic_ai import Agent, RunContext
 from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
+from app.rag.models import SearchLevel, SearchResult, FileContent
+from app.rag import tools as rag_tools
 
 
-# ============================================================================
-# Models and Data Structures
-# ============================================================================
+# =============================================================================
+# Models
+# =============================================================================
 
 class CodeChunk(BaseModel):
     """Represents a code chunk from search results."""
-    content: str = Field(description="The code content")
+    content: str = Field(description="The code/summary content")
     repo_id: str = Field(description="Repository identifier")
     file_path: str = Field(description="File path in repository")
     language: str = Field(description="Programming language")
     score: float = Field(description="Relevance score (0-1)")
     start_line: Optional[int] = Field(default=None, description="Start line number")
     end_line: Optional[int] = Field(default=None, description="End line number")
+    doc_type: str = Field(default="file_index", description="Document type")
 
 
 class ConversationMessage(BaseModel):
@@ -49,15 +53,16 @@ class RAGContext:
     """Context passed to agent tools."""
     db: CouchbaseClient
     tenant_id: str
+    repos_path: str
     ollama_host: str
     http_client: httpx.AsyncClient
     embedding_model: SentenceTransformer
     conversation_history: List[ConversationMessage]
 
 
-# ============================================================================
-# Global Singletons (Shared Resources)
-# ============================================================================
+# =============================================================================
+# Singletons
+# =============================================================================
 
 _embedding_model: Optional[SentenceTransformer] = None
 _http_client: Optional[httpx.AsyncClient] = None
@@ -68,14 +73,10 @@ def get_embedding_model(model_name: str = "nomic-ai/nomic-embed-text-v1.5") -> S
     """Get or create the embedding model (singleton)."""
     global _embedding_model
     if _embedding_model is None:
-        logger.info(f"Loading sentence-transformers embedding model: {model_name}")
+        logger.info(f"Loading embedding model: {model_name}")
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        # MUST match ingestion model for vector search to work
-        _embedding_model = SentenceTransformer(
-            model_name,
-            trust_remote_code=True
-        )
-        logger.info(f"✓ Embedding model loaded: {model_name}")
+        _embedding_model = SentenceTransformer(model_name, trust_remote_code=True)
+        logger.info(f"Embedding model loaded: {model_name}")
     return _embedding_model
 
 
@@ -83,83 +84,64 @@ def get_http_client() -> httpx.AsyncClient:
     """Get or create the shared HTTP client (singleton)."""
     global _http_client
     if _http_client is None:
-        logger.info("Creating shared httpx AsyncClient with connection pooling")
+        logger.info("Creating shared httpx AsyncClient")
         _http_client = httpx.AsyncClient(
             timeout=120.0,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
-        logger.info("✓ HTTP client created with max_connections=100")
     return _http_client
 
 
-def get_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "deepseek-coder:6.7b") -> Agent[RAGContext, str]:
+def get_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]:
     """Get or create the shared PydanticAI agent (singleton)."""
     global _rag_agent
     if _rag_agent is None:
-        logger.info(f"Creating shared PydanticAI agent with model: {llm_model}")
+        logger.info(f"Creating PydanticAI agent with model: {llm_model}")
         _rag_agent = create_rag_agent(ollama_host, llm_model)
-        logger.info("✓ PydanticAI agent created")
     return _rag_agent
 
 
-async def close_shared_resources():
-    """Close all shared resources (for graceful shutdown)."""
-    global _http_client, _rag_agent, _embedding_model
+# =============================================================================
+# Agent Creation
+# =============================================================================
 
-    if _http_client:
-        logger.info("Closing shared HTTP client")
-        await _http_client.aclose()
-        _http_client = None
-
-    # Note: Embedding model and agent don't need explicit cleanup
-    _rag_agent = None
-    _embedding_model = None
-    logger.info("✓ Shared resources closed")
-
-
-# ============================================================================
-# PydanticAI Agent with Tools
-# ============================================================================
-
-# System prompt for the agent
-SYSTEM_PROMPT = """You are a code research assistant for code-smriti, a knowledge base system that indexes code repositories.
+SYSTEM_PROMPT = """You are a code research assistant for code-smriti, a knowledge base that indexes code repositories.
 
 Your role:
-1. **Understand user queries** - Determine if the question is about code in the indexed repositories
-2. **Search strategically** - Use vector search to find relevant code chunks
-3. **Generate high-quality narratives** - Create clear, well-formatted markdown responses with code examples
+1. **Understand queries** - Determine the appropriate search granularity
+2. **Search strategically** - Use the right level for the question:
+   - "repo" level for high-level project questions
+   - "module" level for architecture/organization questions
+   - "file" level for implementation questions (default)
+   - "symbol" level for specific function/class questions
+3. **Retrieve code** - Use get_file to fetch actual implementations when needed
+4. **Generate narratives** - Create clear markdown responses with code examples
 
 Guidelines:
-- Only answer questions about code, architecture, implementations, APIs, and technical documentation
-- If a query is off-topic (weather, jokes, general knowledge), politely decline
-- Use conversation history to understand context and follow-up questions
-- Always cite specific files when referencing code
-- Format code blocks with proper language tags for syntax highlighting
-- Be concise but thorough - focus on what's relevant to the query
+- Only answer questions about code in the indexed repositories
+- If a query is off-topic, politely decline
+- Always cite specific files with line numbers when referencing code
+- Format code blocks with proper language tags
+- Be concise but thorough
 
 Output format:
-- Start with a brief summary
-- Include relevant code snippets with file references
-- Use markdown formatting: headers, lists, code blocks
-- End with actionable insights or next steps if appropriate
+- Brief summary
+- Relevant code snippets with file:line references
+- Markdown formatting: headers, lists, code blocks
+- Actionable insights if appropriate
 """
 
 
-# Initialize the agent with OpenAI-compatible model (LM Studio)
-def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str = "llama3.1:latest") -> Agent[RAGContext, str]:
-    """Create PydanticAI agent for RAG using OpenAI-compatible endpoint (LM Studio)."""
+def create_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]:
+    """Create PydanticAI agent for RAG using OpenAI-compatible endpoint."""
 
-    # Set up environment for OpenAI provider to point to LM Studio
-    base_url = ollama_host if ollama_host.endswith("/v1") or ollama_host.endswith("/v1/") else f"{ollama_host}/v1"
-
-    # Configure environment for OpenAI provider
+    base_url = ollama_host if ollama_host.endswith("/v1") else f"{ollama_host}/v1"
     os.environ['OPENAI_BASE_URL'] = base_url
     if 'OPENAI_API_KEY' not in os.environ:
-        os.environ['OPENAI_API_KEY'] = 'dummy'  # LM Studio doesn't require real API key
+        os.environ['OPENAI_API_KEY'] = 'dummy'
 
-    logger.info(f"Configuring PydanticAI with OpenAI provider: base_url={base_url}, model={llm_model}")
+    logger.info(f"Configuring PydanticAI: base_url={base_url}, model={llm_model}")
 
-    # Use simplified OpenAI model format (works with LM Studio)
     agent = Agent(
         f'openai:{llm_model}',
         system_prompt=SYSTEM_PROMPT,
@@ -168,12 +150,14 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
         retries=1,
     )
 
-    # Register tools
-
+    # -------------------------------------------------------------------------
+    # Tool: search_code
+    # -------------------------------------------------------------------------
     @agent.tool
     async def search_code(
         ctx: RunContext[RAGContext],
         query: str,
+        level: str = "file",
         limit: int = 5,
         repo_filter: Optional[str] = None
     ) -> List[CodeChunk]:
@@ -182,161 +166,202 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
 
         Args:
             query: Natural language or code search query
+            level: Search granularity - "symbol", "file", "module", or "repo"
+                   Use "symbol" for specific functions/classes
+                   Use "file" for relevant files (default)
+                   Use "module" for folders/areas of code
+                   Use "repo" for high-level understanding
             limit: Maximum number of results (default: 5, max: 10)
             repo_filter: Optional repository filter (format: owner/repo)
 
         Returns:
             List of relevant code chunks with metadata
         """
-        logger.warning(f"🔧 TOOL EXECUTED: search_code(query='{query}', limit={limit}, repo={repo_filter})")
-        logger.info(f"Tool called: search_code(query='{query}', limit={limit}, repo={repo_filter})")
+        logger.info(f"Tool: search_code(query='{query[:50]}', level={level}, limit={limit})")
 
         try:
-            # Generate embedding for the query
-            logger.debug("Generating query embedding...")
-            # MUST use same prefix as ingestion: 'search_document:'
-            query_with_prefix = f"search_document: {query}"
-            query_embedding = ctx.deps.embedding_model.encode(query_with_prefix).tolist()
+            search_level = SearchLevel(level)
+        except ValueError:
+            search_level = SearchLevel.FILE
 
-            # Build FTS search request with kNN vector search
-            search_request = {
-                "query": {
-                    "match_none": {}  # We only want vector results
-                },
-                "knn": [
-                    {
-                        "field": "embedding",
-                        "vector": query_embedding,
-                        "k": min(limit, 10)  # Cap at 10
-                    }
-                ],
-                "size": min(limit, 10),
-                "fields": ["*"]
-            }
+        results = await rag_tools.search_code(
+            db=ctx.deps.db,
+            embedding_model=ctx.deps.embedding_model,
+            query=query,
+            level=search_level,
+            repo_filter=repo_filter,
+            limit=min(limit, 10),
+            tenant_id=ctx.deps.tenant_id
+        )
 
-            # Add repository filter if specified
-            if repo_filter:
-                search_request["query"] = {
-                    "conjuncts": [
-                        {"match": repo_filter, "field": "repo_id"}
-                    ]
-                }
+        # Convert to CodeChunk for LLM consumption
+        chunks = []
+        for r in results:
+            chunks.append(CodeChunk(
+                content=r.content,
+                repo_id=r.repo_id,
+                file_path=r.file_path or "",
+                language="",  # V4 doesn't store language at search result level
+                score=r.score,
+                start_line=r.start_line,
+                end_line=r.end_line,
+                doc_type=r.doc_type
+            ))
 
-            # Call Couchbase FTS API
-            couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
-            couchbase_user = os.getenv('COUCHBASE_USERNAME', 'Administrator')
-            couchbase_pass = os.getenv('COUCHBASE_PASSWORD', 'password123')
+        logger.info(f"search_code found {len(chunks)} results")
+        return chunks
 
-            fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
-
-            response = await ctx.deps.http_client.post(
-                fts_url,
-                json=search_request,
-                auth=(couchbase_user, couchbase_pass)
-            )
-
-            if response.status_code != 200:
-                logger.error(f"FTS search failed: {response.status_code} - {response.text}")
-                return []
-
-            result = response.json()
-            hits = result.get('hits', [])
-
-            # Fetch full documents from Couchbase
-            code_chunks = []
-            for hit in hits:
-                doc_id = hit.get('id')
-                if not doc_id:
-                    continue
-
-                try:
-                    bucket = ctx.deps.db.cluster.bucket(ctx.deps.tenant_id)
-                    collection = bucket.default_collection()
-                    doc_result = collection.get(doc_id)
-                    doc = doc_result.content_as[dict]
-
-                    # Handle V4 (metadata nested) and V3 (root level) schemas
-                    metadata = doc.get('metadata', {})
-                    code_chunks.append(CodeChunk(
-                        content=doc.get('content', ''),
-                        repo_id=doc.get('repo_id', ''),
-                        file_path=doc.get('file_path', ''),
-                        language=metadata.get('language', doc.get('language', '')),
-                        score=hit.get('score', 0.0),
-                        start_line=metadata.get('start_line', doc.get('start_line')),
-                        end_line=metadata.get('end_line', doc.get('end_line'))
-                    ))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch document {doc_id}: {e}")
-                    continue
-
-            logger.info(f"Found {len(code_chunks)} code chunks (scores: {[c.score for c in code_chunks[:3]]})")
-            return code_chunks
-
-        except Exception as e:
-            logger.error(f"Vector search failed: {e}", exc_info=True)
-            return []
-
-
+    # -------------------------------------------------------------------------
+    # Tool: get_file
+    # -------------------------------------------------------------------------
     @agent.tool
-    async def list_available_repos(
+    async def get_file(
         ctx: RunContext[RAGContext],
-        repo_filter: Optional[str] = None
+        repo_id: str,
+        file_path: str,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None
+    ) -> str:
+        """
+        Retrieve actual source code from a repository file.
+
+        Args:
+            repo_id: Repository identifier (e.g., "kbhalerao/labcore")
+            file_path: Path to file relative to repo root
+            start_line: Optional start line (1-indexed). Omit for entire file.
+            end_line: Optional end line (1-indexed). Omit for entire file.
+
+        Returns:
+            The file content as a string
+        """
+        logger.info(f"Tool: get_file({repo_id}/{file_path}, lines {start_line}-{end_line})")
+
+        result = await rag_tools.get_file(
+            repos_path=ctx.deps.repos_path,
+            repo_id=repo_id,
+            file_path=file_path,
+            start_line=start_line,
+            end_line=end_line
+        )
+
+        if result is None:
+            return f"File not found: {repo_id}/{file_path}"
+
+        header = f"# {repo_id}/{file_path}\n"
+        header += f"# Lines {result.start_line}-{result.end_line} of {result.total_lines}\n\n"
+        return header + result.code
+
+    # -------------------------------------------------------------------------
+    # Tool: list_repos
+    # -------------------------------------------------------------------------
+    @agent.tool
+    async def list_repos(
+        ctx: RunContext[RAGContext],
+        filter_text: Optional[str] = None
     ) -> List[str]:
         """
         List all repositories available in the indexed codebase.
 
         Args:
-            repo_filter: Optional filter to search for repos containing this text (e.g., 'labcore', 'farmworth')
+            filter_text: Optional filter to search for repos containing this text
 
         Returns:
             List of repository identifiers (format: owner/repo)
         """
-        logger.info(f"Tool called: list_available_repos(repo_filter={repo_filter})")
+        logger.info(f"Tool: list_repos(filter={filter_text})")
 
-        try:
-            # Build query with optional filter
-            if repo_filter:
-                query = f"""
-                    SELECT DISTINCT repo_id
-                    FROM `{ctx.deps.tenant_id}`
-                    WHERE repo_id IS NOT MISSING
-                      AND LOWER(repo_id) LIKE LOWER('%{repo_filter}%')
-                    ORDER BY repo_id
-                """
-            else:
-                query = f"""
-                    SELECT DISTINCT repo_id
-                    FROM `{ctx.deps.tenant_id}`
-                    WHERE repo_id IS NOT MISSING
-                    ORDER BY repo_id
-                """
+        repos = await rag_tools.list_repos(ctx.deps.db, ctx.deps.tenant_id)
 
-            result = ctx.deps.db.cluster.query(query)
-            repos = [row['repo_id'] for row in result]
+        # Apply filter if specified
+        if filter_text:
+            filter_lower = filter_text.lower()
+            repos = [r for r in repos if filter_lower in r.repo_id.lower()]
 
-            logger.info(f"Found {len(repos)} repositories")
-            return repos
+        return [f"{r.repo_id} ({r.doc_count} docs)" for r in repos]
 
-        except Exception as e:
-            logger.error(f"List repos failed: {e}")
-            return []
+    # -------------------------------------------------------------------------
+    # Tool: explore_structure
+    # -------------------------------------------------------------------------
+    @agent.tool
+    async def explore_structure(
+        ctx: RunContext[RAGContext],
+        repo_id: str,
+        path: str = "",
+        pattern: Optional[str] = None,
+        include_summaries: bool = False
+    ) -> str:
+        """
+        Explore repository directory structure.
 
+        Use this to navigate and understand project layout. Similar to 'ls'.
+        Call this before searching to understand where code is organized.
+
+        Args:
+            repo_id: Repository identifier (e.g., "kbhalerao/labcore")
+            path: Path within repo (empty string for root, e.g., "src/", "tests/")
+            pattern: Optional glob pattern to filter files (e.g., "*.py", "test_*")
+            include_summaries: Include module summary if available
+
+        Returns:
+            Directory listing with subdirectories, files, and key files
+        """
+        logger.info(f"Tool: explore_structure({repo_id}/{path})")
+
+        result = await rag_tools.explore_structure(
+            db=ctx.deps.db,
+            repos_path=ctx.deps.repos_path,
+            repo_id=repo_id,
+            path=path,
+            pattern=pattern,
+            include_summaries=include_summaries,
+            tenant_id=ctx.deps.tenant_id
+        )
+
+        # Format as readable string for LLM
+        output = [f"Directory: {repo_id}/{path or '(root)'}\n"]
+
+        if result.key_files:
+            output.append("Key files:")
+            for key_type, key_path in result.key_files.items():
+                output.append(f"  - {key_type}: {key_path}")
+            output.append("")
+
+        if result.directories:
+            output.append("Directories:")
+            for d in result.directories:
+                output.append(f"  - {d}")
+            output.append("")
+
+        if result.files:
+            output.append("Files:")
+            for f in result.files:
+                indexed = " [indexed]" if f.has_summary else ""
+                lang = f" ({f.language})" if f.language else ""
+                output.append(f"  - {f.name}{lang} - {f.line_count} lines{indexed}")
+            output.append("")
+
+        if result.summary:
+            output.append("Module Summary:")
+            output.append(result.summary)
+
+        if not result.directories and not result.files:
+            output.append("(empty or not found)")
+
+        return "\n".join(output)
 
     return agent
 
 
-# ============================================================================
-# RAG Agent Wrapper
-# ============================================================================
+# =============================================================================
+# Agent Wrapper
+# =============================================================================
 
 class CodeSmritiRAGAgent:
     """
     High-level wrapper for code-smriti RAG agent.
 
-    Note: This class uses shared singleton resources (agent, HTTP client, embedding model)
-    to avoid creating new connections and models per request. Only conversation state
-    is per-instance.
+    Uses shared singleton resources (agent, HTTP client, embedding model)
+    to avoid creating new connections per request.
     """
 
     def __init__(
@@ -351,125 +376,91 @@ class CodeSmritiRAGAgent:
         self.db = db
         self.tenant_id = tenant_id
         self.ollama_host = ollama_host
+        self.repos_path = os.getenv("REPOS_PATH", "/repos")
         self.conversation_history = conversation_history or []
 
-        # Use shared singletons (created once per server process)
+        # Shared singletons
         self.http_client = get_http_client()
         self.embedding_model = get_embedding_model(embedding_model_name)
         self.agent = get_rag_agent(ollama_host, llm_model)
 
-
     async def chat(self, query: str) -> str:
-        """
-        Process a chat query with RAG.
+        """Process a chat query with RAG."""
+        logger.info(f"Processing query: '{query[:100]}'")
 
-        Args:
-            query: User's query
-
-        Returns:
-            Generated response as markdown
-        """
-        logger.info(f"Processing query: '{query}'")
-
-        # Validate intent (simple heuristic check)
         if not self._is_valid_query(query):
             return (
                 "I can only help with questions about code, APIs, implementations, "
-                "and technical documentation in the indexed repositories. "
-                "Your query seems to be off-topic. Please ask about code-related topics."
+                "and technical documentation in the indexed repositories."
             )
 
-        # Create context
         ctx = RAGContext(
             db=self.db,
             tenant_id=self.tenant_id,
+            repos_path=self.repos_path,
             ollama_host=self.ollama_host,
             http_client=self.http_client,
             embedding_model=self.embedding_model,
             conversation_history=self.conversation_history
         )
 
-        # Build prompt with conversation history
         prompt = self._build_prompt_with_history(query)
-
-        # Run the agent
         result = await self.agent.run(prompt, deps=ctx)
 
-        # Add to conversation history
+        # Update history
         self.conversation_history.append(ConversationMessage(role="user", content=query))
         self.conversation_history.append(ConversationMessage(role="assistant", content=result.output))
 
-        # Keep only last 6 messages (3 exchanges)
+        # Keep last 6 messages
         if len(self.conversation_history) > 6:
             self.conversation_history = self.conversation_history[-6:]
 
         return result.output
 
-
     async def chat_stream(self, query: str):
-        """
-        Process a chat query with streaming response.
+        """Process a chat query with streaming response."""
+        logger.info(f"Processing query (streaming): '{query[:100]}'")
 
-        Args:
-            query: User's query
-
-        Yields:
-            Chunks of the response as they're generated
-        """
-        logger.info(f"Processing query (streaming): '{query}'")
-
-        # Validate intent
         if not self._is_valid_query(query):
             yield (
                 "I can only help with questions about code, APIs, implementations, "
-                "and technical documentation in the indexed repositories. "
-                "Your query seems to be off-topic. Please ask about code-related topics."
+                "and technical documentation in the indexed repositories."
             )
             return
 
-        # Create context
         ctx = RAGContext(
             db=self.db,
             tenant_id=self.tenant_id,
+            repos_path=self.repos_path,
             ollama_host=self.ollama_host,
             http_client=self.http_client,
             embedding_model=self.embedding_model,
             conversation_history=self.conversation_history
         )
 
-        # Build prompt with conversation history
         prompt = self._build_prompt_with_history(query)
-
-        # Run the agent with streaming
         full_response = []
+
         async with self.agent.run_stream(prompt, deps=ctx) as result:
             async for chunk in result.stream():
                 full_response.append(chunk)
                 yield chunk
 
-        # Add to conversation history
+        # Update history
         self.conversation_history.append(ConversationMessage(role="user", content=query))
         self.conversation_history.append(ConversationMessage(role="assistant", content="".join(full_response)))
 
-        # Keep only last 6 messages
         if len(self.conversation_history) > 6:
             self.conversation_history = self.conversation_history[-6:]
 
-
     def _is_valid_query(self, query: str) -> bool:
-        """
-        Simple heuristic to check if query is code-related.
-
-        This is a lightweight gate. The agent can still refuse if needed.
-        """
+        """Check if query is code-related."""
         query_lower = query.lower()
 
-        # Off-topic keywords
         off_topic = ['weather', 'joke', 'recipe', 'movie', 'sports', 'news']
         if any(word in query_lower for word in off_topic):
             return False
 
-        # Code-related keywords (positive signals)
         code_keywords = [
             'code', 'function', 'class', 'api', 'implement', 'how does',
             'show me', 'example', 'authentication', 'database', 'endpoint',
@@ -479,19 +470,16 @@ class CodeSmritiRAGAgent:
         if any(keyword in query_lower for keyword in code_keywords):
             return True
 
-        # Default: allow if query is reasonably long (likely a real question)
         return len(query.split()) >= 3
 
-
     def _build_prompt_with_history(self, query: str) -> str:
-        """Build prompt with conversation history for context."""
+        """Build prompt with conversation history."""
         if not self.conversation_history:
             return query
 
-        # Format conversation history
         history_text = "\n\n".join([
             f"{'User' if msg.role == 'user' else 'Assistant'}: {msg.content}"
-            for msg in self.conversation_history[-4:]  # Last 2 exchanges
+            for msg in self.conversation_history[-4:]
         ])
 
         return f"""Previous conversation:
@@ -499,4 +487,4 @@ class CodeSmritiRAGAgent:
 
 Current question: {query}
 
-Please answer the current question, taking into account the conversation history for context."""
+Answer the current question using the conversation history for context."""

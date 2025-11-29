@@ -433,20 +433,34 @@
                      │  5. Aggregate modules → repo        │            │
                      └─────────────────────────────────────┘            │
                                                                         │
-                              ┌──────────────────────────────────────────┘
-                              ▼
-                     ┌─────────────────────┐
-                     │    FastAPI Server   │
-                     │   /api/rag/search   │◀──── MCP Protocol
-                     │   /api/rag/         │      (Claude, VSCode)
-                     └─────────────────────┘</div>
+┌───────────────────────────────────────────────────────────────────────┘
+│
+│              ┌─────────────────────────────────────────────────────────────┐
+│              │                     TOOL LAYER (shared)                      │
+│              │  list_repos | explore_structure | search_code | get_file    │
+│              └─────────────────────────────────────────────────────────────┘
+│                       │                                    │
+│                       ▼                                    ▼
+│              ┌─────────────────────┐          ┌─────────────────────────────┐
+│              │  MCP Server         │          │  PydanticAI Agent           │
+└─────────────▶│  (rag_mcp_server)   │          │  (pydantic_rag_agent)       │
+               │                     │          │                             │
+               │  - Direct tool call │          │  - LLM orchestrates tools   │
+               │  - Claude reasons   │          │  - ask_codebase() wraps     │
+               │  - No LLM needed    │          │  - Local LLM synthesizes    │
+               └─────────────────────┘          └─────────────────────────────┘
+                        │                                    │
+                        ▼                                    ▼
+                  Claude Code                         LMStudio / Ollama</div>
 
                 <h3>Components</h3>
                 <ul>
                     <li><strong>Ingestion Pipeline:</strong> Bottom-up processor: tree-sitter parsing → LLM chunking → symbol summarization → file aggregation → module aggregation → repo summary</li>
                     <li><strong>Vector Database:</strong> Couchbase with FTS vector search index (768 dimensions)</li>
-                    <li><strong>API Server:</strong> FastAPI providing RAG endpoints with hybrid search (vector + FTS)</li>
-                    <li><strong>MCP Server:</strong> Model Context Protocol bridge for Claude Desktop and VSCode integration</li>
+                    <li><strong>Tool Layer:</strong> Shared implementations for all RAG operations (search, explore, file retrieval)</li>
+                    <li><strong>API Server:</strong> FastAPI providing RAG endpoints with hierarchical search (symbol/file/module/repo levels)</li>
+                    <li><strong>MCP Server:</strong> Model Context Protocol for Claude Code—direct tool access without intermediate LLM</li>
+                    <li><strong>PydanticAI Agent:</strong> LLM-driven mode for local models (LMStudio, Ollama)—LLM orchestrates tool calls</li>
                 </ul>
 
                 <h3>Key Technologies</h3>
@@ -804,7 +818,7 @@ docker-compose up -d
 # Verify
 curl http://localhost/health</code></pre>
 
-                <h3>MCP Integration (Claude Desktop)</h3>
+                <h3>MCP Integration (Claude Desktop / Claude Code)</h3>
                 <p>Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>:</p>
 
                 <pre><code>{
@@ -812,7 +826,7 @@ curl http://localhost/health</code></pre>
     "code-smriti": {
       "command": "uv",
       "args": ["run", "--with", "mcp", "--with", "httpx",
-               "path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py"],
+               "path/to/code-smriti/services/mcp-server/rag_mcp_server.py"],
       "env": {
         "CODESMRITI_API_URL": "http://localhost",
         "CODESMRITI_USERNAME": "your-username",
@@ -829,20 +843,43 @@ curl http://localhost/health</code></pre>
                         <th>Description</th>
                     </tr>
                     <tr>
-                        <td><code>search_codebase</code></td>
-                        <td>Semantic search, returns raw chunks</td>
+                        <td><code>list_repos</code></td>
+                        <td>Discover available repositories with document counts</td>
                     </tr>
                     <tr>
-                        <td><code>ask_codebase</code></td>
-                        <td>RAG query, returns synthesized answer</td>
+                        <td><code>explore_structure</code></td>
+                        <td>Navigate directory structure, find key files</td>
+                    </tr>
+                    <tr>
+                        <td><code>search_codebase</code></td>
+                        <td>Semantic search with <code>level</code> param: symbol, file, module, or repo</td>
                     </tr>
                     <tr>
                         <td><code>get_file</code></td>
-                        <td>Fetch file contents or specific line ranges</td>
+                        <td>Fetch actual code with optional line ranges</td>
                     </tr>
                     <tr>
-                        <td><code>list_repos</code></td>
-                        <td>List indexed repositories</td>
+                        <td><code>ask_codebase</code></td>
+                        <td>RAG query with LLM synthesis (calls backend LLM)</td>
+                    </tr>
+                </table>
+
+                <h3>Two Usage Modes</h3>
+                <table>
+                    <tr>
+                        <th>Mode</th>
+                        <th>Use Case</th>
+                        <th>How It Works</th>
+                    </tr>
+                    <tr>
+                        <td><strong>MCP Mode</strong></td>
+                        <td>Claude Code / Claude Desktop</td>
+                        <td>Claude calls tools directly, does its own reasoning and synthesis</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LLM Mode</strong></td>
+                        <td>LMStudio / Ollama</td>
+                        <td>Local LLM orchestrates tools via PydanticAI agent</td>
                     </tr>
                 </table>
             </section>

@@ -1,15 +1,30 @@
+"""
+CodeSmriti RAG MCP Server (V4)
+
+Provides MCP tools for Claude Code to search and explore codebases.
+This is the "direct tool access" mode - Claude does the reasoning.
+
+Tools:
+- list_repos: Discover available repositories
+- explore_structure: Navigate directory structure
+- search_code: Semantic search at any level
+- get_file: Retrieve actual source code
+"""
+
 import os
+from typing import Literal
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 # Initialize FastMCP server
-mcp = FastMCP("CodeSmriti RAG")
+mcp = FastMCP("code-smriti")
 
-# Configuration from environment
+# Configuration
 API_BASE_URL = os.getenv("CODESMRITI_API_URL", "http://macstudio.local")
 API_USERNAME = os.getenv("CODESMRITI_USERNAME", "")
 API_PASSWORD = os.getenv("CODESMRITI_PASSWORD", "")
@@ -26,7 +41,7 @@ async def get_auth_token() -> str:
         return _cached_token
 
     if not API_USERNAME or not API_PASSWORD:
-        raise ValueError("CODESMRITI_USERNAME and CODESMRITI_PASSWORD must be set in environment")
+        raise ValueError("CODESMRITI_USERNAME and CODESMRITI_PASSWORD must be set")
 
     async with httpx.AsyncClient(verify=False) as client:
         response = await client.post(
@@ -39,12 +54,176 @@ async def get_auth_token() -> str:
         _cached_token = data["access_token"]
         return _cached_token
 
+
+def clear_token_on_auth_error():
+    """Clear cached token on authentication failure."""
+    global _cached_token
+    _cached_token = None
+
+
+# =============================================================================
+# MCP Tools
+# =============================================================================
+
+@mcp.tool()
+async def list_repos() -> str:
+    """
+    List all indexed repositories available for code search.
+
+    Use this tool to discover what proprietary codebases are available to search.
+    This helps you understand the scope of indexed repositories and make better
+    targeted queries with repo_filter.
+
+    Returns repositories sorted by document count (descending), showing:
+    - Repository name (use this for repo_filter in search_codebase)
+    - Number of indexed documents (code files, docs, commits)
+
+    Call this first when:
+    - You're unsure what repositories are available
+    - The user mentions a project name you don't recognize
+    - You want to verify a repo exists before filtering searches
+    - You need to understand the codebase coverage
+    """
+    try:
+        token = await get_auth_token()
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(
+                f"{API_BASE_URL}/api/rag/repos",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            repos = data.get("repos", [])
+            if not repos:
+                return "No repositories indexed."
+
+            output = ["## Indexed Repositories\n"]
+            for repo in repos:
+                name = repo.get("repo_id", "Unknown")
+                doc_count = repo.get("doc_count", 0)
+                languages = repo.get("languages", [])
+                lang_str = f" ({', '.join(languages[:3])})" if languages else ""
+                output.append(f"- **{name}**: {doc_count} documents{lang_str}")
+
+            output.append(f"\n_Total: {data.get('total_repos', 0)} repos, {data.get('total_docs', 0)} documents_")
+            return "\n".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error listing repositories: {str(e)}"
+    except Exception as e:
+        return f"Error listing repositories: {str(e)}"
+
+
+@mcp.tool()
+async def explore_structure(
+    repo_id: str,
+    path: str = "",
+    pattern: str = None,
+    include_summaries: bool = False
+) -> str:
+    """
+    Explore repository directory structure.
+
+    Use this tool to navigate and understand project layout before diving
+    into search. Similar to how you'd use 'ls' to orient yourself.
+
+    Args:
+        repo_id: Repository identifier (e.g., "kbhalerao/labcore")
+        path: Path within repo (empty string for root, e.g., "src/", "tests/")
+        pattern: Optional glob pattern to filter files (e.g., "*.py", "test_*")
+        include_summaries: Include module summary if available
+
+    Returns:
+        Directory listing with:
+        - Subdirectories
+        - Files with language and line count
+        - Key files (config, readme, entry points)
+        - Module summary if requested
+    """
+    try:
+        token = await get_auth_token()
+
+        payload = {
+            "repo_id": repo_id,
+            "path": path,
+            "include_summaries": include_summaries
+        }
+        if pattern:
+            payload["pattern"] = pattern
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/structure",
+                headers={"Authorization": f"Bearer {token}"},
+                json=payload,
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            output = [f"## {repo_id}/{path or '(root)'}\n"]
+
+            # Key files
+            key_files = data.get("key_files", {})
+            if key_files:
+                output.append("**Key files:**")
+                for key_type, key_path in key_files.items():
+                    output.append(f"  - {key_type}: `{key_path}`")
+                output.append("")
+
+            # Directories
+            directories = data.get("directories", [])
+            if directories:
+                output.append("**Directories:**")
+                for d in directories:
+                    output.append(f"  - {d}")
+                output.append("")
+
+            # Files
+            files = data.get("files", [])
+            if files:
+                output.append("**Files:**")
+                for f in files:
+                    name = f.get("name", "")
+                    lang = f.get("language", "")
+                    lines = f.get("line_count", 0)
+                    has_summary = "indexed" if f.get("has_summary") else ""
+                    lang_str = f" ({lang})" if lang else ""
+                    output.append(f"  - `{name}`{lang_str} - {lines} lines {has_summary}")
+                output.append("")
+
+            # Summary
+            summary = data.get("summary")
+            if summary:
+                output.append("**Module Summary:**")
+                output.append(summary)
+
+            if not directories and not files:
+                output.append("_Empty or not found_")
+
+            return "\n".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error exploring structure: {str(e)}"
+    except Exception as e:
+        return f"Error exploring structure: {str(e)}"
+
+
 @mcp.tool()
 async def search_codebase(
     query: str,
+    level: Literal["symbol", "file", "module", "repo"] = "file",
     limit: int = 5,
-    repo_filter: str = None,
-    file_pattern: str = None
+    repo_filter: str = None
 ) -> str:
     """
     Search proprietary codebases for code, documentation, and commit history.
@@ -59,30 +238,30 @@ async def search_codebase(
     - Commit messages and git history
     - Configuration files
 
-    Use this tool when you want to:
-    - Find code patterns, functions, or classes in proprietary repos
-    - Search commit history for changes or context
-    - Explore unfamiliar private codebases
-    - Get raw code context to analyze yourself
-    - Find specific files or implementations
-
-    Prefer this over web search for any internal/proprietary code questions.
-
     Args:
         query: The search query (semantic or keyword). Works with natural language
                or specific code patterns like "def authenticate" or "class UserModel".
+        level: Search granularity:
+               - "symbol": Find specific functions/classes (most specific)
+               - "file": Find relevant files (default, good balance)
+               - "module": Find relevant folders/areas of code
+               - "repo": High-level repository understanding (most broad)
         limit: Number of results to return (default: 5, max: 20).
         repo_filter: Optional repository name to filter by (e.g. "kbhalerao/labcore").
-        file_pattern: Optional file path pattern (e.g. "*.py", "src/", "tests/").
+
+    Returns:
+        Search results with summaries and metadata for navigation.
     """
     try:
         token = await get_auth_token()
 
-        payload = {"query": query, "limit": min(limit, 20)}
+        payload = {
+            "query": query,
+            "level": level,
+            "limit": min(limit, 20)
+        }
         if repo_filter:
             payload["repo_filter"] = repo_filter
-        if file_pattern:
-            payload["file_path_pattern"] = file_pattern
 
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.post(
@@ -94,33 +273,53 @@ async def search_codebase(
             response.raise_for_status()
             data = response.json()
 
-            # Format results array into readable output
             results = data.get("results", [])
             if not results:
-                return "No results found."
+                return f"No results found for '{query}' at {level} level."
 
-            output = []
+            output = [f"## Search Results ({level} level)\n"]
+
             for r in results:
-                file_path = r.get("file_path", "Unknown")
+                doc_type = r.get("doc_type", "")
                 repo_id = r.get("repo_id", "")
-                language = r.get("language", "")
+                file_path = r.get("file_path", "")
+                symbol_name = r.get("symbol_name", "")
                 content = r.get("content", "")
                 score = r.get("score", 0)
-                output.append(
-                    f"## {file_path} ({repo_id})\n"
-                    f"```{language}\n{content}\n```\n"
-                    f"Score: {score:.2f}\n"
-                )
+                start_line = r.get("start_line")
+                end_line = r.get("end_line")
+
+                # Build header based on doc type
+                if doc_type == "symbol_index":
+                    symbol_type = r.get("symbol_type", "symbol")
+                    header = f"### {symbol_name} ({symbol_type}) in {file_path}"
+                    if start_line and end_line:
+                        header += f" [lines {start_line}-{end_line}]"
+                elif doc_type == "file_index":
+                    header = f"### {file_path}"
+                elif doc_type == "module_summary":
+                    module_path = r.get("module_path", file_path or "")
+                    header = f"### Module: {module_path}/"
+                elif doc_type == "repo_summary":
+                    header = f"### Repository: {repo_id}"
+                else:
+                    header = f"### {file_path or repo_id}"
+
+                output.append(header)
+                output.append(f"_Repo: {repo_id} | Score: {score:.2f}_\n")
+                output.append(content[:500] + ("..." if len(content) > 500 else ""))
+                output.append("")
 
             return "\n".join(output)
+
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            global _cached_token
-            _cached_token = None  # Clear cached token on auth failure
+            clear_token_on_auth_error()
             return "Authentication failed. Please check credentials."
         return f"Error searching codebase: {str(e)}"
     except Exception as e:
         return f"Error searching codebase: {str(e)}"
+
 
 @mcp.tool()
 async def ask_codebase(query: str) -> str:
@@ -167,14 +366,15 @@ async def ask_codebase(query: str) -> str:
             response.raise_for_status()
             data = response.json()
             return data.get("answer", "No answer received.")
+
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            global _cached_token
-            _cached_token = None  # Clear cached token on auth failure
+            clear_token_on_auth_error()
             return "Authentication failed. Please check credentials."
-        return f"Error querying RAG agent: {str(e)}"
+        return f"Error querying codebase: {str(e)}"
     except Exception as e:
-        return f"Error querying RAG agent: {str(e)}"
+        return f"Error querying codebase: {str(e)}"
+
 
 @mcp.tool()
 async def get_file(
@@ -222,6 +422,7 @@ async def get_file(
             start = data.get("start_line", 1)
             end = data.get("end_line", 0)
             total = data.get("total_lines", 0)
+            language = data.get("language", "")
             truncated = data.get("truncated", False)
 
             header = f"## {repo_id}/{file_path}\n"
@@ -230,12 +431,11 @@ async def get_file(
                 header += " (truncated)"
             header += "\n\n"
 
-            return header + f"```\n{code}\n```"
+            return header + f"```{language}\n{code}\n```"
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            global _cached_token
-            _cached_token = None
+            clear_token_on_auth_error()
             return "Authentication failed. Please check credentials."
         elif e.response.status_code == 404:
             return f"File not found: {repo_id}/{file_path}"
@@ -243,57 +443,6 @@ async def get_file(
     except Exception as e:
         return f"Error fetching file: {str(e)}"
 
-
-@mcp.tool()
-async def list_repos() -> str:
-    """
-    List all indexed repositories available for code search.
-
-    Use this tool to discover what proprietary codebases are available to search.
-    This helps you understand the scope of indexed repositories and make better
-    targeted queries with repo_filter.
-
-    Returns repositories sorted by document count (descending), showing:
-    - Repository name (use this for repo_filter in search_codebase)
-    - Number of indexed documents (code files, docs, commits)
-
-    Call this first when:
-    - You're unsure what repositories are available
-    - The user mentions a project name you don't recognize
-    - You want to verify a repo exists before filtering searches
-    - You need to understand the codebase coverage
-    """
-    try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient(verify=False) as client:
-            response = await client.get(
-                f"{API_BASE_URL}/api/rag/repos",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            repos = data.get("repos", [])
-            if not repos:
-                return "No repositories indexed."
-
-            output = ["## Indexed Repositories\n"]
-            for repo in repos:
-                name = repo.get("repo_id", "Unknown")
-                doc_count = repo.get("doc_count", 0)
-                output.append(f"- **{name}**: {doc_count} documents")
-
-            return "\n".join(output)
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            global _cached_token
-            _cached_token = None
-            return "Authentication failed. Please check credentials."
-        return f"Error listing repositories: {str(e)}"
-    except Exception as e:
-        return f"Error listing repositories: {str(e)}"
 
 if __name__ == "__main__":
     mcp.run()
