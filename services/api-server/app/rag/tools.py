@@ -83,9 +83,10 @@ async def list_repos(
     """
     try:
         # Query V4 document types
+        # Note: 'language' is a reserved word in N1QL, so we use backticks to escape it
         n1ql = f"""
             SELECT repo_id, COUNT(*) as doc_count,
-                   ARRAY_AGG(DISTINCT metadata.language) as languages
+                   ARRAY_AGG(DISTINCT metadata.`language`) as languages
             FROM `{tenant_id}`
             WHERE repo_id IS NOT MISSING
               AND type IN ['file_index', 'symbol_index', 'module_summary', 'repo_summary']
