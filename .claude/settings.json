@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__chief-of-staff__cos_capture",
+      "mcp__chief-of-staff__cos_task",
+      "mcp__chief-of-staff__cos_next",
+      "mcp__chief-of-staff__cos_inbox",
+      "mcp__chief-of-staff__cos_list",
+      "mcp__chief-of-staff__cos_search_tags",
+      "mcp__chief-of-staff__cos_done",
+      "mcp__chief-of-staff__cos_update",
+      "mcp__chief-of-staff__cos_save_context",
+      "mcp__chief-of-staff__cos_get_context",
+      "mcp__chief-of-staff__cos_stats"
+    ],
+    "deny": []
+  }
+}

@@ -255,14 +255,16 @@ def create_rag_agent(ollama_host: str = "http://localhost:11434", llm_model: str
                     doc_result = collection.get(doc_id)
                     doc = doc_result.content_as[dict]
 
+                    # Handle V4 (metadata nested) and V3 (root level) schemas
+                    metadata = doc.get('metadata', {})
                     code_chunks.append(CodeChunk(
-                        content=doc.get('content', doc.get('code_text', '')),  # Unified schema with fallback
+                        content=doc.get('content', ''),
                         repo_id=doc.get('repo_id', ''),
                         file_path=doc.get('file_path', ''),
-                        language=doc.get('language', ''),
+                        language=metadata.get('language', doc.get('language', '')),
                         score=hit.get('score', 0.0),
-                        start_line=doc.get('start_line'),
-                        end_line=doc.get('end_line')
+                        start_line=metadata.get('start_line', doc.get('start_line')),
+                        end_line=metadata.get('end_line', doc.get('end_line'))
                     ))
                 except Exception as e:
                     logger.warning(f"Failed to fetch document {doc_id}: {e}")

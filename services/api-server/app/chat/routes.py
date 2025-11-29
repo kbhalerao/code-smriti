@@ -101,8 +101,8 @@ class SearchRequest(BaseModel):
     )
 
     doc_type: str = Field(
-        default="code_chunk",
-        description="Document type: code_chunk, document, or commit"
+        default="file_index",
+        description="Document type: file_index, symbol_index, module_summary, repo_summary (V4) or code_chunk (legacy V3)"
     )
 
     tenant_id: Optional[str] = Field(
@@ -406,9 +406,19 @@ async def search(
 
         where_clause = " AND ".join(where_clauses)
 
+        # V4 stores language/lines in metadata, V3 at root level
+        # Use CASE to handle both schemas
         n1ql = f"""
-            SELECT META().id, repo_id, file_path, content, `language`,
-                   start_line, end_line, type
+            SELECT META().id, repo_id, file_path, content, type,
+                   CASE WHEN type IN ['file_index', 'symbol_index']
+                        THEN metadata.language
+                        ELSE `language` END as language,
+                   CASE WHEN type IN ['file_index', 'symbol_index']
+                        THEN metadata.start_line
+                        ELSE start_line END as start_line,
+                   CASE WHEN type IN ['file_index', 'symbol_index']
+                        THEN metadata.end_line
+                        ELSE end_line END as end_line
             FROM `{tenant_id}`
             WHERE {where_clause}
         """
@@ -499,10 +509,12 @@ async def list_repos(
         logger.info(f"Repos list request from user={current_user.get('username')} tenant={tenant}")
 
         # Query to get repo_id with document counts, sorted by count descending
+        # V4 uses file_index/symbol_index/module_summary/repo_summary types
         n1ql = f"""
             SELECT repo_id, COUNT(*) as doc_count
             FROM `{tenant}`
-            WHERE repo_id IS NOT MISSING AND type = 'code_chunk'
+            WHERE repo_id IS NOT MISSING
+              AND type IN ['file_index', 'symbol_index', 'module_summary', 'repo_summary']
             GROUP BY repo_id
             ORDER BY doc_count DESC
         """
