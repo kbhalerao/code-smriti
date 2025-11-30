@@ -234,8 +234,13 @@ class DocumentParser:
                 logger.info(f"Splitting large markdown file {relative_path} ({len(post.content):,} chars) into {len(sections)} sections")
 
                 for idx, (header_text, section_content, header_level) in enumerate(sections):
-                    # Skip empty sections or sections that are just headers (too short)
-                    if len(section_content.strip()) < 50:
+                    # Skip sections that are just headers with no real content
+                    # Strip the header line and check remaining content
+                    lines = section_content.strip().split('\n')
+                    content_without_header = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ''
+
+                    # Need at least 100 chars of actual content (not counting header)
+                    if len(content_without_header) < 100:
                         continue
 
                     metadata = {
