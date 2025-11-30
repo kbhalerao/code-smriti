@@ -4,15 +4,16 @@ Create Couchbase Vector Search Index
 Sets up HNSW index for fast vector similarity search
 """
 
+import os
 import requests
 import json
 from requests.auth import HTTPBasicAuth
 
 # Couchbase configuration
-COUCHBASE_HOST = "localhost"
+COUCHBASE_HOST = os.getenv("COUCHBASE_HOST", "localhost")
 COUCHBASE_PORT = 8094  # FTS service port
-COUCHBASE_USER = "Administrator"
-COUCHBASE_PASSWORD = "password123"
+COUCHBASE_USER = os.getenv("COUCHBASE_USERNAME", "Administrator")
+COUCHBASE_PASSWORD = os.environ["COUCHBASE_PASSWORD"]
 BUCKET_NAME = "code_kosha"
 INDEX_NAME = "code_vector_index"
 

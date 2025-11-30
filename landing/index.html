@@ -340,7 +340,7 @@
                 </div>
             </div>
             <div class="meta">
-                <span>Technical Brief v1.0</span>
+                <span>Technical Brief v2.0 (V4 Architecture)</span>
                 <span>November 2025</span>
                 <span><a href="https://github.com/kbhalerao/code-smriti">github.com/kbhalerao/code-smriti</a></span>
                 <span><a href="/docs">API Docs</a></span>
@@ -658,8 +658,8 @@ __pycache__/     Cargo.lock           *.map
             <section id="performance">
                 <h2>5. Performance</h2>
 
-                <h3>Retrieval Metrics</h3>
-                <p>Evaluated on 37 questions across 5 repositories:</p>
+                <h3>V4 Production Stats (November 2025)</h3>
+                <p>Full ingestion of 101 repositories on Mac M3 Ultra with LM Studio (qwen2.5-coder-7b):</p>
 
                 <table>
                     <tr>
@@ -668,19 +668,24 @@ __pycache__/     Cargo.lock           *.map
                         <th>Notes</th>
                     </tr>
                     <tr>
-                        <td>Repo-level Recall@5</td>
-                        <td>90%</td>
-                        <td>Correct repo in top 5</td>
+                        <td>Total repositories</td>
+                        <td>101</td>
+                        <td>99 processed, 2 skipped (pre-existing)</td>
                     </tr>
                     <tr>
-                        <td>File-level Recall@5</td>
-                        <td>30%</td>
-                        <td>Exact file in top 5</td>
+                        <td>Documents indexed</td>
+                        <td>48,795</td>
+                        <td>13K files, 31K symbols, 4K modules</td>
                     </tr>
                     <tr>
-                        <td>MRR</td>
-                        <td>0.20</td>
-                        <td>Mean Reciprocal Rank [7]</td>
+                        <td>Total ingestion time</td>
+                        <td>32 hours</td>
+                        <td>~20 min average per repo</td>
+                    </tr>
+                    <tr>
+                        <td>LLM tokens per file</td>
+                        <td>~1,850</td>
+                        <td>Estimated input+output</td>
                     </tr>
                 </table>
 
@@ -693,8 +698,8 @@ __pycache__/     Cargo.lock           *.map
                     </tr>
                     <tr>
                         <td>Embedding generation</td>
-                        <td>1,280 chunks/min</td>
-                        <td>MPS GPU, batch=128</td>
+                        <td>1,280 docs/min</td>
+                        <td>MPS GPU, nomic-embed-text-v1.5</td>
                     </tr>
                     <tr>
                         <td>Search latency</td>
@@ -702,21 +707,22 @@ __pycache__/     Cargo.lock           *.map
                         <td>Hybrid vector + FTS</td>
                     </tr>
                     <tr>
-                        <td>Small repo ingestion</td>
-                        <td>1-2 seconds</td>
-                        <td>&lt;500 files</td>
+                        <td>Average repo ingestion</td>
+                        <td>~20 min</td>
+                        <td>With LLM enrichment</td>
                     </tr>
                     <tr>
-                        <td>Large repo (55k chunks)</td>
-                        <td>10-15 minutes</td>
-                        <td>Full re-index</td>
+                        <td>Ingestion without LLM</td>
+                        <td>1-2 min</td>
+                        <td>Basic summaries only</td>
                     </tr>
                 </table>
 
-                <h3>Incremental Updates</h3>
+                <h3>Resumable Ingestion</h3>
                 <p>
-                    File-level change detection via git commit hash. Only modified files
-                    are re-chunked and re-embedded. Unchanged files skip processing entirely.
+                    The <code>--skip-existing</code> flag enables resumable batch ingestion.
+                    Repos with existing V4 documents are skipped, allowing recovery from
+                    failures without re-processing completed work.
                 </p>
             </section>
 

@@ -320,7 +320,7 @@ async def search_code(
         # Call Couchbase FTS
         couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
         couchbase_user = os.getenv('COUCHBASE_USERNAME', 'Administrator')
-        couchbase_pass = os.getenv('COUCHBASE_PASSWORD', 'password123')
+        couchbase_pass = os.environ['COUCHBASE_PASSWORD']
 
         fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
 

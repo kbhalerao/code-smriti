@@ -7,7 +7,11 @@ from couchbase.cluster import Cluster
 from couchbase.auth import PasswordAuthenticator
 from couchbase.options import ClusterOptions
 
-auth = PasswordAuthenticator('Administrator', 'password123')
+import os
+auth = PasswordAuthenticator(
+    os.getenv('COUCHBASE_USERNAME', 'Administrator'),
+    os.environ['COUCHBASE_PASSWORD']
+)
 cluster = Cluster('couchbase://localhost', ClusterOptions(auth))
 
 # Get repos from file

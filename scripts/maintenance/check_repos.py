@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check which repos are in the database"""
+import os
 import sys
 sys.path.insert(0, 'lib/ingestion-worker')
 
@@ -7,7 +8,10 @@ from couchbase.cluster import Cluster
 from couchbase.auth import PasswordAuthenticator
 from couchbase.options import ClusterOptions
 
-auth = PasswordAuthenticator('Administrator', 'password123')
+auth = PasswordAuthenticator(
+    os.getenv('COUCHBASE_USERNAME', 'Administrator'),
+    os.environ['COUCHBASE_PASSWORD']
+)
 cluster = Cluster('couchbase://localhost', ClusterOptions(auth))
 
 # Query for distinct repo_ids

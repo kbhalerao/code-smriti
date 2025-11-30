@@ -24,7 +24,7 @@ echo "Updated GITHUB_REPOS to: $TEST_REPO"
 
 # Clean database
 echo "Cleaning database..."
-curl -s -u Administrator:password123 -X POST "http://localhost:8093/query/service" \
+curl -s -u Administrator:${COUCHBASE_PASSWORD:?COUCHBASE_PASSWORD required} -X POST "http://localhost:8093/query/service" \
   -d "statement=DELETE FROM \`code_kosha\`" > /dev/null
 
 echo "Database cleaned"
@@ -45,7 +45,7 @@ CHUNKS_PARSED=$(grep "Parsed.*chunks from" /tmp/test-small-ingestion.log | tail 
 echo "Chunks parsed: $CHUNKS_PARSED"
 
 # Count chunks in database
-CHUNKS_STORED=$(curl -s -u Administrator:password123 "http://localhost:8093/query/service" \
+CHUNKS_STORED=$(curl -s -u Administrator:${COUCHBASE_PASSWORD} "http://localhost:8093/query/service" \
   -d 'statement=SELECT COUNT(*) as count FROM `code_kosha`' | \
   python3 -c "import sys, json; print(json.load(sys.stdin)['results'][0]['count'])")
 

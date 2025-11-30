@@ -35,7 +35,11 @@ def test_vector_search():
 
     # Perform search
     url = "http://localhost:8094/api/index/code_vector_index/query"
-    auth = HTTPBasicAuth("Administrator", "password123")
+    import os
+    auth = HTTPBasicAuth(
+        os.getenv("COUCHBASE_USERNAME", "Administrator"),
+        os.environ["COUCHBASE_PASSWORD"]
+    )
 
     print("\n1. Sending vector search query...")
     print(f"   Vector dimensions: {len(query_vector)}")

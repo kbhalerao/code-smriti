@@ -36,110 +36,117 @@ CodeSmriti is your team's "Pensieve" - a forever memory system that:
 - "What are our best practices for error handling?"
 - "I need to build a retry mechanism - show me similar code"
 
-## ⚡ Recent Improvements (November 2025)
+## ⚡ V4 Architecture (November 2025)
 
-CodeSmriti now features **zero-deduplication storage** and **file-level incremental updates**:
+CodeSmriti V4 introduces **hierarchical document indexing** with **LLM-generated summaries**:
 
-- ✅ **Content-Hash Chunk IDs** - `sha256(repo:file:commit:content_hash)` guarantees uniqueness
-- ✅ **Separate Commit Storage** - Commit messages stored once, referenced by chunks (storage efficiency)
-- ✅ **File-Level Updates** - Changed files trigger atomic deletion + re-parse of all file chunks
-- ✅ **Local Embeddings** - `sentence-transformers` with Apple Silicon MPS acceleration (~1,280 chunks/min)
-- ✅ **Recursion Prevention** - Repos stored outside project directory for safe self-ingestion
+- ✅ **Hierarchical Structure** - repo → module → file → symbol (bottom-up aggregation)
+- ✅ **LLM Summaries** - Every document has a semantic summary for better search
+- ✅ **No Raw Code Storage** - Summaries only in index; fetch code on demand via API
+- ✅ **Local Embeddings** - `nomic-embed-text` (768d) with Apple Silicon MPS acceleration
+- ✅ **Multi-Level Search** - Query at symbol, file, module, or repo granularity
 
-**Performance:**
-- Small repos (~25 chunks): 1-2 seconds
-- Medium repos (~45 chunks): 2-3 seconds
-- Large repos (55K+ chunks): ~10-15 minutes (first run), estimated <1 minute for incremental updates
+**Production Stats (101 repos):**
+- 48,795 documents indexed (13K files, 31K symbols, 4K modules)
+- ~1,850 tokens per file for LLM enrichment
+- 32 hours total ingestion time (~20 min/repo avg)
 
-📖 **[Read implementation details in PIPELINE.md](./PIPELINE.md)**
+📖 **[V4 Schema Spec](docs/V4_SCHEMA_SPEC.md)** | **[V4 Ingestion Guide](docs/V4_INGESTION.md)**
 
 ## How It Works
 
-### Data Flow
+### Data Flow (V4)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        1. INGESTION                             │
-│  GitHub Repos → Clone → Parse (tree-sitter) → Extract Metadata │
+│                      1. PARSE & EXTRACT                         │
+│  GitHub Repos → Clone → tree-sitter → Symbols (functions/classes)│
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                     2. EMBEDDING                                │
-│  Code Chunks → nomic-embed-text (768d) → Vector Embeddings     │
+│                    2. LLM ENRICHMENT                            │
+│  Symbols → LLM Summary → Files → Modules → Repo (bottom-up)    │
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                      3. STORAGE                                 │
-│  Couchbase: {code, metadata, embedding, commit_hash, author}   │
+│                      3. EMBEDDING                               │
+│  Summaries → nomic-embed-text (768d) → Vector Embeddings       │
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                    4. RETRIEVAL                                 │
-│  Query → Embed → Vector Search + Filters → Ranked Results      │
+│                      4. STORAGE                                 │
+│  Couchbase: {summary, embedding, metadata, hierarchy links}    │
 └────────────────────────┬────────────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                   5. AI INTEGRATION                             │
-│  MCP Tools → Claude/VSCode → Natural Language Queries           │
+│                    5. RETRIEVAL                                 │
+│  Query → Embed → Vector Search (symbol/file/module/repo level) │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   6. AI INTEGRATION                             │
+│  MCP Tools → Claude Code → Navigate hierarchy → Fetch code     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Step-by-Step Process
+### Step-by-Step Process (V4)
 
-**1. Ingestion (Automated)**
-- Ingestion worker clones your GitHub repositories
-- tree-sitter parses code into semantic chunks (functions, classes, modules)
-- Extracts metadata: commit hash, author, dates, imports, dependencies
-- Parses documentation (Markdown, JSON, YAML) with hashtag extraction
+**1. Parse & Extract**
+- Clone repositories to local storage
+- tree-sitter parses code into symbols (functions, classes, methods)
+- Extract imports, docstrings, and structural metadata
+- Symbols >= 5 lines get their own searchable document
 
-**2. Embedding Generation**
-- Each code chunk is converted to a 768-dimensional vector using nomic-embed-text
-- Embeddings capture semantic meaning, not just keywords
-- "user authentication" and "login verification" are understood as similar concepts
+**2. LLM Enrichment (Bottom-Up)**
+- LLM generates summary for each symbol from code + docstring
+- File summaries aggregate from symbol summaries
+- Module (folder) summaries aggregate from file summaries
+- Repository summary aggregates from module summaries
 
-**3. Storage**
-- Couchbase stores everything together:
-  - Original code text
-  - Vector embedding (for similarity search)
-  - Rich metadata (language, repo, file path, git info)
-  - Hashtags and project associations
-- Indexes created for fast filtering by repo, language, hashtags
+**3. Embedding Generation**
+- Each summary is embedded as a 768-dimensional vector
+- Uses `nomic-embed-text` with Apple Silicon MPS acceleration
+- Embeddings capture semantic meaning for similarity search
 
-**4. Retrieval (On-Demand)**
-- Your query: *"How do we handle API rate limiting?"*
-- Query is embedded using the same model
-- Vector search finds semantically similar code chunks
-- Filters applied (e.g., only Python, only api-server repo)
-- Results ranked by similarity score + metadata relevance
-- Returns: Top 10 code examples with context
+**4. Hierarchical Storage**
+- Couchbase stores 4 document types: `repo_summary`, `module_summary`, `file_index`, `symbol_index`
+- Each document has: summary, embedding, metadata, parent/children links
+- No raw code stored - fetch on demand via `get_file` API
 
-**5. AI Integration**
-- MCP protocol exposes search as tools to AI assistants
-- Claude/VSCode can iteratively search, refine, and explore
-- Natural language queries: "Find auth patterns" → "Show JWT implementation" → "Compare with OAuth code"
-- AI synthesizes findings into actionable insights
+**5. Multi-Level Retrieval**
+- Search at any level: symbol (specific), file, module, or repo (broad)
+- Vector search finds semantically similar summaries
+- Navigate hierarchy: drill down from repo → module → file → symbol
+- Fetch actual code only when needed
 
-### Example Query Flow
+**6. AI Integration**
+- MCP tools: `list_repos`, `explore_structure`, `search_codebase`, `get_file`, `ask_codebase`
+- Claude Code navigates the hierarchy intelligently
+- Progressive disclosure: overview first, then drill into details
+
+### Example Query Flow (V4)
 
 ```
-You: "I need to implement a retry mechanism with exponential backoff"
-     ↓
-CodeSmriti: Embeds query → Searches 100 repos → Finds 5 implementations
-     ↓
-Response:
-  1. api-server/src/utils/retry.py (similarity: 0.94)
-     - Uses tenacity library, max 3 retries, exponential backoff
-  2. data-pipeline/workers/fetch.ts (similarity: 0.89)
-     - Custom implementation with jitter
-  3. mobile-backend/src/network/retry.go (similarity: 0.87)
-     - Circuit breaker pattern included
+You: "How does authentication work in labcore?"
 
-  Note tagged #best-practices:
-  "We standardized on tenacity library after comparing approaches"
+1. search_codebase("authentication", level="module")
+   → Finds: associates/ module - "Handles user auth, permissions, guardian integration"
+
+2. explore_structure("kbhalerao/labcore", "associates/")
+   → Shows: models.py, views.py, backends.py, permissions.py
+
+3. search_codebase("login flow", level="symbol", repo="kbhalerao/labcore")
+   → Finds: LoginView class (views.py:45-120), authenticate() (backends.py:15-45)
+
+4. get_file("kbhalerao/labcore", "associates/backends.py", 15, 45)
+   → Returns actual code for the authenticate function
+
+Result: Progressive disclosure from high-level overview to specific implementation
 ```
 
 ## Key Capabilities
@@ -219,13 +226,11 @@ Internet
 
 - **MCP Framework**: Python + FastAPI
 - **Vector DB**: Couchbase 8.0 with Vector Search
-- **Embeddings**:
-  - Local: `sentence-transformers/all-mpnet-base-v2` (768 dimensions, MPS acceleration)
-  - Ollama API: `nomic-embed-text` (alternative, slower)
-- **LLM**: Ollama (codellama, deepseek-coder, mistral)
-- **Code Parsing**: tree-sitter (JavaScript/TypeScript, Python)
+- **Embeddings**: `nomic-embed-text-v1.5` (768 dimensions, MPS acceleration)
+- **LLM Enrichment**: LM Studio or Ollama (qwen2.5-coder, codellama, deepseek-coder)
+- **Code Parsing**: tree-sitter (Python, JavaScript/TypeScript, Go, Rust, Java)
 - **Authentication**: JWT with API keys
-- **Chunk Identification**: Content-hash based (`sha256(repo:file:commit:content_hash)`)
+- **Document Schema**: V4 hierarchical (repo → module → file → symbol)
 
 ## Deployment Options
 
@@ -609,15 +614,16 @@ open http://localhost:8091
 
 ## Performance
 
-On Mac M3 Ultra (256GB RAM) with local embeddings:
-- **Indexing Speed**:
-  - Small repos: 1-2 seconds
-  - Large repos (55K chunks): ~10-15 minutes first run
-  - Incremental updates: estimated <1 minute (file-level granularity)
-- **Embedding Generation**: ~1,280 chunks/minute (Apple Silicon MPS acceleration)
-- **Search latency**: <100ms for vector search
-- **Concurrent requests**: Handles 50+ simultaneous MCP calls
-- **Storage Efficiency**: Commit messages deduplicated (stored once per commit)
+**V4 Ingestion** (Mac M3 Ultra, LM Studio with qwen2.5-coder-7b):
+- **101 repos**: 32 hours total (~20 min/repo average)
+- **48,795 documents**: 13K files, 31K symbols, 4K modules
+- **LLM tokens**: ~1,850 per file (estimated input+output)
+- **Embedding Generation**: ~1,280 docs/minute (Apple Silicon MPS)
+
+**Search Performance**:
+- Vector search latency: <100ms
+- Concurrent requests: 50+ simultaneous MCP calls
+- Multi-level queries: symbol → file → module → repo
 
 ## Security
 

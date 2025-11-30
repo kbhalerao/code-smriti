@@ -37,7 +37,7 @@ load_dotenv()
 # Couchbase configuration
 CB_HOST = os.getenv("COUCHBASE_HOST", "localhost")
 CB_USER = os.getenv("COUCHBASE_USER", "Administrator")
-CB_PASSWORD = os.getenv("COUCHBASE_PASSWORD", "password123")
+CB_PASSWORD = os.environ["COUCHBASE_PASSWORD"]
 CB_BUCKET_CODE = os.getenv("COUCHBASE_BUCKET_CODE", "code_kosha")
 CB_BUCKET_USERS = os.getenv("COUCHBASE_BUCKET_USERS", "users")
 

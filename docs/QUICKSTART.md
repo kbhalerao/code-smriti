@@ -1,6 +1,6 @@
 # CodeSmriti Quick Start Guide
 
-One-page reference for getting started with CodeSmriti after installation.
+One-page reference for getting started with CodeSmriti (V4 Architecture).
 
 ## Installation
 
@@ -12,6 +12,28 @@ cd code-smriti
 ```
 
 This takes 30-60 minutes and handles everything automatically.
+
+## V4 Ingestion
+
+After installation, ingest your repositories:
+
+```bash
+cd services/ingestion-worker
+
+# Single repo (dry run first)
+python ingest_v4.py --repo owner/name --dry-run
+
+# Single repo (full ingestion with LLM summaries)
+python ingest_v4.py --repo owner/name
+
+# All repos in REPOS_PATH
+python ingest_v4.py --all --output /tmp/results.json
+
+# Resume after failure
+python ingest_v4.py --all --skip-existing
+```
+
+See [V4_INGESTION.md](V4_INGESTION.md) for full documentation.
 
 ## Daily Operations
 
@@ -101,17 +123,21 @@ curl http://localhost:11434/api/version
 
 ## MCP Integration
 
-### Claude Desktop
+### Claude Desktop / Claude Code
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "codesmriti": {
-      "url": "http://localhost:8080/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
+    "code-smriti": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp", "--with", "httpx",
+               "path/to/code-smriti/services/mcp-server/rag_mcp_server.py"],
+      "env": {
+        "CODESMRITI_API_URL": "http://localhost",
+        "CODESMRITI_USERNAME": "your-username",
+        "CODESMRITI_PASSWORD": "your-password"
       }
     }
   }
@@ -120,9 +146,15 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Restart Claude Desktop.
 
-### VSCode
+### V4 MCP Tools
 
-Install MCP extension and configure similarly.
+| Tool | Description |
+|------|-------------|
+| `list_repos` | Discover available repositories |
+| `explore_structure` | Navigate directory structure |
+| `search_codebase` | Semantic search at symbol/file/module/repo level |
+| `get_file` | Fetch actual code with line ranges |
+| `ask_codebase` | RAG query with LLM synthesis |
 
 ## Troubleshooting
 

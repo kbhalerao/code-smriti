@@ -39,89 +39,11 @@ def _user_doc_to_safe_info(user_doc: dict) -> SafeUserInfo:
 @router.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest):
     """
-    Register a new user with email and password.
-
-    Creates a new user document in the users bucket and returns a JWT token.
-
-    Example:
-        curl -X POST http://localhost:8000/api/auth/register \
-          -H "Content-Type: application/json" \
-          -d '{"email": "user@example.com", "password": "securepassword123"}'
+    Registration is disabled. Contact administrator for account creation.
     """
-    # Check if email already exists
-    cluster = get_cluster()
-    query = """
-        SELECT META().id as doc_id
-        FROM users
-        WHERE email = $1 AND type = 'user'
-        LIMIT 1
-    """
-    try:
-        result = cluster.query(query, request.email)
-        existing = list(result)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already registered",
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error checking existing email: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error during registration",
-        )
-
-    # Create new user
-    user_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat() + "Z"
-
-    user_doc = UserDocument(
-        type="user",
-        user_id=user_id,
-        email=request.email,
-        password_hash=get_password_hash(request.password),
-        github_pat_encrypted=None,
-        repos=[],
-        quota_max_repos=10,
-        quota_max_chunks=100000,
-        created_at=now,
-        updated_at=now,
-        last_login=now,
-    )
-
-    # Insert user document
-    try:
-        collection = get_users_collection()
-        doc_key = f"user::{user_id}"
-        collection.insert(doc_key, user_doc.model_dump())
-        logger.info(f"Created new user: {request.email} ({user_id})")
-    except DocumentExistsException:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User already exists",
-        )
-    except Exception as e:
-        logger.error(f"Error creating user: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user",
-        )
-
-    # Generate JWT token
-    token_data = {
-        "sub": user_id,
-        "user_id": user_id,
-        "email": request.email,
-        "tenant_id": "code_kosha",
-    }
-    access_token = create_access_token(data=token_data)
-
-    return AuthResponse(
-        success=True,
-        token=access_token,
-        user=_user_doc_to_safe_info(user_doc.model_dump()),
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Registration is disabled. Contact administrator for account access.",
     )
 
 

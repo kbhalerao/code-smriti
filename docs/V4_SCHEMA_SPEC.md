@@ -1,8 +1,8 @@
 # CodeSmriti V4 Document Schema Specification
 
 **Version**: 4.0
-**Date**: 2025-11-29
-**Status**: Active (ingestion in progress)
+**Date**: 2025-11-30
+**Status**: Complete (101 repos, 48K documents indexed)
 
 ## Overview
 

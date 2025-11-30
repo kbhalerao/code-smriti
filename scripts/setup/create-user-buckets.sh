@@ -18,7 +18,7 @@ fi
 CB_HOST="${COUCHBASE_HOST:-localhost}"
 CB_PORT="${COUCHBASE_PORT:-8091}"
 CB_USER="${COUCHBASE_USER:-Administrator}"
-CB_PASSWORD="${COUCHBASE_PASSWORD:-password123}"
+CB_PASSWORD="${COUCHBASE_PASSWORD:?COUCHBASE_PASSWORD environment variable is required}"
 
 echo "========================================"
 echo "Creating Multitenancy Buckets"

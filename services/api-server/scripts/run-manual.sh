@@ -12,7 +12,7 @@ docker run -d \
   -e COUCHBASE_HOST=couchbase \
   -e COUCHBASE_PORT=8091 \
   -e COUCHBASE_USER=Administrator \
-  -e COUCHBASE_PASSWORD=password123 \
+  -e COUCHBASE_PASSWORD=${COUCHBASE_PASSWORD:?COUCHBASE_PASSWORD required} \
   -e COUCHBASE_BUCKET_CODE=code_kosha \
   -e COUCHBASE_BUCKET_USERS=users \
   -e OLLAMA_HOST=http://host.docker.internal:1234 \
