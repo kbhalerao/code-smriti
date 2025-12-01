@@ -340,7 +340,7 @@
                 </div>
             </div>
             <div class="meta">
-                <span>Technical Brief v2.0 (V4 Architecture)</span>
+                <span>Technical Brief v0.4.0</span>
                 <span>November 2025</span>
                 <span><a href="https://github.com/kbhalerao/code-smriti">github.com/kbhalerao/code-smriti</a></span>
                 <span><a href="/docs">API Docs</a></span>
@@ -730,81 +730,152 @@ __pycache__/     Cargo.lock           *.map
                 <h2>6. Case Studies</h2>
 
                 <p>
-                    To evaluate real-world utility, we tested CodeSmriti with intentionally vague questions
-                    that a new team member might ask about an unfamiliar codebase. Results from 6 test queries
-                    across 20+ proprietary repositories:
+                    V4 evaluation suite: 47 questions across 9 categories, tested against 32 proprietary repositories.
+                    The evaluation covers symbol lookups, pattern discovery, documentation retrieval, and cross-repo queries.
                 </p>
 
+                <h3>Evaluation Results (v0.4.0)</h3>
                 <table>
                     <tr>
-                        <th>#</th>
-                        <th>Question</th>
-                        <th>Result</th>
-                        <th>Score</th>
+                        <th>Category</th>
+                        <th>Questions</th>
+                        <th>Avg Score</th>
+                        <th>Notes</th>
                     </tr>
                     <tr>
-                        <td>1</td>
-                        <td>"How do we implement client-visible views?"</td>
-                        <td>Found patterns across multiple repos</td>
-                        <td>9/10</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>"How does the zone creation algorithm work?"</td>
-                        <td>Found exact geospatial implementation</td>
-                        <td>10/10</td>
-                    </tr>
-                    <tr>
+                        <td>Symbol Pattern</td>
                         <td>3</td>
-                        <td>"How is auto-projection area calculated?"</td>
-                        <td>Found algorithm with formula details</td>
-                        <td>10/10</td>
+                        <td>93%</td>
+                        <td>Decorators, mixins, base classes</td>
                     </tr>
                     <tr>
-                        <td>4</td>
-                        <td>"Compare our weather graph implementations"</td>
-                        <td>Found 2 of 3 implementations (missed Svelte)</td>
-                        <td>7/10</td>
-                    </tr>
-                    <tr>
+                        <td>Symbol Specific</td>
                         <td>5</td>
-                        <td>"Find frontend audit principles across repos"</td>
-                        <td>Found design system, color vars, component guidelines</td>
-                        <td>8/10</td>
+                        <td>85%</td>
+                        <td>Exact function/class lookups</td>
                     </tr>
                     <tr>
+                        <td>Svelte Components</td>
+                        <td>11</td>
+                        <td>78%</td>
+                        <td>Template logic, reactive statements</td>
+                    </tr>
+                    <tr>
+                        <td>Code Explanation</td>
+                        <td>1</td>
+                        <td>80%</td>
+                        <td>"How does X work?"</td>
+                    </tr>
+                    <tr>
+                        <td>Documentation</td>
+                        <td>8</td>
+                        <td>76%</td>
+                        <td>RST/MD docs, design principles</td>
+                    </tr>
+                    <tr>
+                        <td>File Pattern</td>
+                        <td>7</td>
+                        <td>76%</td>
+                        <td>Models, views, configuration</td>
+                    </tr>
+                    <tr>
+                        <td>Architecture</td>
                         <td>6</td>
-                        <td>"What are our backend design patterns?"</td>
-                        <td>Found code patterns, missed Sphinx docs</td>
-                        <td>4/10</td>
+                        <td>76%</td>
+                        <td>Multi-tenant, permissions</td>
+                    </tr>
+                    <tr>
+                        <td>Discovery</td>
+                        <td>4</td>
+                        <td>75%</td>
+                        <td>Cross-repo exploration</td>
+                    </tr>
+                    <tr>
+                        <td>Implementation</td>
+                        <td>2</td>
+                        <td>70%</td>
+                        <td>Complex feature deep-dives</td>
                     </tr>
                 </table>
 
+                <p><strong>Overall: 47/47 passing (100%), average quality 78%</strong></p>
+
+                <h3>Example Output: Symbol Query</h3>
+                <p>Query: <em>"job_counter decorator implementation"</em></p>
+                <pre><code># `job_counter` Decorator Implementation
+
+The `job_counter` decorator is implemented in `common/consumer_decorators.py`
+and tracks task execution metrics using Redis.
+
+## Key Features
+- Tracks success, failure, and pending task counts
+- Uses Redis for state management
+- Supports both synchronous and asynchronous functions
+
+## Implementation
+```python
+def job_counter(func: Callable) -> Callable:
+    @wraps(func)
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        key_success, key_failed_list, key_pending_list, job_string = _make_keys(func, *args)
+        try:
+            redis_connection.lpush(key_pending_list, job_string)
+            result = await func(*args, **kwargs)
+            redis_connection.incr(key_success)
+            return result
+        except Exception as e:
+            redis_connection.lpush(key_failed_list, f"Error: {str(e)}")
+            redis_connection.ltrim(key_failed_list, 0, 50)
+            raise
+        finally:
+            redis_connection.lpop(key_pending_list)
+```</code></pre>
+
+                <h3>Example Output: Documentation Query</h3>
+                <p>Query: <em>"L1 Python best practices"</em></p>
+                <pre><code># L1 Python Best Practices
+
+## Naming Conventions
+- Use `snake_case` for function and variable names
+- Use `PascalCase` for class names
+- Constants should be `UPPER_CASE`
+
+## Error Handling
+- Use specific exception types rather than bare `except:`
+- Always include error messages for debugging
+- Use context managers for resource management
+
+## Type Hints
+- Always use type hints for function parameters and return values
+- Use `typing` module for complex types
+
+```python
+def process_user_data(
+    user_list: List[Dict[str, str]],
+    filter_criteria: Optional[Dict[str, str]] = None
+) -> Tuple[Dict[str, List], int]:
+    ...
+```
+
+Source: `docs/source/developer_guide/audit_standards/L1_python_best_practices.rst`</code></pre>
+
+                <h3>Search Level Selection</h3>
+                <p>The LLM automatically selects the appropriate search level based on query intent:</p>
+                <ul>
+                    <li><code>symbol</code> — "Find the job_counter decorator" → specific function/class</li>
+                    <li><code>file</code> — "How do we handle authentication?" → implementation files</li>
+                    <li><code>module</code> — "What's in the permissions folder?" → directory overview</li>
+                    <li><code>doc</code> — "What are our coding standards?" → RST/MD documentation</li>
+                    <li><code>repo</code> — "What repos handle geospatial data?" → cross-repo discovery</li>
+                </ul>
+
                 <h3>Strengths</h3>
                 <ul>
-                    <li>Excellent at finding <strong>code patterns</strong> across multiple repositories</li>
-                    <li>Strong at <strong>comparing implementations</strong> (e.g., weather graphs, mixins)</li>
+                    <li>Excellent at finding <strong>code patterns</strong> across repositories</li>
+                    <li>Strong at <strong>comparing implementations</strong> (decorators, mixins)</li>
                     <li>Good at synthesizing answers from <strong>scattered sources</strong></li>
-                    <li>Works well with <strong>specific technical queries</strong></li>
+                    <li>Documentation queries now use dedicated <code>doc</code> level search</li>
                 </ul>
-
-                <h3>Handling Complex Files</h3>
-                <ul>
-                    <li><strong>SvelteKit files:</strong> LLM semantic chunker identifies template logic, event handlers, and reactive statements that tree-sitter misses</li>
-                    <li><strong>Embedded SQL:</strong> Django ORM queries, raw SQL strings, and database migrations are detected as semantic chunks</li>
-                    <li><strong>Configuration files:</strong> Complex YAML/JSON configs with business logic are semantically chunked</li>
-                </ul>
-
-                <h3>Known Limitations</h3>
-                <ul>
-                    <li><strong>Documentation:</strong> Sphinx <code>.rst</code> and markdown docs may be under-indexed</li>
-                    <li><strong>Vague queries:</strong> May return adjacent but incorrect results initially</li>
-                </ul>
-
-                <p>
-                    <strong>Average score: 8/10</strong> for code-related queries. Documentation retrieval
-                    remains an area for improvement.
-                </p>
             </section>
 
             <section id="quickstart">
@@ -858,7 +929,7 @@ curl http://localhost/health</code></pre>
                     </tr>
                     <tr>
                         <td><code>search_codebase</code></td>
-                        <td>Semantic search with <code>level</code> param: symbol, file, module, or repo</td>
+                        <td>Semantic search with <code>level</code> param: symbol, file, module, repo, or doc</td>
                     </tr>
                     <tr>
                         <td><code>get_file</code></td>
