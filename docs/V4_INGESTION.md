@@ -333,18 +333,67 @@ services/ingestion-worker/
 
 ## Incremental Updates
 
-For ongoing maintenance after initial ingestion:
+For ongoing maintenance after initial ingestion, use `incremental_v4.py`:
 
 ```bash
-# Update single repo (deletes old docs, re-ingests)
-./ingest.sh --repo owner/name
+cd services/ingestion-worker
 
-# Update all repos, skipping unchanged (by commit hash)
-./ingest.sh --all --skip-existing
+# Full incremental update (all repos)
+python incremental_v4.py
 
-# Re-run docs only (faster, no LLM needed)
-./ingest.sh --all --docs-only
+# Single repo
+python incremental_v4.py --repo owner/name
+
+# Dry run - shows what would change, runs LLM for summary comparison
+python incremental_v4.py --dry-run
+
+# Adjust threshold for full re-ingestion (default: 5%)
+python incremental_v4.py --threshold 0.10
 ```
+
+### How It Works
+
+```
+Phase 1: Repository Discovery
+  - Get canonical repo list (GitHub API or config file)
+  - Compare to: repos on disk, repos in database
+  - Identify: new, existing, orphaned repos
+
+Phase 2: Clone New Repos
+  - git clone --depth 1 for repos not on disk
+
+Phase 3: Clean Orphaned Repos
+  - DELETE FROM code_kosha WHERE repo_id = X
+  - For repos no longer in canonical list
+
+Phase 4: Process Repos
+  - git fetch origin
+  - Compare origin HEAD to stored commit (in repo_summary)
+  - If unchanged: skip
+  - If >threshold% files changed: full re-ingest
+  - Otherwise: surgical update
+    - Delete docs for deleted files
+    - Process only changed files
+    - Regenerate affected module_summary + repo_summary
+```
+
+### Incremental CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--repo OWNER/NAME` | Process single repo | All |
+| `--dry-run` | Preview + run LLM, skip DB writes | False |
+| `--threshold N` | Full re-ingest if >N% files changed | 0.05 (5%) |
+| `--no-llm` | Disable LLM summaries | False |
+| `--llm-provider` | lmstudio or ollama | lmstudio |
+
+### Canonical Repo Sources
+
+The incremental updater checks these sources in order:
+
+1. **GitHub API** - If `GITHUB_TOKEN` is set in `.env`
+2. **Config file** - `repos_to_ingest.txt` (one repo per line)
+3. **Disk fallback** - Whatever repos exist in `$REPOS_PATH`
 
 ## Related Documentation
 
