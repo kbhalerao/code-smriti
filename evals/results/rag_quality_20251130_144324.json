@@ -1,0 +1,672 @@
+{
+  "timestamp": "2025-11-30T14:43:24.425518",
+  "config": {
+    "api_url": "http://localhost",
+    "question_count": 30
+  },
+  "summary": {
+    "total_questions": 30,
+    "successful": 12,
+    "errors": 18,
+    "avg_quality_score": 0.7861111111111111,
+    "avg_response_time": 39.32172451416651,
+    "total_time": 471.86069416999817,
+    "good_answers": 11,
+    "fair_answers": 0,
+    "poor_answers": 1,
+    "answers_with_code": 10,
+    "by_category": {
+      "symbol_specific": 0.475,
+      "symbol_pattern": 1.0,
+      "file_pattern": 0.8222222222222223,
+      "module_pattern": 0.8,
+      "code_explanation": 0.8,
+      "architecture": 0.9500000000000002
+    }
+  },
+  "results": [
+    {
+      "answer_length": 122,
+      "has_code_block": false,
+      "citations": {
+        "files": [],
+        "symbols": [],
+        "repos": []
+      },
+      "repo_hits": 0,
+      "file_hits": 0,
+      "content_hits": 0,
+      "quality_score": 0.2,
+      "response_time": 0.19556808471679688,
+      "answer_preview": "I can only help with questions about code, APIs, implementations, and technical documentation in the indexed repositories.",
+      "question_id": 1,
+      "query": "job_counter decorator",
+      "category": "symbol_specific",
+      "full_answer": "I can only help with questions about code, APIs, implementations, and technical documentation in the indexed repositories.",
+      "status": "success"
+    },
+    {
+      "answer_length": 4208,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "utils/mixins.py",
+          "tenant.py",
+          "views.py",
+          "models.py",
+          "middleware.py",
+          "core/mixins.py",
+          "tenants/mixins.py",
+          "settings.py"
+        ],
+        "symbols": [
+          "FilteredQuerySetMixin",
+          "get_current_tenant",
+          "is",
+          "Project",
+          "ProjectListView",
+          "TenantMiddleware",
+          "process_request",
+          "get_queryset",
+          "TenantAwareManager"
+        ],
+        "repos": [
+          "getting/setting",
+          "utils/mixins",
+          "projects/list",
+          "tenants/mixins",
+          "core/mixins",
+          "kbhalerao/labcore"
+        ]
+      },
+      "repo_hits": 1,
+      "file_hits": 0,
+      "content_hits": 3,
+      "quality_score": 0.75,
+      "response_time": 16.001092195510864,
+      "answer_preview": "The `FilteredQuerySetMixin` class is used in multi-tenant applications to ensure that database queries are automatically filtered by tenant, providing isolation between different tenants' data.\n\nThis pattern is commonly used in Django applications with multi-tenancy, where each tenant has its own da...",
+      "question_id": 2,
+      "query": "FilteredQuerySetMixin class for multi-tenant isolation",
+      "category": "symbol_specific",
+      "full_answer": "The `FilteredQuerySetMixin` class is used in multi-tenant applications to ensure that database queries are automatically filtered by tenant, providing isolation between different tenants' data.\n\nThis pattern is commonly used in Django applications with multi-tenancy, where each tenant has its own data set, and queries must not accidentally access another tenant's data.\n\n---\n\n### \u2705 Purpose\nThe `FilteredQuerySetMixin` ensures that any query on a model that uses this mixin automatically includes a filter for the current tenant, typically via a `tenant_id` field on the model.\n\n---\n\n### \ud83d\udcc2 Typical Location\nThis class is often found in:\n- `utils/mixins.py`\n- `core/mixins.py`\n- `tenants/mixins.py`\n\n---\n\n### \ud83d\udd0d Example Implementation\n\nHere\u2019s a common implementation of `FilteredQuerySetMixin`:\n\n```python\n# utils/mixins.py\nfrom django.db import models\nfrom django.utils import timezone\n\nclass FilteredQuerySetMixin:\n    \"\"\"\n    Mixin to automatically filter QuerySets by the current tenant.\n    Should be used with models that have a `tenant` or `tenant_id` field.\n    \"\"\"\n\n    def get_queryset(self):\n        \"\"\"\n        Override get_queryset to filter by current tenant.\n        Assumes the tenant is available via request or thread-local storage.\n        \"\"\"\n        queryset = super().get_queryset()\n        tenant = self.get_current_tenant()\n        if tenant:\n            return queryset.filter(tenant=tenant)\n        return queryset\n\n    def get_current_tenant(self):\n        \"\"\"\n        Retrieve the current tenant from request or thread-local storage.\n        This is typically set in a middleware.\n        \"\"\"\n        from django.utils import timezone\n        from .tenant import get_current_tenant  # Custom utility\n\n        return get_current_tenant()\n```\n\n---\n\n### \ud83d\udccc Usage in a View or Model\n\n```python\n# views.py\nfrom .mixins import FilteredQuerySetMixin\nfrom django.views.generic import ListView\nfrom .models import Project\n\nclass ProjectListView(FilteredQuerySetMixin, ListView):\n    model = Project\n    template_name = 'projects/list.html'\n    context_object_name = 'projects'\n```\n\nThis ensures that only projects belonging to the current tenant are returned.\n\n---\n\n### \ud83e\udde9 How Tenant Is Determined\n\nThe `get_current_tenant()` method usually relies on one of these mechanisms:\n\n1. **Request-based**: Tenant extracted from `request.tenant` (set by middleware).\n2. **Thread-local storage**: Using `threading.local()` to store tenant during request.\n3. **Middleware**: A custom middleware sets `request.tenant` based on domain, subdomain, or header.\n\nExample middleware:\n\n```python\n# middleware.py\nfrom django.utils.deprecation import MiddlewareMixin\nfrom .tenant import set_current_tenant\n\nclass TenantMiddleware(MiddlewareMixin):\n    def process_request(self, request):\n        tenant = get_tenant_from_request(request)\n        set_current_tenant(tenant)\n```\n\n---\n\n### \ud83d\udcc2 Related Files\n- `models.py` \u2013 Models with `tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)`\n- `tenant.py` \u2013 Utilities for getting/setting current tenant\n- `middleware.py` \u2013 Sets tenant on request\n- `settings.py` \u2013 May have `TENANT_MODEL = 'tenants.Tenant'`\n\n---\n\n### \u2705 Best Practices\n- Always use this mixin **on all views** that access tenant-specific data.\n- Avoid direct `Model.objects.all()` calls; use `get_queryset()` via the mixin.\n- Combine with `TenantAwareManager` for model-level filtering.\n\n---\n\n### \ud83d\udd17 Example: With Custom Manager\n\n```python\n# models.py\nclass TenantAwareManager(models.Manager):\n    def get_queryset(self):\n        queryset = super().get_queryset()\n        tenant = get_current_tenant()\n        return queryset.filter(tenant=tenant)\n\nclass Project(models.Model):\n    name = models.CharField(max_length=100)\n    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)\n    objects = TenantAwareManager()  # Use this instead of default\n```\n\n---\n\n### \ud83d\udccc Summary\n- `FilteredQuerySetMixin` enables automatic tenant filtering in views.\n- It\u2019s a **key pattern** for secure multi-tenancy in Django.\n- Must be used in conjunction with tenant-aware middleware and managers.\n\nIf you provide a specific repo (e.g., `kbhalerao/labcore`), I can locate the exact file and show the actual code.",
+      "status": "success"
+    },
+    {
+      "answer_length": 1767,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "kbhalerao/labcore/common/loginbackend.py"
+        ],
+        "symbols": [
+          "EmailOrUsernameLoginBackend",
+          "authenticate",
+          "in",
+          "provides",
+          "GetUserModelBackend",
+          "None",
+          "first"
+        ],
+        "repos": [
+          "username/email",
+          "common/loginbackend",
+          "kbhalerao/labcore"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 2,
+      "content_hits": 3,
+      "quality_score": 1.0,
+      "response_time": 13.300884008407593,
+      "answer_preview": "# Authenticate Function in Login Backend\n\nBased on the code from `kbhalerao/labcore/common/loginbackend.py`, here's the implementation of the authenticate function in the login backend:\n\n## Implementation Details\n\nThe `authenticate` method is implemented in the `EmailOrUsernameLoginBackend` class, w...",
+      "question_id": 3,
+      "query": "authenticate function in login backend",
+      "category": "symbol_pattern",
+      "full_answer": "# Authenticate Function in Login Backend\n\nBased on the code from `kbhalerao/labcore/common/loginbackend.py`, here's the implementation of the authenticate function in the login backend:\n\n## Implementation Details\n\nThe `authenticate` method is implemented in the `EmailOrUsernameLoginBackend` class, which inherits from `GetUserModelBackend`. This class provides authentication using either email or username.\n\n```python\ndef authenticate(self, request, username=None, password=None, **kwargs):\n    try:\n        user = UserModel.objects.filter(is_active=True).get(\n            Q(username__iexact=username) | Q(email__iexact=username)\n        )\n    except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):\n        UserModel().set_password(password)\n    else:\n        if user.check_password(password) and self.user_can_authenticate(user):\n            return user\n```\n\n## Key Features\n\n1. **Flexible Authentication**: Accepts either email or username for login (case-insensitive)\n2. **Active User Check**: Filters for users with `is_active=True`\n3. **Password Verification**: Uses `check_password()` to securely verify the password\n4. **User Validation**: Ensures the user can authenticate via `user_can_authenticate()`\n5. **Return Value**: Returns the User object if authentication succeeds, otherwise returns `None`\n\n## Authentication Flow\n- The function first tries to find a user with the provided username/email\n- If found, it checks if the password is correct\n- If both conditions are met, it returns the user object\n- If the user doesn't exist or the password is incorrect, it returns `None`\n\nThis implementation provides a secure authentication mechanism that supports both email and username login, which is a common pattern in modern web applications.",
+      "status": "success"
+    },
+    {
+      "answer_length": 4962,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "manage.py",
+          "permissions.py",
+          "views.py",
+          "urls.py",
+          "models.py",
+          "myapp/models.py",
+          "serializers.py"
+        ],
+        "symbols": [
+          "User",
+          "get_organizations",
+          "UserRole",
+          "Meta",
+          "AbstractUser",
+          "__str__",
+          "CustomUser",
+          "Organization",
+          "Membership"
+        ],
+        "repos": [
+          "myapp/models",
+          "orgs/acme"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 3,
+      "quality_score": 0.8,
+      "response_time": 12.498642921447754,
+      "answer_preview": "Based on your query about \"Django models for user organization management,\" here's a comprehensive overview of how such models are typically structured in Django, along with common patterns and implementations.\n\n---\n\n## \ud83d\udd37 Overview: User Organization Management in Django\n\nUser organization management...",
+      "question_id": 4,
+      "query": "Django models for user organization management",
+      "category": "file_pattern",
+      "full_answer": "Based on your query about \"Django models for user organization management,\" here's a comprehensive overview of how such models are typically structured in Django, along with common patterns and implementations.\n\n---\n\n## \ud83d\udd37 Overview: User Organization Management in Django\n\nUser organization management typically involves:\n- **Users** (e.g., employees, members)\n- **Organizations** (e.g., companies, teams, departments)\n- **Relationships** between users and organizations (e.g., membership, roles)\n\nThis is commonly implemented using:\n- `AbstractUser` or `User` model (from `django.contrib.auth`)\n- Custom `Organization` model\n- `Membership` or `UserRole` model to define user roles in an org\n\n---\n\n## \ud83d\udd37 Typical Django Models Structure\n\n### 1. **Organization Model**\n\n```python\n# models.py\nfrom django.db import models\nfrom django.contrib.auth import get_user_model\n\nUser = get_user_model()\n\nclass Organization(models.Model):\n    name = models.CharField(max_length=255)\n    slug = models.SlugField(unique=True)\n    created_at = models.DateTimeField(auto_now_add=True)\n    updated_at = models.DateTimeField(auto_now=True)\n\n    def __str__(self):\n        return self.name\n```\n\n> **File**: `myapp/models.py`  \n> **Purpose**: Represents an organization (e.g., \"Acme Corp\").\n\n---\n\n### 2. **User Organization Membership Model**\n\n```python\nclass Membership(models.Model):\n    ROLE_CHOICES = [\n        ('admin', 'Administrator'),\n        ('member', 'Member'),\n        ('owner', 'Owner'),\n    ]\n\n    user = models.ForeignKey(User, on_delete=models.CASCADE)\n    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)\n    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='member')\n    is_active = models.BooleanField(default=True)\n    joined_at = models.DateTimeField(auto_now_add=True)\n\n    class Meta:\n        unique_together = ('user', 'organization')\n\n    def __str__(self):\n        return f\"{self.user.email} - {self.organization.name} ({self.role})\"\n```\n\n> **File**: `myapp/models.py`  \n> **Purpose**: Links users to organizations with roles and status.\n\n---\n\n### 3. **Optional: Custom User Model (Recommended)**\n\nIf you need to extend the `User` model with organization-related fields:\n\n```python\nclass CustomUser(User):\n    # Optional: link to default org\n    default_organization = models.ForeignKey(\n        Organization,\n        on_delete=models.SET_NULL,\n        null=True,\n        blank=True\n    )\n\n    # Or track last active org\n    active_organization = models.ForeignKey(\n        Organization,\n        on_delete=models.SET_NULL,\n        null=True,\n        related_name='active_users'\n    )\n\n    def get_organizations(self):\n        return Organization.objects.filter(membership__user=self, membership__is_active=True)\n```\n\n> **File**: `myapp/models.py`  \n> **Note**: Use `AbstractUser` instead of `User` if extending.\n\n---\n\n## \ud83d\udd37 Key Features & Best Practices\n\n| Feature | Implementation |\n|-------|----------------|\n| **Multi-org support** | Use `Membership` model (many-to-many via intermediate model) |\n| **Role-based access** | `role` field in `Membership` with choices |\n| **Soft deletion** | Use `is_active` in `Membership` to disable membership |\n| **Slug-based URLs** | `slug` in `Organization` for clean URLs (`/orgs/acme/`) |\n| **Permissions** | Use `django.contrib.auth` or `django-guardian` for object-level permissions |\n\n---\n\n## \ud83d\udd37 Example: Querying Organizations a User Belongs To\n\n```python\n# Get all organizations a user is part of\nuser = User.objects.get(email=\"alice@example.com\")\norgs = Organization.objects.filter(membership__user=user, membership__is_active=True)\n\n# Get user's role in a specific org\nmembership = Membership.objects.get(user=user, organization=org)\nprint(membership.role)  # e.g., \"admin\"\n```\n\n---\n\n## \ud83d\udd37 Common Repository Structures\n\nIf you're using a well-structured Django project (like `labcore` or `django-organizations`), you might find:\n\n```bash\nmyproject/\n\u251c\u2500\u2500 accounts/\n\u2502   \u251c\u2500\u2500 models.py          # Custom User and Organization\n\u2502   \u251c\u2500\u2500 views.py\n\u2502   \u2514\u2500\u2500 urls.py\n\u251c\u2500\u2500 organizations/\n\u2502   \u251c\u2500\u2500 models.py          # Organization, Membership\n\u2502   \u251c\u2500\u2500 permissions.py     # Custom permissions\n\u2502   \u2514\u2500\u2500 serializers.py     # For API\n\u2514\u2500\u2500 manage.py\n```\n\n---\n\n## \ud83d\udd37 Tools & Libraries\n\n- **`django-organizations`** \u2013 A third-party package for full org management.\n- **`django-guardian`** \u2013 For object-level permissions (e.g., \"Only admins can delete org\").\n- **`django-tenant-schemas`** \u2013 For multi-tenancy (if each org is a separate database).\n\n---\n\n## \u2705 Summary\n\nYou should implement:\n- `Organization` model\n- `Membership` model (with `role`, `is_active`)\n- Use `User` (or `CustomUser`) with foreign key to `Membership`\n\nThis pattern ensures:\n- Scalability\n- Role-based access\n- Clean separation of concerns\n\n---\n\nWould you like:\n- A full working example with migrations?\n- Integration with Django REST Framework?\n- How to handle API endpoints or permissions?\n\nLet me know and I\u2019ll generate it.",
+      "status": "success"
+    },
+    {
+      "answer_length": 6308,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "celeryconfig.py"
+        ],
+        "symbols": [
+          "add",
+          "send_welcome_email",
+          "long_running_task",
+          "process_order",
+          "setup_periodic_tasks",
+          "process_multiple_orders",
+          "handle_order_completion",
+          "process_complex_data",
+          "health_check",
+          "process_file_upload",
+          "process_user_data"
+        ],
+        "repos": [
+          "6379/0"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 2,
+      "quality_score": 0.7333333333333334,
+      "response_time": 16.359581232070923,
+      "answer_preview": "# Celery Task Definitions for Async Processing\n\nCelery is a distributed task queue system used for executing tasks asynchronously in Python applications. Below is a comprehensive overview of Celery task definitions and best practices for async processing.\n\n## Key Components\n\n### 1. Basic Task Defini...",
+      "question_id": 5,
+      "query": "Celery task definitions for async processing",
+      "category": "file_pattern",
+      "full_answer": "# Celery Task Definitions for Async Processing\n\nCelery is a distributed task queue system used for executing tasks asynchronously in Python applications. Below is a comprehensive overview of Celery task definitions and best practices for async processing.\n\n## Key Components\n\n### 1. Basic Task Definition\n\n```python\nfrom celery import Celery\n\n# Create Celery instance\napp = Celery('tasks', broker='redis://localhost:6379/0', backend='redis://localhost:6379/0')\n\n@app.task\ndef add(x, y):\n    return x + y\n\n# Usage\nresult = add.delay(4, 4)\nprint(result.get())  # Returns 8\n```\n\n### 2. Task Configuration and Decorators\n\n```python\nfrom celery import Celery\nfrom celery.utils.log import get_task_logger\n\napp = Celery('tasks', broker='redis://localhost:6379/0')\n\n# Task with custom configuration\n@app.task(bind=True, max_retries=3, default_retry_delay=60)\ndef process_user_data(self, user_id):\n    logger = get_task_logger(__name__)\n    \n    try:\n        # Your async processing logic here\n        user = get_user(user_id)\n        send_email_notification(user)\n        update_user_status(user_id, 'processed')\n        \n    except Exception as exc:\n        logger.error(f\"Task failed for user {user_id}: {str(exc)}\")\n        raise self.retry(exc=exc, countdown=60)\n```\n\n### 3. Task Routing and Queues\n\n```python\n# Define multiple queues\napp = Celery('tasks', broker='redis://localhost:6379/0', \n             include=['tasks.user_tasks', 'tasks.payment_tasks'])\n\n# Task routing configuration\napp.conf.task_routes = {\n    'tasks.user_tasks.*': {'queue': 'user_queue'},\n    'tasks.payment_tasks.*': {'queue': 'payment_queue'},\n    'tasks.high_priority.*': {'queue': 'high_priority', 'routing_key': 'high_priority'},\n}\n\n# Task with explicit routing\n@app.task(queue='email_queue')\ndef send_welcome_email(user_id):\n    user = get_user(user_id)\n    send_email(user.email, \"Welcome!\", \"Welcome to our service\")\n```\n\n### 4. Task Chaining and Grouping\n\n```python\nfrom celery import group, chord\n\n# Task chaining\n@app.task\ndef process_order(order_id):\n    # Step 1: Validate order\n    validate_order.delay(order_id)\n    \n    # Step 2: Process payment\n    process_payment.delay(order_id)\n    \n    # Step 3: Ship order\n    ship_order.delay(order_id)\n\n# Task grouping (parallel execution)\n@app.task\ndef process_multiple_orders(order_ids):\n    tasks = group(\n        process_order.s(order_id) for order_id in order_ids\n    )\n    return tasks.apply_async()\n\n# Task chords (callback after group completion)\n@app.task\ndef handle_order_completion(results):\n    # Called after all order processing tasks complete\n    successful_orders = sum(1 for result in results if result is True)\n    total_orders = len(results)\n    \n    send_summary_report(f\"Processed {successful_orders}/{total_orders} orders\")\n```\n\n### 5. Task Result Management\n\n```python\n# Enable result storage\napp.conf.task_result_expires = 3600  # 1 hour\napp.conf.result_backend = 'redis://localhost:6379/0'\n\n@app.task\ndef long_running_task(data):\n    # Simulate long-running operation\n    time.sleep(30)\n    \n    # Process data and return result\n    result = complex_data_processing(data)\n    \n    # Store result for later retrieval\n    return result\n\n# Retrieving results\ntask = long_running_task.delay(some_data)\nresult = task.get(timeout=60)  # Wait up to 60 seconds\n```\n\n### 6. Task Serialization and Custom Types\n\n```python\n# Custom serializer for complex objects\nimport json\nfrom celery import Celery\n\napp = Celery('tasks', broker='redis://localhost:6379/0')\n\n# Custom JSON serializer\n@app.task(serializer='json')\ndef process_complex_data(data):\n    # Handle complex data types\n    result = process_data_structure(data)\n    return result\n\n# Task with custom argument types\n@app.task\ndef process_file_upload(file_path, metadata):\n    # Process file upload with metadata\n    file = FileHandler(file_path)\n    file.validate()\n    file.process()\n    \n    # Return structured result\n    return {\n        'status': 'success',\n        'file_path': file_path,\n        'size': file.size,\n        'processed_at': datetime.now().isoformat()\n    }\n```\n\n### 7. Task Monitoring and Health Checks\n\n```python\n# Health check task\n@app.task\ndef health_check():\n    \"\"\"Check if worker is healthy\"\"\"\n    try:\n        # Verify database connection\n        db_status = check_database_connection()\n        \n        # Verify external service availability\n        external_service_status = check_external_service()\n        \n        return {\n            'status': 'healthy',\n            'database': db_status,\n            'external_service': external_service_status,\n            'timestamp': datetime.now().isoformat()\n        }\n    except Exception as e:\n        return {\n            'status': 'unhealthy',\n            'error': str(e),\n            'timestamp': datetime.now().isoformat()\n        }\n\n# Periodic health check\n@app.on_after_configure.connect\ndef setup_periodic_tasks(sender, **kwargs):\n    sender.add_periodic_task(\n        30.0,  # Every 30 seconds\n        health_check.s(),\n        name='health check every 30 seconds'\n    )\n```\n\n## Best Practices\n\n1. **Use explicit task naming** to avoid conflicts\n2. **Implement proper error handling** with retry mechanisms\n3. **Set appropriate timeouts** for long-running tasks\n4. **Use result backend** for tracking task progress\n5. **Implement proper task routing** based on priority and type\n6. **Monitor task queues** and worker health\n7. **Use task chaining** for complex workflows\n8. **Implement idempotency** for critical operations\n\n## Common Configuration\n\n```python\n# celeryconfig.py\nfrom datetime import timedelta\n\n# Broker and backend\nbroker_url = 'redis://localhost:6379/0'\nresult_backend = 'redis://localhost:6379/0'\n\n# Task settings\ntask_default_queue = 'default'\ntask_default_exchange = 'default'\ntask_default_routing_key = 'default'\n\n# Task serialization\ntask_serializer = 'json'\nresult_serializer = 'json'\naccept_content = ['json']\n\n# Task timeouts\ntask_time_limit = 300  # 5 minutes\ntask_soft_time_limit = 240  # 4 minutes\n\n# Task retries\ntask_max_retries = 3\ntask_default_retry_delay = 60\n\n# Worker settings\nworker_prefetch_multiplier = 1\nworker_max_tasks_per_child = 100\n```\n\nThis comprehensive setup enables robust async processing with proper error handling, monitoring, and scalability for production applications.",
+      "status": "success"
+    },
+    {
+      "answer_length": 1827,
+      "has_code_block": false,
+      "citations": {
+        "files": [
+          "samples/models.py"
+        ],
+        "symbols": [
+          "SampleRegistry",
+          "Sample"
+        ],
+        "repos": [
+          "samples/models",
+          "clients/apiviews"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 3,
+      "quality_score": 0.8,
+      "response_time": 105.51235580444336,
+      "answer_preview": "After extensive searching through the codebase, I've found that the API views for sample submission are not directly visible in the files I've examined. The only API view I found in the samples app was for toggling measurement void status, which is not related to sample submission.\n\nThe most likely ...",
+      "question_id": 6,
+      "query": "API views for sample submission",
+      "category": "file_pattern",
+      "full_answer": "After extensive searching through the codebase, I've found that the API views for sample submission are not directly visible in the files I've examined. The only API view I found in the samples app was for toggling measurement void status, which is not related to sample submission.\n\nThe most likely location for sample submission API views would be in the `clients/apiviews` directory, which contains the main API view files for the application. However, my search through these files did not reveal any specific API views for sample submission.\n\nGiven that the sample submission functionality is likely implemented through the `SampleRegistry` model in the samples/models.py file, which handles the creation of samples and their registration, the actual API endpoints for sample submission would most likely be implemented through Django REST Framework serializers and views that interact with this model.\n\nThe `SampleRegistry` model has a `save` method that handles the creation of samples when a new sample receiving record is created, which would be the primary mechanism for sample submission. The actual API endpoints would be defined in the Django REST Framework views that handle the creation of `SampleRegistry` instances.\n\nSince I cannot find any explicit API views for sample submission in the codebase, I'll provide a summary of the sample submission process based on the available code:\n- The `SampleRegistry` model in samples/models.py handles the creation of samples\n- The `save` method in this model manages the creation of sample instances\n- The actual API endpoints for sample submission would be defined in the Django REST Framework views, likely in the clients/apiviews directory\n- The functionality would involve creating a `SampleRegistry` instance which then creates the corresponding `Sample` instances",
+      "status": "success"
+    },
+    {
+      "answer_length": 3361,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "response.js"
+        ],
+        "symbols": [
+          "async",
+          "function",
+          "login"
+        ],
+        "repos": [
+          "login/logout",
+          "api/auth",
+          "application/json",
+          "svelte/store"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 0,
+      "content_hits": 3,
+      "quality_score": 0.8,
+      "response_time": 22.079050064086914,
+      "answer_preview": "Based on my analysis of the codebase, I can now provide a comprehensive overview of the authentication module with login and logout functionality.\n\n## Authentication Module with Login and Logout\n\nThe authentication system in the labcore application follows a standard pattern for web applications, us...",
+      "question_id": 7,
+      "query": "authentication module with login and logout",
+      "category": "module_pattern",
+      "full_answer": "Based on my analysis of the codebase, I can now provide a comprehensive overview of the authentication module with login and logout functionality.\n\n## Authentication Module with Login and Logout\n\nThe authentication system in the labcore application follows a standard pattern for web applications, using a combination of server-side logic and client-side state management to handle user sessions.\n\n### Key Components\n\n1. **Authentication State Management**: The system uses a writable `auth` store to track login status and user data across the application.\n\n2. **Login Flow**: \n   - The login process typically involves a form submission to an authentication endpoint\n   - Upon successful authentication, the system stores credentials (typically a token) in cookies or local storage\n   - Users are redirected to a protected area or dashboard\n\n3. **Logout Flow**:\n   - The logout process securely destroys session data on both client and server sides\n   - It clears authentication tokens and cookies\n   - Users are redirected to the login page or home page\n\n### Implementation Pattern\n\nWhile I couldn't find the exact implementation files in the labcore repository, the pattern is consistent across similar applications in the codebase:\n\n```javascript\n// Example of login/logout pattern (based on common patterns in the codebase)\nimport { writable } from 'svelte/store';\n\n// Authentication store to track login status\nconst authStore = writable({\n  isAuthenticated: false,\n  user: null,\n  token: null\n});\n\n// Login function\nasync function login(credentials) {\n  const response = await fetch('/api/auth/login', {\n    method: 'POST',\n    body: JSON.stringify(credentials),\n    headers: { 'Content-Type': 'application/json' }\n  });\n  \n  if (response.ok) {\n    const data = await response.json();\n    // Store token in cookie\n    document.cookie = `auth_token=${data.token}; path=/`;\n    // Update auth store\n    authStore.set({\n      isAuthenticated: true,\n      user: data.user,\n      token: data.token\n    });\n  }\n}\n\n// Logout function\nfunction logout() {\n  // Clear token from cookie\n  document.cookie = 'auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';\n  // Reset auth store\n  authStore.set({\n    isAuthenticated: false,\n    user: null,\n    token: null\n  });\n  // Redirect to login\n  window.location.href = '/login';\n}\n```\n\n### Security Considerations\n\nThe authentication system implements several security best practices:\n\n1. **Session Management**: Uses secure token storage (cookies with HttpOnly flag)\n2. **Access Control**: Implements proper authorization checks to prevent unauthorized access\n3. **Token Expiry**: Tokens likely have expiration times to limit session duration\n4. **Logout Confirmation**: Some implementations include confirmation dialogs to prevent accidental logout\n\n### Integration Points\n\n- **Frontend**: The `auth` store is consumed reactively to conditionally render content based on login status\n- **Routing**: Login and logout endpoints are protected, with unauthenticated users redirected to login\n- **API**: Authentication endpoints are secured with proper permission checks\n\nThe exact implementation details would be found in the application's authentication routes, API endpoints, and frontend components, but the overall architecture follows standard patterns for secure user authentication and session management.",
+      "status": "success"
+    },
+    {
+      "question_id": 8,
+      "query": "test utilities and fixtures",
+      "category": "module_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 9,
+      "query": "laboratory information management system overview",
+      "category": "repo_overview",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 10,
+      "query": "Django multi-tenant application architecture",
+      "category": "repo_overview",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 11,
+      "query": "WebSocket consumer for real-time notifications",
+      "category": "symbol_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 12,
+      "query": "database migration files",
+      "category": "file_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 13,
+      "query": "permission checking mixin",
+      "category": "symbol_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 14,
+      "query": "HubSpot integration API client",
+      "category": "file_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 15,
+      "query": "form validation utilities",
+      "category": "file_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "answer_length": 5429,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "fieldcalendar/serializers/serializers.py"
+        ],
+        "symbols": [
+          "FieldEvent",
+          "FieldEventRequestSerializer",
+          "get_title",
+          "Meta",
+          "get_color",
+          "CalendarEvent",
+          "get_extendedProps",
+          "BaseEventSerializer",
+          "get_textColor",
+          "FieldEventSerializer",
+          "FieldEventRequest",
+          "get_id"
+        ],
+        "repos": [
+          "static/icons",
+          "fieldcalendar/serializers",
+          "456/file",
+          "101/event",
+          "api/field",
+          "api/events",
+          "456/update",
+          "kbhalerao/labcore"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 3,
+      "quality_score": 0.8,
+      "response_time": 86.49071788787842,
+      "answer_preview": "### \u2705 Serializer for REST API Responses in `kbhalerao/labcore`\n\nBased on the `fieldcalendar/serializers/serializers.py` file, here\u2019s how serializers are implemented for REST API responses in this Django-based project.\n\n---\n\n## \ud83d\udccc Key Serializer Classes\n\n### 1. **`FieldEventSerializer`** \u2013 Main API Re...",
+      "question_id": 16,
+      "query": "serializer for REST API responses",
+      "category": "file_pattern",
+      "full_answer": "### \u2705 Serializer for REST API Responses in `kbhalerao/labcore`\n\nBased on the `fieldcalendar/serializers/serializers.py` file, here\u2019s how serializers are implemented for REST API responses in this Django-based project.\n\n---\n\n## \ud83d\udccc Key Serializer Classes\n\n### 1. **`FieldEventSerializer`** \u2013 Main API Response Serializer\nThis is the primary serializer used to convert `FieldEvent` model instances into JSON for API responses.\n\n#### \ud83e\udde9 Fields Included:\n```python\nclass Meta:\n    model = FieldEvent\n    fields = [\n        'id', 'allDay', 'start', 'end', 'title', 'event_type',\n        'editable', 'color', 'extendedProps', 'textColor'\n    ]\n```\n\n- `id`: Unique ID (via `get_id`)\n- `title`: Dynamic title from `details['title']`\n- `color`, `textColor`: Styled based on event type\n- `extendedProps`: Custom metadata (e.g., `field_id`, `file`, `geotags`, `custom_fields`)\n\n#### \ud83d\udd27 Dynamic Field Methods\n```python\ndef get_id(self, obj):\n    return obj.pk\n\ndef get_title(self, obj):\n    return obj.details.get('title')\n\ndef get_color(self, obj):\n    return obj.color\n\ndef get_textColor(self, obj):\n    try:\n        return obj.event_type.kind.textcolor\n    except AttributeError:\n        return \"white\"\n```\n\n> These methods allow **dynamic, computed fields** in the API response.\n\n#### \ud83d\udcce `extendedProps` \u2013 Custom Payload\n```python\ndef get_extendedProps(self, obj):\n    sent = {\n        'field_id': obj.field.id,\n        'field_name': obj.field.name,\n        'event_type': obj.event_type.name,\n        'file': reverse('fieldevent_file', kwargs={'pk': obj.pk}),\n        'file_type': obj.file.content_type if obj.file else None,\n        'geotags': obj.details.get('geotags'),\n        'geolocation': obj.details.get('geolocation'),\n        'custom_fields': obj.details.get('custom_fields')\n    }\n    if obj.event_type.icon:\n        sent['icon'] = obj.event_type.icon.url\n    sent['event_url'] = reverse(\"api_field_event_update\", kwargs={'pk': obj.field.id, 'event': obj.id})\n    return sent\n```\n\n> \u2705 **Includes file URLs**, icons, and edit links \u2014 ideal for frontend rendering.\n\n---\n\n### 2. **`FieldEventRequestSerializer`** \u2013 Nested Response for Requests\nUsed to serialize `FieldEventRequest` objects, which may include related `FieldEvent` and `CalendarEvent` details.\n\n```python\nclass Meta:\n    model = FieldEventRequest\n    fields = \"__all__\"\n\n# Nested serializers\nevent_type = CalendarEventDetailSerializer(many=False, read_only=True)\nrelated_event = FieldEventSerializer(many=False, read_only=True)\n```\n\n> This enables **deep, nested JSON responses** like:\n```json\n{\n  \"id\": 123,\n  \"event_type\": { \"name\": \"Planting\", \"color\": \"#00ff00\" },\n  \"related_event\": {\n    \"id\": 456,\n    \"title\": \"Planted corn\",\n    \"file\": \"/api/events/456/file/\"\n  }\n}\n```\n\n---\n\n### 3. **`BaseEventSerializer`** \u2013 Base Class for Reuse\nUsed as a base for other serializers to avoid duplication.\n\n```python\nclass BaseEventSerializer(ParseTimeMixin, serializers.ModelSerializer):\n    id = serializers.SerializerMethodField()\n    title = serializers.SerializerMethodField()\n    color = serializers.SerializerMethodField()\n    textColor = serializers.SerializerMethodField()\n    extendedProps = serializers.SerializerMethodField()\n```\n\n> \u2705 **Modular design**: Reusable across event types.\n\n---\n\n### 4. **`validate()` and `create()`/`update()` \u2013 Full Control**\nThese methods override DRF behavior for complex logic:\n\n- **`validate()`**: Sets `field` from `extendedProps` or context.\n- **`create()`**: Handles file uploads via base64, saves to `file` field.\n- **`update()`**: Clears file if `file_is_cleared` is sent.\n\n#### Example: File Upload via Base64\n```python\nfile_data = self.initial_data['extendedProps'].pop('file_data')\nres = re.match(r\"^(.*?)base64,\", file_data)\nstripped_file_data = file_data[res.end():]\nfe_file = base64.decodebytes(stripped_file_data.encode(\"utf-8\"))\nfilename = self.initial_data['extendedProps'].pop('filename')\ninstance.file.save(f\"calendar/{instance.field.id}/{filename}\", ContentFile(fe_file))\n```\n\n> \ud83d\udca1 This is how the API accepts file attachments in JSON payloads.\n\n---\n\n## \ud83d\udce4 Sample API Response\n```json\n{\n  \"id\": 456,\n  \"title\": \"Planted corn\",\n  \"start\": \"2024-04-10T08:00:00Z\",\n  \"end\": \"2024-04-10T12:00:00Z\",\n  \"color\": \"#00ff00\",\n  \"textColor\": \"white\",\n  \"extendedProps\": {\n    \"field_id\": 101,\n    \"field_name\": \"Field A\",\n    \"event_type\": \"Planting\",\n    \"file\": \"/api/events/456/file/\",\n    \"icon\": \"/static/icons/planting.svg\",\n    \"event_url\": \"/api/field/101/event/456/update/\"\n  }\n}\n```\n\n---\n\n## \u2705 Summary: How Serializers Work Here\n\n| Feature | Implemented? | Details |\n|-------|--------------|--------|\n| **Dynamic fields** | \u2705 | `get_title()`, `get_color()` |\n| **Nested objects** | \u2705 | `event_type`, `related_event` |\n| **File upload (base64)** | \u2705 | Via `file_data` in JSON |\n| **Custom metadata** | \u2705 | `extendedProps` for frontend |\n| **File URL generation** | \u2705 | `reverse()` for `/file/` endpoint |\n| **Validation logic** | \u2705 | `validate()`, `create()`, `update()` |\n\n---\n\n## \ud83d\udee0\ufe0f Recommendations\n- Use `exclude = ('available_to',)` to prevent exposing internal fields.\n- Consider using `to_representation()` instead of `get_*` for complex fields.\n- Add `read_only=True` on `file` to prevent tampering.\n\n---\n\nLet me know if you\u2019d like:\n- A diagram of the serializer hierarchy\n- How to test these serializers\n- How to generate API docs from them\n\nYou're all set for building robust, frontend-ready API responses!",
+      "status": "success"
+    },
+    {
+      "question_id": 17,
+      "query": "email sending utility functions",
+      "category": "symbol_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "answer_length": 6040,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "src/cache/manager.py",
+          "src/monitoring/cache_monitor.py",
+          "src/services/user_service.py",
+          "src/cache/redis_client.py",
+          "src/cache/decorators.py"
+        ],
+        "symbols": [
+          "invalidate_pattern",
+          "RedisCache",
+          "wrapper",
+          "delete",
+          "decorator",
+          "__init__",
+          "name",
+          "update_user_profile",
+          "cache_result",
+          "ping",
+          "and",
+          "CacheManager",
+          "get",
+          "get_cache_stats",
+          "set",
+          "get_user_profile"
+        ],
+        "repos": [
+          "src/monitoring",
+          "config/redis",
+          "hit/miss",
+          "src/cache",
+          "src/services"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 2,
+      "content_hits": 3,
+      "quality_score": 0.8,
+      "response_time": 16.891153812408447,
+      "answer_preview": "# Redis Caching Implementation Overview\n\nRedis is commonly used as a high-performance caching layer in modern applications. Below is a comprehensive overview of how Redis caching is typically implemented, based on common patterns found in code repositories.\n\n## Key Components of Redis Caching\n\n### 1...",
+      "question_id": 18,
+      "query": "caching implementation with Redis",
+      "category": "file_pattern",
+      "full_answer": "# Redis Caching Implementation Overview\n\nRedis is commonly used as a high-performance caching layer in modern applications. Below is a comprehensive overview of how Redis caching is typically implemented, based on common patterns found in code repositories.\n\n## Key Components of Redis Caching\n\n### 1. Redis Client Configuration\n\n```python\n# Example: Redis connection setup (common pattern)\nimport redis\nfrom typing import Optional\n\nclass RedisCache:\n    def __init__(self, host: str = \"localhost\", port: int = 6379, db: int = 0, \n                 password: Optional[str] = None):\n        self.redis_client = redis.Redis(\n            host=host,\n            port=port,\n            db=db,\n            password=password,\n            decode_responses=True,  # Returns strings instead of bytes\n            retry_on_timeout=True\n        )\n    \n    def ping(self):\n        \"\"\"Test Redis connection\"\"\"\n        return self.redis_client.ping()\n```\n\n**File reference**: `src/cache/redis_client.py:1-15`\n\n### 2. Caching Decorator Pattern\n\n```python\n# Example: Function-level caching decorator\nimport functools\nimport hashlib\nimport json\n\ndef cache_result(ttl: int = 300):  # Default 5 minutes\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            # Create cache key from function name and arguments\n            key = f\"cache:{func.__name__}:{hashlib.md5(str(args + tuple(kwargs.items())).encode()).hexdigest()}\"\n            \n            # Try to get from cache\n            cached_result = cache.redis_client.get(key)\n            if cached_result:\n                return json.loads(cached_result)\n            \n            # Execute function and cache result\n            result = func(*args, **kwargs)\n            cache.redis_client.setex(key, ttl, json.dumps(result))\n            \n            return result\n        return wrapper\n    return decorator\n```\n\n**File reference**: `src/cache/decorators.py:1-22`\n\n### 3. Cache Manager with Multiple Operations\n\n```python\n# Example: Comprehensive cache manager\nclass CacheManager:\n    def __init__(self, cache_client):\n        self.cache = cache_client\n    \n    def get(self, key: str, default=None):\n        \"\"\"Retrieve value from cache\"\"\"\n        try:\n            value = self.cache.get(key)\n            return json.loads(value) if value else default\n        except (json.JSONDecodeError, Exception):\n            return default\n    \n    def set(self, key: str, value, ttl: int = 300):\n        \"\"\"Store value in cache with time-to-live\"\"\"\n        try:\n            self.cache.setex(key, ttl, json.dumps(value))\n            return True\n        except Exception as e:\n            print(f\"Cache set error: {e}\")\n            return False\n    \n    def delete(self, key: str):\n        \"\"\"Remove key from cache\"\"\"\n        return self.cache.delete(key) > 0\n    \n    def invalidate_pattern(self, pattern: str):\n        \"\"\"Delete all keys matching pattern\"\"\"\n        keys = self.cache.keys(pattern)\n        if keys:\n            self.cache.delete(*keys)\n```\n\n**File reference**: `src/cache/manager.py:1-28`\n\n### 4. Integration with Database Queries\n\n```python\n# Example: Caching database query results\ndef get_user_profile(user_id: int):\n    # Try cache first\n    cache_key = f\"user:profile:{user_id}\"\n    cached_profile = cache_manager.get(cache_key)\n    \n    if cached_profile:\n        return cached_profile\n    \n    # Database query\n    profile = database.query(\"SELECT * FROM users WHERE id = %s\", user_id)\n    \n    # Cache result\n    cache_manager.set(cache_key, profile, ttl=1800)  # 30 minutes\n    \n    return profile\n```\n\n**File reference**: `src/services/user_service.py:45-58`\n\n### 5. Cache Invalidation Strategies\n\n```python\n# Example: Cache invalidation on data updates\ndef update_user_profile(user_id: int, updates: dict):\n    # Update database\n    database.execute(\"UPDATE users SET %s WHERE id = %s\", updates, user_id)\n    \n    # Invalidate related cache keys\n    cache_manager.delete(f\"user:profile:{user_id}\")\n    cache_manager.delete(f\"user:stats:{user_id}\")\n    cache_manager.delete(f\"user:activity:{user_id}\")\n    \n    # Optionally invalidate all user-related patterns\n    cache_manager.invalidate_pattern(\"user:*\")\n```\n\n**File reference**: `src/services/user_service.py:120-130`\n\n## Best Practices for Redis Caching\n\n1. **Use meaningful key patterns**:\n   - `cache:resource:operation:identifier`\n   - Example: `cache:users:find:123`\n\n2. **Set appropriate TTLs**:\n   - Short-lived (30s-5min) for frequently changing data\n   - Long-lived (30min-1hr) for stable data\n   - Consider using `setex` with proper expiration\n\n3. **Implement cache warming**:\n   - Pre-populate cache with frequently accessed data\n   - Use background jobs to populate cache\n\n4. **Handle cache misses gracefully**:\n   - Implement fallback logic\n   - Use circuit breakers to prevent cache stampede\n\n5. **Monitor cache performance**:\n   - Track hit/miss ratios\n   - Monitor memory usage\n   - Set up alerts for cache exhaustion\n\n## Common Configuration Options\n\n```yaml\n# Example configuration file\nredis:\n  host: \"redis.example.com\"\n  port: 6379\n  db: 1\n  password: \"${REDIS_PASSWORD}\"\n  max_connections: 20\n  connection_timeout: 30\n  retry_attempts: 3\n```\n\n**File reference**: `config/redis.yaml`\n\n## Monitoring and Maintenance\n\n```python\n# Example: Cache statistics monitoring\ndef get_cache_stats():\n    info = cache.redis_client.info()\n    return {\n        \"connected_clients\": info.get(\"connected_clients\", 0),\n        \"used_memory\": info.get(\"used_memory\", 0),\n        \"keyspace_hits\": info.get(\"keyspace_hits\", 0),\n        \"keyspace_misses\": info.get(\"keyspace_misses\", 0),\n        \"hit_rate\": (info.get(\"keyspace_hits\", 0) / \n                    max(info.get(\"keyspace_hits\", 0) + info.get(\"keyspace_misses\", 0), 1))\n    }\n```\n\n**File reference**: `src/monitoring/cache_monitor.py:1-18`\n\nThis implementation pattern provides a robust, scalable caching solution using Redis that can significantly improve application performance by reducing database load and response times.",
+      "status": "success"
+    },
+    {
+      "answer_length": 2727,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "urls.py",
+          "atlas_pmp/urls.py",
+          "projects/urls.py",
+          "users/urls.py"
+        ],
+        "symbols": [],
+        "repos": [
+          "api/chatbot",
+          "api/github",
+          "api/projects",
+          "atlas_pmp/urls",
+          "projects/urls",
+          "ecinfo/Atlas-PMP_backend",
+          "api/integrations",
+          "api/users",
+          "users/123",
+          "users/urls"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 3,
+      "quality_score": 1.0,
+      "response_time": 60.55429005622864,
+      "answer_preview": "# URL Routing Configuration Analysis\n\nBased on the analysis of multiple repositories, I'll provide a comprehensive overview of URL routing configuration patterns, with a focus on Django-based applications.\n\n## Django URL Routing Pattern\n\nThe most common URL routing pattern in the analyzed repositori...",
+      "question_id": 19,
+      "query": "URL routing configuration",
+      "category": "file_pattern",
+      "full_answer": "# URL Routing Configuration Analysis\n\nBased on the analysis of multiple repositories, I'll provide a comprehensive overview of URL routing configuration patterns, with a focus on Django-based applications.\n\n## Django URL Routing Pattern\n\nThe most common URL routing pattern in the analyzed repositories follows Django's standard structure, as seen in the `atlas_pmp/urls.py` file from the `ecinfo/Atlas-PMP_backend` repository.\n\n### Core Structure\n\n```python\n# atlas_pmp/urls.py\nfrom django.contrib import admin\nfrom django.urls import path, include\n\nurlpatterns = [\n    path(\"admin/\", admin.site.urls),\n    path(\"api/users/\", include(\"users.urls\")),\n    path(\"api/\", include(\"projects.urls\")),\n    path(\"api/integrations/\", include(\"integrations.basecamp.urls\")),\n    path(\"api/github/\", include(\"integrations.github.urls\")),\n    path(\"api/chatbot/\", include(\"chatbot.urls\")),\n]\n```\n\n### Key Components\n\n1. **Root URL Configuration**: The main `urls.py` file in the project root (e.g., `atlas_pmp/urls.py`) serves as the central routing hub.\n\n2. **Path Patterns**: Uses `path()` to define URL patterns with route specifications and view mappings.\n\n3. **Modular Design**: Implements a modular approach by using `include()` to delegate routing to app-specific URL configurations.\n\n4. **RESTful API Structure**: Follows a consistent REST API pattern with `/api/` prefix for all endpoints.\n\n## Common Routing Patterns\n\n### 1. API Endpoint Structure\n```python\npath(\"api/users/\", include(\"users.urls\"))\n```\n- `/api/users/` - User management API\n- `/api/projects/` - Project management API\n- `/api/integrations/basecamp/` - Third-party integration\n- `/api/chatbot/` - Specialized service\n\n### 2. App-Specific URL Configuration\nEach application has its own URL configuration file (e.g., `users/urls.py`, `projects/urls.py`) that defines the detailed routing for that specific module.\n\n### 3. Dynamic Routing\nThe pattern allows for dynamic routing through:\n- **URL parameter capture**: For dynamic segments like `/users/123/`\n- **Named URLs**: For easy reference in templates and code\n- **Automatic route generation**: For CRUD operations in REST frameworks\n\n## Best Practices Observed\n\n1. **Modularity**: Each application has its own URL configuration, promoting separation of concerns.\n\n2. **Consistency**: Uniform API structure with `/api/` prefix for all endpoints.\n\n3. **Scalability**: Easy to add new applications by simply including their URL configurations.\n\n4. **Maintainability**: Clear separation between project-level routing and application-level routing.\n\nThis pattern provides a robust foundation for web applications, enabling clean, organized, and maintainable URL routing that scales well with application complexity.",
+      "status": "success"
+    },
+    {
+      "question_id": 20,
+      "query": "middleware for request processing",
+      "category": "file_pattern",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "answer_length": 2568,
+      "has_code_block": true,
+      "citations": {
+        "files": [],
+        "symbols": [
+          "async_wrapper",
+          "arguments",
+          "result",
+          "job_counter",
+          "process_user_data"
+        ],
+        "repos": []
+      },
+      "repo_hits": 0,
+      "file_hits": 0,
+      "content_hits": 4,
+      "quality_score": 0.8,
+      "response_time": 81.05802702903748,
+      "answer_preview": "# How the `job_counter` Decorator Tracks Background Jobs\n\nThe `job_counter` decorator tracks background job execution metrics using Redis as a persistent storage backend. Here's how it works:\n\n## Core Tracking Mechanism\n\nThe decorator maintains three key metrics in Redis:\n- `key_success`: Counter fo...",
+      "question_id": 21,
+      "query": "How does the job_counter decorator track background jobs?",
+      "category": "code_explanation",
+      "full_answer": "# How the `job_counter` Decorator Tracks Background Jobs\n\nThe `job_counter` decorator tracks background job execution metrics using Redis as a persistent storage backend. Here's how it works:\n\n## Core Tracking Mechanism\n\nThe decorator maintains three key metrics in Redis:\n- `key_success`: Counter for successful job executions\n- `key_failed_list`: Redis list storing failed job details (capped at 50 entries)\n- `key_pending_list`: Redis list tracking currently running jobs\n\n## Implementation Details\n\n```python\ndef job_counter(func: Callable) -> Callable:\n    @wraps(func)\n    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:\n        key_success, key_failed_list, key_pending_list, job_string = _make_keys(func, *args)\n        try:\n            # Increment pending jobs counter\n            redis_connection.lpush(key_pending_list, job_string)\n            \n            # Execute the decorated function\n            result = await func(*args, **kwargs)\n            \n            # Increment success counter\n            redis_connection.incr(key_success)\n            return result\n        except Exception as e:\n            # Log failure with error details\n            redis_connection.lpush(key_failed_list, f\"Error: {str(e)}, Job: {job_string}\")\n            # Cap failed list to 50 entries\n            redis_connection.ltrim(key_failed_list, 0, 50)\n            raise e\n        finally:\n            # Always decrement pending counter\n            redis_connection.lpop(key_pending_list)\n```\n\n## Key Features\n\n1. **Dual Implementation**: Supports both synchronous and asynchronous functions through `sync_wrapper` and `async_wrapper`\n\n2. **Atomic Operations**: Uses Redis's atomic list operations (`lpush`, `lpop`, `ltrim`) to ensure thread-safe tracking\n\n3. **Failure Management**: \n   - Stores error details in a Redis list\n   - Limits failed jobs to 50 recent entries using `ltrim`\n   - Preserves context by including function arguments in the job string\n\n4. **Pending Job Tracking**: \n   - Pushes job to pending list before execution\n   - Removes job from pending list in `finally` block (ensures cleanup even on failure)\n   - Provides real-time visibility into running jobs\n\n5. **Error Handling**: Preserves original exception and re-raises it after logging\n\n## Usage Example\n\n```python\n@job_counter\nasync def process_user_data(user_id, data):\n    # Your background job logic here\n    return processed_result\n```\n\nThis pattern provides comprehensive job monitoring with minimal performance overhead, making it ideal for production background task processing.",
+      "status": "success"
+    },
+    {
+      "question_id": 22,
+      "query": "What is the authentication flow in labcore?",
+      "category": "architecture",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 23,
+      "query": "How does multi-tenant data isolation work in the application?",
+      "category": "architecture",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 24,
+      "query": "What Celery tasks are defined and what do they do?",
+      "category": "discovery",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "answer_length": 2907,
+      "has_code_block": true,
+      "citations": {
+        "files": [
+          "src/server/websocket.js",
+          "Node.js",
+          "server.js"
+        ],
+        "symbols": [
+          "Upgrade",
+          "Origin",
+          "WebSocket"
+        ],
+        "repos": [
+          "8080/ws",
+          "ping/pong",
+          "Room/Channel",
+          "src/server",
+          "kbhalerao/labcore"
+        ]
+      },
+      "repo_hits": 0,
+      "file_hits": 1,
+      "content_hits": 3,
+      "quality_score": 0.9500000000000002,
+      "response_time": 40.919331073760986,
+      "answer_preview": "WebSocket connections are established and managed through a combination of client-side JavaScript and server-side logic, typically using a WebSocket protocol implementation. The exact mechanics depend on the framework or library being used.\n\nHere\u2019s a general overview of how WebSocket connections are...",
+      "question_id": 25,
+      "query": "How are WebSocket connections established and managed?",
+      "category": "architecture",
+      "full_answer": "WebSocket connections are established and managed through a combination of client-side JavaScript and server-side logic, typically using a WebSocket protocol implementation. The exact mechanics depend on the framework or library being used.\n\nHere\u2019s a general overview of how WebSocket connections are established and managed:\n\n---\n\n### \ud83d\udd17 **1. Connection Establishment**\n- **Client**: Initiates a connection using the `WebSocket` constructor in JavaScript:\n  ```javascript\n  const ws = new WebSocket('ws://localhost:8080/ws');\n  ```\n- **Server**: Listens for incoming connections on a specified endpoint (e.g., `/ws`).\n- **Handshake**: The client sends an HTTP `Upgrade` request to switch from HTTP to WebSocket. The server responds with a `101 Switching Protocols` status, confirming the upgrade.\n\n---\n\n### \ud83d\udce1 **2. Connection Management**\n- **Keep-Alive**: The server and client exchange `ping/pong` messages to maintain the connection and detect dead peers.\n- **Reconnection**: If the connection drops, clients often implement retry logic (e.g., exponential backoff).\n- **Error Handling**: Events like `onerror`, `onclose`, and `onopen` allow handling connection states.\n\n---\n\n### \ud83d\udee0\ufe0f **3. Server-Side Implementation (Example in Node.js with `ws` library)**\n```javascript\nconst WebSocket = require('ws');\n\nconst wss = new WebSocket.Server({ port: 8080 });\n\nwss.on('connection', (ws, req) => {\n  console.log('Client connected');\n\n  // Send message to client\n  ws.send('Welcome to the WebSocket server!');\n\n  // Handle incoming messages\n  ws.on('message', (data) => {\n    console.log('Received:', data);\n    ws.send(`Echo: ${data}`);\n  });\n\n  // Handle close\n  ws.on('close', () => {\n    console.log('Client disconnected');\n  });\n\n  // Handle errors\n  ws.on('error', (err) => {\n    console.error('WebSocket error:', err);\n  });\n});\n```\n\n> **File reference**: `server.js` (example), line 1\u201320\n\n---\n\n### \ud83d\udcc1 **4. Common Patterns in Codebases**\n- **Authentication**: Often handled during the handshake (e.g., using query params or JWT in the `Origin` header).\n- **Room/Channel Management**: Used in chat apps or real-time dashboards.\n- **State Management**: Server maintains session state per client.\n\n---\n\n### \ud83d\udccc **Where to Look in Code Repositories**\nUse these queries to find WebSocket-related code:\n- `search_code(\"WebSocket\" level=\"file\")` \u2192 Find files using WebSocket APIs.\n- `explore_structure(repo_id=\"kbhalerao/labcore\", path=\"src/\")` \u2192 Locate `ws`, `socket`, or `realtime` directories.\n- `get_file(repo_id=\"kbhalerao/labcore\", file_path=\"src/server/websocket.js\")` \u2192 View actual implementation.\n\n---\n\n### \u2705 **Best Practices**\n- Use `wss://` (secure WebSocket) in production.\n- Implement proper error recovery and heartbeat mechanisms.\n- Avoid long-lived connections without monitoring.\n\nLet me know if you'd like to explore a specific repository or file (e.g., `labcore`, `socket.io`, `fastapi-websocket`).",
+      "status": "success"
+    },
+    {
+      "question_id": 26,
+      "query": "What Django models exist for sample management?",
+      "category": "discovery",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 27,
+      "query": "How does the API handle pagination of large result sets?",
+      "category": "implementation",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 28,
+      "query": "What external service integrations exist (HubSpot, USDA)?",
+      "category": "discovery",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 29,
+      "query": "How are user permissions checked in views?",
+      "category": "implementation",
+      "status": "error",
+      "error": ""
+    },
+    {
+      "question_id": 30,
+      "query": "What testing utilities and fixtures are available?",
+      "category": "discovery",
+      "status": "error",
+      "error": ""
+    }
+  ],
+  "errors": [
+    {
+      "question_id": 8,
+      "query": "test utilities and fixtures",
+      "error": ""
+    },
+    {
+      "question_id": 9,
+      "query": "laboratory information management system overview",
+      "error": ""
+    },
+    {
+      "question_id": 10,
+      "query": "Django multi-tenant application architecture",
+      "error": ""
+    },
+    {
+      "question_id": 11,
+      "query": "WebSocket consumer for real-time notifications",
+      "error": ""
+    },
+    {
+      "question_id": 12,
+      "query": "database migration files",
+      "error": ""
+    },
+    {
+      "question_id": 13,
+      "query": "permission checking mixin",
+      "error": ""
+    },
+    {
+      "question_id": 14,
+      "query": "HubSpot integration API client",
+      "error": ""
+    },
+    {
+      "question_id": 15,
+      "query": "form validation utilities",
+      "error": ""
+    },
+    {
+      "question_id": 17,
+      "query": "email sending utility functions",
+      "error": ""
+    },
+    {
+      "question_id": 20,
+      "query": "middleware for request processing",
+      "error": ""
+    },
+    {
+      "question_id": 22,
+      "query": "What is the authentication flow in labcore?",
+      "error": ""
+    },
+    {
+      "question_id": 23,
+      "query": "How does multi-tenant data isolation work in the application?",
+      "error": ""
+    },
+    {
+      "question_id": 24,
+      "query": "What Celery tasks are defined and what do they do?",
+      "error": ""
+    },
+    {
+      "question_id": 26,
+      "query": "What Django models exist for sample management?",
+      "error": ""
+    },
+    {
+      "question_id": 27,
+      "query": "How does the API handle pagination of large result sets?",
+      "error": ""
+    },
+    {
+      "question_id": 28,
+      "query": "What external service integrations exist (HubSpot, USDA)?",
+      "error": ""
+    },
+    {
+      "question_id": 29,
+      "query": "How are user permissions checked in views?",
+      "error": ""
+    },
+    {
+      "question_id": 30,
+      "query": "What testing utilities and fixtures are available?",
+      "error": ""
+    }
+  ]
+}

@@ -1,0 +1,424 @@
+{
+  "timestamp": "2025-11-30T13:40:31.692711",
+  "config": {
+    "api_url": "http://localhost",
+    "levels": [
+      "symbol",
+      "file",
+      "module",
+      "repo"
+    ],
+    "question_count": 20
+  },
+  "summary": {},
+  "results_by_level": {
+    "symbol": [
+      {
+        "query": "job_counter decorator",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "FilteredQuerySetMixin class for multi-tenant isolation",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authenticate function in login backend",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django models for user organization management",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Celery task definitions for async processing",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "API views for sample submission",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authentication module with login and logout",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "test utilities and fixtures",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "laboratory information management system overview",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django multi-tenant application architecture",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "WebSocket consumer for real-time notifications",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "database migration files",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "permission checking mixin",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "HubSpot integration API client",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "form validation utilities",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "serializer for REST API responses",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "email sending utility functions",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "caching implementation with Redis",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "URL routing configuration",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "middleware for request processing",
+        "level": "symbol",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      }
+    ],
+    "file": [
+      {
+        "query": "job_counter decorator",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "FilteredQuerySetMixin class for multi-tenant isolation",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authenticate function in login backend",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django models for user organization management",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Celery task definitions for async processing",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "API views for sample submission",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authentication module with login and logout",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "test utilities and fixtures",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "laboratory information management system overview",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django multi-tenant application architecture",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "WebSocket consumer for real-time notifications",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "database migration files",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "permission checking mixin",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "HubSpot integration API client",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "form validation utilities",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "serializer for REST API responses",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "email sending utility functions",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "caching implementation with Redis",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "URL routing configuration",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "middleware for request processing",
+        "level": "file",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      }
+    ],
+    "module": [
+      {
+        "query": "job_counter decorator",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "FilteredQuerySetMixin class for multi-tenant isolation",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authenticate function in login backend",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django models for user organization management",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Celery task definitions for async processing",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "API views for sample submission",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authentication module with login and logout",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "test utilities and fixtures",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "laboratory information management system overview",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django multi-tenant application architecture",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "WebSocket consumer for real-time notifications",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "database migration files",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "permission checking mixin",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "HubSpot integration API client",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "form validation utilities",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "serializer for REST API responses",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "email sending utility functions",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "caching implementation with Redis",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "URL routing configuration",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "middleware for request processing",
+        "level": "module",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      }
+    ],
+    "repo": [
+      {
+        "query": "job_counter decorator",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "FilteredQuerySetMixin class for multi-tenant isolation",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authenticate function in login backend",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django models for user organization management",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Celery task definitions for async processing",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "API views for sample submission",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "authentication module with login and logout",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "test utilities and fixtures",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "laboratory information management system overview",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "Django multi-tenant application architecture",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "WebSocket consumer for real-time notifications",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "database migration files",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "permission checking mixin",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "HubSpot integration API client",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "form validation utilities",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "serializer for REST API responses",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "email sending utility functions",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "caching implementation with Redis",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "URL routing configuration",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      },
+      {
+        "query": "middleware for request processing",
+        "level": "repo",
+        "error": "Client error '422 Unprocessable Entity' for url 'http://localhost/api/auth/login'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+      }
+    ]
+  }
+}

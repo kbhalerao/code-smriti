@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-11-30T13:56:45.672855",
+  "questions_file": "evals/v4_eval_questions.json",
+  "evaluations": {
+    "search": {
+      "status": "completed",
+      "summary": {
+        "symbol": {
+          "total_questions": 20,
+          "hit_rate": 0.9,
+          "avg_precision_at_1": 0.55,
+          "avg_precision_at_3": 0.5333333333333333,
+          "avg_precision_at_5": 0.51,
+          "avg_mrr": 0.6501388888888889,
+          "avg_score": 13.998131356239318
+        },
+        "file": {
+          "total_questions": 20,
+          "hit_rate": 0.9,
+          "avg_precision_at_1": 0.55,
+          "avg_precision_at_3": 0.5333333333333333,
+          "avg_precision_at_5": 0.51,
+          "avg_mrr": 0.6501388888888889,
+          "avg_score": 13.998131356239318
+        },
+        "module": {
+          "total_questions": 20,
+          "hit_rate": 0.9,
+          "avg_precision_at_1": 0.55,
+          "avg_precision_at_3": 0.5333333333333333,
+          "avg_precision_at_5": 0.51,
+          "avg_mrr": 0.6501388888888889,
+          "avg_score": 13.998131356239318
+        },
+        "repo": {
+          "total_questions": 20,
+          "hit_rate": 0.9,
+          "avg_precision_at_1": 0.55,
+          "avg_precision_at_3": 0.5333333333333333,
+          "avg_precision_at_5": 0.51,
+          "avg_mrr": 0.6501388888888889,
+          "avg_score": 13.998131356239318
+        }
+      }
+    }
+  },
+  "duration_seconds": 5.871671
+}

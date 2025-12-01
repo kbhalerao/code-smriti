@@ -45,15 +45,19 @@ router = APIRouter(prefix="/rag", tags=["CodeSmriti RAG V4"])
 class SearchRequest(BaseModel):
     """Request model for search_code endpoint"""
     query: str = Field(description="Search query (natural language or code)")
-    level: Literal["symbol", "file", "module", "repo"] = Field(
+    level: Literal["symbol", "file", "module", "repo", "doc"] = Field(
         default="file",
-        description="Search granularity: symbol, file, module, or repo"
+        description="Search granularity: symbol, file, module, repo, or doc"
     )
     repo_filter: Optional[str] = Field(
         default=None,
         description="Filter by repository (format: owner/repo)"
     )
     limit: int = Field(default=5, ge=1, le=20, description="Maximum results")
+    preview: bool = Field(
+        default=False,
+        description="If true, return only metadata without full content (for peek/preview)"
+    )
 
 
 class SearchResponse(BaseModel):
@@ -174,6 +178,9 @@ async def search_code_endpoint(
     - **file**: Find relevant files (default)
     - **module**: Find relevant folders/areas
     - **repo**: High-level repository understanding
+    - **doc**: Find documentation files (RST, MD)
+
+    Use preview=true to get metadata-only results for initial exploration.
     """
     tenant_id = current_user.get("tenant_id", "code_kosha")
     embedding_model = get_embedding_model(settings.embedding_model_name)
@@ -187,7 +194,8 @@ async def search_code_endpoint(
         level=level,
         repo_filter=request.repo_filter,
         limit=request.limit,
-        tenant_id=tenant_id
+        tenant_id=tenant_id,
+        preview=request.preview
     )
 
     return SearchResponse(

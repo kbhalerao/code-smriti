@@ -46,12 +46,12 @@ async def get_auth_token() -> str:
     async with httpx.AsyncClient(verify=False) as client:
         response = await client.post(
             f"{API_BASE_URL}/api/auth/login",
-            json={"username": API_USERNAME, "password": API_PASSWORD},
+            json={"email": API_USERNAME, "password": API_PASSWORD},
             timeout=30.0
         )
         response.raise_for_status()
         data = response.json()
-        _cached_token = data["access_token"]
+        _cached_token = data["token"]
         return _cached_token
 
 
@@ -221,9 +221,10 @@ async def explore_structure(
 @mcp.tool()
 async def search_codebase(
     query: str,
-    level: Literal["symbol", "file", "module", "repo"] = "file",
+    level: Literal["symbol", "file", "module", "repo", "doc"] = "file",
     limit: int = 5,
-    repo_filter: str = None
+    repo_filter: str = None,
+    preview: bool = False
 ) -> str:
     """
     Search proprietary codebases for code, documentation, and commit history.
@@ -246,11 +247,22 @@ async def search_codebase(
                - "file": Find relevant files (default, good balance)
                - "module": Find relevant folders/areas of code
                - "repo": High-level repository understanding (most broad)
+               - "doc": Find documentation files (RST, MD) - use for conceptual questions,
+                        design guidelines, audit docs, principles
         limit: Number of results to return (default: 5, max: 20).
         repo_filter: Optional repository name to filter by (e.g. "kbhalerao/labcore").
+        preview: If true, return shortened content for quick scanning before fetching full details.
 
     Returns:
         Search results with summaries and metadata for navigation.
+
+    Query Routing Strategy:
+    - For "how does X work" or implementation questions -> start with "file" level
+    - For "find function/class X" -> use "symbol" level
+    - For "what principles/guidelines" or conceptual docs -> use "doc" level
+    - For "what is in X folder" -> use "module" level
+    - For "what repos have X" -> use "repo" level
+    - If results are poor, try adjacent levels or add preview=true first
     """
     try:
         token = await get_auth_token()
@@ -258,7 +270,8 @@ async def search_codebase(
         payload = {
             "query": query,
             "level": level,
-            "limit": min(limit, 20)
+            "limit": min(limit, 20),
+            "preview": preview
         }
         if repo_filter:
             payload["repo_filter"] = repo_filter
@@ -277,7 +290,8 @@ async def search_codebase(
             if not results:
                 return f"No results found for '{query}' at {level} level."
 
-            output = [f"## Search Results ({level} level)\n"]
+            mode_note = " (preview)" if preview else ""
+            output = [f"## Search Results ({level} level{mode_note})\n"]
 
             for r in results:
                 doc_type = r.get("doc_type", "")
@@ -302,12 +316,18 @@ async def search_codebase(
                     header = f"### Module: {module_path}/"
                 elif doc_type == "repo_summary":
                     header = f"### Repository: {repo_id}"
+                elif doc_type == "document":
+                    doc_subtype = r.get("symbol_type", "doc")  # symbol_type holds doc_type for documents
+                    header = f"### Doc: {file_path} ({doc_subtype})"
                 else:
                     header = f"### {file_path or repo_id}"
 
                 output.append(header)
                 output.append(f"_Repo: {repo_id} | Score: {score:.2f}_\n")
-                output.append(content[:500] + ("..." if len(content) > 500 else ""))
+
+                # In preview mode, content is already truncated; otherwise show first 500 chars
+                max_len = 200 if preview else 500
+                output.append(content[:max_len] + ("..." if len(content) > max_len else ""))
                 output.append("")
 
             return "\n".join(output)

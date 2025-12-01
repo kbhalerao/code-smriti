@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-11-30T13:59:17.104961",
+  "questions_file": "evals/v4_eval_questions.json",
+  "evaluations": {
+    "rag": {
+      "status": "completed",
+      "summary": {
+        "total_questions": 30,
+        "successful": 12,
+        "errors": 18,
+        "avg_quality_score": 0.7861111111111111,
+        "avg_response_time": 39.32172451416651,
+        "total_time": 471.86069416999817,
+        "good_answers": 11,
+        "fair_answers": 0,
+        "poor_answers": 1,
+        "answers_with_code": 10,
+        "by_category": {
+          "symbol_specific": 0.475,
+          "symbol_pattern": 1.0,
+          "file_pattern": 0.8222222222222223,
+          "module_pattern": 0.8,
+          "code_explanation": 0.8,
+          "architecture": 0.9500000000000002
+        }
+      }
+    }
+  },
+  "duration_seconds": 2647.3223
+}

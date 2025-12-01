@@ -270,7 +270,8 @@ async def search_code(
     level: SearchLevel = SearchLevel.FILE,
     repo_filter: str = None,
     limit: int = 5,
-    tenant_id: str = "code_kosha"
+    tenant_id: str = "code_kosha",
+    preview: bool = False
 ) -> List[SearchResult]:
     """
     Semantic search across indexed documents at specified granularity.
@@ -279,10 +280,11 @@ async def search_code(
         db: Couchbase client
         embedding_model: Sentence transformer for query embedding
         query: Search query (natural language or code)
-        level: Granularity level (symbol, file, module, repo)
+        level: Granularity level (symbol, file, module, repo, doc)
         repo_filter: Optional repository filter
         limit: Maximum results to return
         tenant_id: Tenant bucket name
+        preview: If True, return only metadata without full content (for peek/preview)
 
     Returns:
         List of SearchResult sorted by relevance
@@ -299,20 +301,22 @@ async def search_code(
             normalize_embeddings=True
         ).tolist()
 
-        # Build FTS request with type filter
+        # Build FTS request with hybrid search (query + knn)
+        # KNN filter alone doesn't pre-filter in Couchbase - need query + knn_operator: and
         filter_conjuncts = [{"term": doc_type, "field": "type"}]
         if repo_filter:
             filter_conjuncts.append({"term": repo_filter, "field": "repo_id"})
 
-        knn_filter = filter_conjuncts[0] if len(filter_conjuncts) == 1 else {"conjuncts": filter_conjuncts}
+        type_query = filter_conjuncts[0] if len(filter_conjuncts) == 1 else {"conjuncts": filter_conjuncts}
 
         fts_request = {
+            "query": type_query,
             "knn": [{
                 "field": "embedding",
                 "vector": query_embedding,
                 "k": min(limit * 2, 20),  # Oversample
-                "filter": knn_filter
             }],
+            "knn_operator": "and",
             "size": min(limit * 2, 20),
             "fields": ["*"]
         }
@@ -342,7 +346,7 @@ async def search_code(
         if not hits:
             return []
 
-        # Fetch full documents
+        # Fetch documents (full or preview mode)
         results = []
         bucket = db.cluster.bucket(tenant_id)
         collection = bucket.default_collection()
@@ -357,14 +361,19 @@ async def search_code(
                 doc = doc_result.content_as[dict]
                 metadata = doc.get('metadata', {})
 
+                # In preview mode, only return first ~200 chars of content
+                content = doc.get('content', '')
+                if preview and len(content) > 200:
+                    content = content[:200] + "..."
+
                 results.append(SearchResult(
                     document_id=doc_id,
                     doc_type=doc.get('type', doc_type),
                     repo_id=doc.get('repo_id', ''),
-                    file_path=doc.get('file_path'),
+                    file_path=doc.get('file_path') or doc.get('module_path'),
                     symbol_name=doc.get('symbol_name'),
-                    symbol_type=doc.get('symbol_type'),
-                    content=doc.get('content', ''),
+                    symbol_type=doc.get('symbol_type') or doc.get('doc_type'),
+                    content=content,
                     score=hit.get('score', 0.0),
                     parent_id=doc.get('parent_id'),
                     children_ids=doc.get('children_ids', []),
@@ -375,7 +384,7 @@ async def search_code(
                 logger.warning(f"Failed to fetch document {doc_id}: {e}")
                 continue
 
-        logger.info(f"search_code: query='{query[:50]}' level={level.value} found {len(results)} results")
+        logger.info(f"search_code: query='{query[:50]}' level={level.value} preview={preview} found {len(results)} results")
         return results
 
     except Exception as e:

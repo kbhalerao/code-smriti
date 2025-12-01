@@ -21,26 +21,33 @@ We use a **tool-calling architecture** instead of a rigid two-stage pipeline. Th
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Intent Validation (Heuristic)                   │
-│  - Code-related? ✓                                          │
-│  - Off-topic? ✗                                             │
+│              Intent Classification & Query Routing           │
+│  Classify query intent to select search level:              │
+│  - CONCEPTUAL → "doc" level (guidelines, design docs)       │
+│  - IMPLEMENTATION → "file" level (default)                  │
+│  - SPECIFIC → "symbol" level (find exact function/class)    │
+│  - ARCHITECTURAL → "module" level (folder structure)        │
+│  - OVERVIEW → "repo" level (high-level understanding)       │
 └───────────────────────┬─────────────────────────────────────┘
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
 │           PydanticAI Agent (Ollama: deepseek-coder)        │
-│  System Prompt: Code research assistant                     │
+│  System Prompt: Code research assistant with intent routing │
 │  Tools:                                                      │
-│    - search_code(query, limit, repo_filter)                │
+│    - search_code(query, level, limit, repo_filter, preview)│
 │    - list_available_repos()                                │
+│    - explore_structure(repo_id, path)                      │
+│    - get_file(repo_id, file_path, start_line, end_line)   │
 └───────────────────────┬─────────────────────────────────────┘
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Vector Search (Couchbase FTS)                   │
+│        Vector Search (Couchbase FTS - Hybrid Mode)          │
 │  1. Embed query with sentence-transformers                  │
 │     Model: nomic-ai/nomic-embed-text-v1.5 (768 dims)       │
-│  2. FTS kNN search on "code_vector_index"                   │
+│  2. Hybrid search: query (type filter) + kNN               │
+│     knn_operator: "and" for proper pre-filtering           │
 │  3. Fetch top-k documents from Couchbase                    │
 └───────────────────────┬─────────────────────────────────────┘
                         │
@@ -63,35 +70,44 @@ We use a **tool-calling architecture** instead of a rigid two-stage pipeline. Th
 
 ### ✅ Implemented
 
-1. **Intent Classification**
-   - Heuristic-based validation (code vs off-topic keywords)
-   - Context-aware (considers conversation history)
-   - Fast pre-filter before expensive operations
+1. **Intent Classification & Query Routing**
+   - Classifies query intent to select appropriate search level
+   - CONCEPTUAL queries → `doc` level (documentation, guidelines)
+   - IMPLEMENTATION queries → `file` level (default)
+   - SPECIFIC queries → `symbol` level (find exact function/class)
+   - ARCHITECTURAL queries → `module` level (folder structure)
+   - OVERVIEW queries → `repo` level (high-level understanding)
 
-2. **Vector Search**
-   - Couchbase FTS with kNN vector similarity
-   - Uses sentence-transformers for embedding (matches ingestion model)
-   - Supports repo filtering
-   - Returns top-k most relevant code chunks
+2. **Multi-Level Vector Search**
+   - Couchbase FTS with hybrid search (query + kNN + knn_operator)
+   - Five search levels: symbol, file, module, repo, doc
+   - Uses sentence-transformers for embedding (nomic-embed-text-v1.5)
+   - Supports repo filtering and preview mode
+   - Returns top-k most relevant documents
 
-3. **Tool-Calling Agent**
+3. **Preview Mode**
+   - `preview=True` returns truncated content (~200 chars)
+   - Useful for scanning multiple results before fetching full content
+   - Reduces token usage in LLM context
+
+4. **Tool-Calling Agent**
    - PydanticAI framework
    - Ollama backend (deepseek-coder:6.7b recommended)
-   - Two tools: `search_code()` and `list_available_repos()`
-   - Agent decides when and how to use tools
+   - Four tools: `search_code()`, `list_available_repos()`, `explore_structure()`, `get_file()`
+   - Agent decides when and how to use tools based on query intent
 
-4. **Conversation History**
+5. **Conversation History**
    - Supports last N messages for context
    - Sent with each request from client
    - Helps with follow-up questions
    - Keeps last 6 messages (3 exchanges) per agent instance
 
-5. **Streaming & Non-Streaming**
+6. **Streaming & Non-Streaming**
    - Streaming: Server-Sent Events (SSE) via FastAPI StreamingResponse
    - Non-streaming: Standard JSON response
    - Client chooses mode with `stream: true/false` flag
 
-6. **Markdown Narrative**
+7. **Markdown Narrative**
    - Agent generates well-formatted markdown
    - Code blocks with language tags
    - File references with citations
@@ -265,23 +281,23 @@ cd 4-consume/api-server
 ## Code Structure
 
 ```
-4-consume/api-server/app/chat/
-├── routes.py                  # FastAPI endpoints
-├── pydantic_rag_agent.py     # Main RAG agent with PydanticAI
-├── simple_agent.py           # Legacy agent (kept for reference)
-├── tools.py                   # Tool definitions (legacy)
-├── agent.py                   # Legacy agent implementation
-└── intent.py                  # Legacy intent classification
+services/api-server/app/
+├── chat/
+│   ├── routes.py              # FastAPI endpoints
+│   └── pydantic_rag_agent.py  # Main RAG agent with PydanticAI
+├── rag/
+│   ├── __init__.py
+│   ├── models.py              # Pydantic models (SearchLevel, SearchResult, etc.)
+│   └── tools.py               # Tool implementations (search_code, list_repos, etc.)
+└── database/
+    └── couchbase_client.py    # Couchbase connection management
 ```
 
 **Key files:**
-- `pydantic_rag_agent.py:23` - System prompt for agent
-- `pydantic_rag_agent.py:44` - Agent creation with tools
-- `pydantic_rag_agent.py:54` - `search_code` tool implementation
-- `pydantic_rag_agent.py:256` - Main chat method
-- `pydantic_rag_agent.py:305` - Streaming chat method
-- `routes.py:54` - Authenticated chat endpoint
-- `routes.py:189` - Test chat endpoint
+- `app/rag/models.py` - SearchLevel enum with symbol/file/module/repo/doc levels
+- `app/rag/tools.py` - Core tool implementations with hybrid FTS search
+- `app/chat/pydantic_rag_agent.py` - System prompt with intent detection strategy
+- `app/chat/routes.py` - HTTP endpoints for RAG API
 
 ## Performance Considerations
 
@@ -327,13 +343,13 @@ ollama serve
 
 ## Next Steps
 
+- [x] ~~Implement hybrid search (vector + keyword)~~ - Done via query + knn + knn_operator
+- [x] ~~Add tool for querying by file/repo directly~~ - Done via get_file and explore_structure
 - [ ] Add re-ranking for better relevance
-- [ ] Implement hybrid search (vector + keyword)
 - [ ] Add citation tracking for sources
 - [ ] Implement conversation memory persistence
 - [ ] Add user feedback collection
 - [ ] Create evaluation metrics dashboard
-- [ ] Add tool for querying by file/repo directly
 - [ ] Implement multi-hop reasoning for complex queries
 
 ## Related Documentation

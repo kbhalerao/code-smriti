@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-11-30T13:54:48.271500",
+  "questions_file": "evals/v4_eval_questions.json",
+  "evaluations": {
+    "search": {
+      "status": "completed",
+      "summary": {
+        "symbol": {
+          "total_questions": 17,
+          "hit_rate": 0.9411764705882353,
+          "avg_precision_at_1": 0.6470588235294118,
+          "avg_precision_at_3": 0.6078431372549019,
+          "avg_precision_at_5": 0.5882352941176471,
+          "avg_mrr": 0.7387254901960785,
+          "avg_score": 13.917671725329232
+        },
+        "file": {
+          "total_questions": 17,
+          "hit_rate": 0.9411764705882353,
+          "avg_precision_at_1": 0.6470588235294118,
+          "avg_precision_at_3": 0.6078431372549019,
+          "avg_precision_at_5": 0.5882352941176471,
+          "avg_mrr": 0.7387254901960785,
+          "avg_score": 13.917671725329232
+        },
+        "module": {
+          "total_questions": 17,
+          "hit_rate": 0.9411764705882353,
+          "avg_precision_at_1": 0.6470588235294118,
+          "avg_precision_at_3": 0.6078431372549019,
+          "avg_precision_at_5": 0.5882352941176471,
+          "avg_mrr": 0.7387254901960785,
+          "avg_score": 13.917671725329232
+        },
+        "repo": {
+          "total_questions": 17,
+          "hit_rate": 0.9411764705882353,
+          "avg_precision_at_1": 0.6470588235294118,
+          "avg_precision_at_3": 0.6078431372549019,
+          "avg_precision_at_5": 0.5882352941176471,
+          "avg_mrr": 0.7387254901960785,
+          "avg_score": 13.917671725329232
+        }
+      }
+    }
+  },
+  "duration_seconds": 5.8424
+}

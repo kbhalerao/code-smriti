@@ -1,0 +1,511 @@
+{
+  "metadata": {
+    "version": "v4.2",
+    "created": "2025-11-30",
+    "updated": "2025-11-30",
+    "description": "Comprehensive evaluation suite for V4 ingestion - code, RST docs, Svelte, and design systems",
+    "categories": [
+      "symbol_specific",
+      "symbol_pattern",
+      "file_pattern",
+      "module_pattern",
+      "code_explanation",
+      "architecture",
+      "discovery",
+      "implementation",
+      "documentation",
+      "svelte"
+    ],
+    "notes": "v4.2: Added FarmWorth design system questions (.claude/design-system MD + design-guidelines Svelte pages)"
+  },
+  "questions": [
+    {
+      "id": 1,
+      "query": "job_counter decorator implementation",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["decorators.py"],
+      "expected_symbols": ["job_counter"],
+      "expected_content": ["decorator", "counter", "job", "redis"],
+      "category": "symbol_specific",
+      "difficulty": "easy",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 2,
+      "query": "FilteredQuerySetMixin class for organization filtering",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["role_privileges.py", "mixins.py"],
+      "expected_symbols": ["FilteredQuerySetMixin"],
+      "expected_content": ["mixin", "queryset", "filter", "organization"],
+      "category": "symbol_specific",
+      "difficulty": "easy",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 3,
+      "query": "EmailOrUsernameLoginBackend authenticate method",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["loginbackend.py", "backend.py"],
+      "expected_symbols": ["authenticate", "EmailOrUsernameLoginBackend"],
+      "expected_content": ["authenticate", "user", "password", "email"],
+      "category": "symbol_pattern",
+      "difficulty": "medium",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 4,
+      "query": "Organization and Associate models in labcore",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["models.py", "associates"],
+      "expected_symbols": ["Organization", "Associate"],
+      "expected_content": ["model", "organization", "associate"],
+      "category": "file_pattern",
+      "difficulty": "easy",
+      "search_levels": ["file", "module"]
+    },
+    {
+      "id": 5,
+      "query": "AccessControlQuerySet filter_for_organization method",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["mixins.py", "models.py"],
+      "expected_symbols": ["AccessControlQuerySet", "filter_for_organization"],
+      "expected_content": ["queryset", "filter", "organization", "access"],
+      "category": "symbol_specific",
+      "difficulty": "medium",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 6,
+      "query": "Sample and SampleRegistry models",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["samples/models.py", "models.py"],
+      "expected_symbols": ["Sample", "SampleRegistry"],
+      "expected_content": ["sample", "model", "registry"],
+      "category": "file_pattern",
+      "difficulty": "medium",
+      "search_levels": ["file", "symbol"]
+    },
+    {
+      "id": 7,
+      "query": "DealershipRequiredMixin for view authentication",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["role_privileges.py", "mixins.py"],
+      "expected_symbols": ["DealershipRequiredMixin"],
+      "expected_content": ["mixin", "dealership", "authentication", "view"],
+      "category": "symbol_pattern",
+      "difficulty": "medium",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 8,
+      "query": "HallPass model for temporary cross-organization access",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["models.py", "hallpass"],
+      "expected_symbols": ["HallPass"],
+      "expected_content": ["hallpass", "access", "organization", "temporary"],
+      "category": "symbol_specific",
+      "difficulty": "medium",
+      "search_levels": ["symbol", "file"]
+    },
+
+    {
+      "id": 10,
+      "query": "What are the L0 universal backend principles?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L0_universal_principles.rst"],
+      "expected_content": ["least privilege", "OWASP", "SOLID", "security", "principle"],
+      "category": "documentation",
+      "difficulty": "easy",
+      "rag_only": true
+    },
+    {
+      "id": 11,
+      "query": "L1 Python best practices and coding standards",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L1_python_best_practices.rst"],
+      "expected_content": ["python", "PEP", "type hints", "standards"],
+      "category": "documentation",
+      "difficulty": "easy",
+      "rag_only": true
+    },
+    {
+      "id": 12,
+      "query": "L2 Django exemplar patterns and conventions",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L2_django_exemplars.rst"],
+      "expected_content": ["django", "views", "models", "ORM", "pattern"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 13,
+      "query": "L3 multi-tenancy pattern with AccessControlQuerySet",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L3_pattern_multi_tenancy.rst"],
+      "expected_content": ["multi-tenancy", "AccessControlQuerySet", "organization", "FilteredQuerySetMixin"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 14,
+      "query": "L3 parent-child architecture pattern",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L3_pattern_parent_child.rst", "parent_child_architecture.rst"],
+      "expected_content": ["parent", "child", "hierarchy", "model"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 15,
+      "query": "L3 background processing pattern with Celery",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L3_pattern_background_processing.rst", "background_tasks.rst"],
+      "expected_content": ["celery", "task", "background", "async", "job"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 16,
+      "query": "L3 GIS workflows pattern for field boundaries",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["L3_pattern_gis_workflows.rst", "gis_features.rst"],
+      "expected_content": ["GIS", "field", "boundary", "geometry", "spatial"],
+      "category": "documentation",
+      "difficulty": "hard",
+      "rag_only": true
+    },
+
+    {
+      "id": 20,
+      "query": "MLMap and MapWithDrawControl Svelte components",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["MLMap.svelte", "MapWithDrawControl.svelte", "MLMapContainer.svelte"],
+      "expected_symbols": [],
+      "expected_content": ["map", "draw", "control", "svelte"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 21,
+      "query": "LoginForm Svelte component for authentication",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["LoginForm.svelte"],
+      "expected_content": ["login", "form", "auth", "svelte"],
+      "category": "svelte",
+      "difficulty": "easy",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 22,
+      "query": "ContactCreateUpdateForm Svelte component",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["ContactCreateUpdateForm.svelte", "ContactDetailsCard.svelte"],
+      "expected_content": ["contact", "form", "create", "update"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 23,
+      "query": "ClientDetailCard and ClientSelect Svelte components",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["ClientDetailCard.svelte", "ClientSelect.svelte", "ClientComboSelect.svelte"],
+      "expected_content": ["client", "select", "detail", "card"],
+      "category": "svelte",
+      "difficulty": "easy",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 24,
+      "query": "AppShell and AppSidebar layout components",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["AppShell.svelte", "AppSidebar.svelte", "AppHeader.svelte"],
+      "expected_content": ["layout", "shell", "sidebar", "header"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 25,
+      "query": "CategoryTreeView and CategorySelect Svelte components",
+      "expected_repos": ["kbhalerao/agkit.io-ui"],
+      "expected_files": ["CategoryTreeView.svelte", "CategorySelect.svelte", "CategoryCRUD.svelte"],
+      "expected_content": ["category", "tree", "select", "hierarchy"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 26,
+      "query": "FarmMapcomponent and MapDrawButtons in farmworth",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["FarmMapcomponent.svelte", "MapDrawButtons.svelte"],
+      "expected_content": ["farm", "map", "draw", "component"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 27,
+      "query": "CalendarWrapper and CalendarEventCRUDModal components",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["CalendarWrapper.svelte", "CalendarEventCRUDModal.svelte"],
+      "expected_content": ["calendar", "event", "modal", "CRUD"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+
+    {
+      "id": 30,
+      "query": "How does the job_counter decorator track Redis job metrics?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["decorators.py"],
+      "expected_content": ["job_counter", "redis", "decorator", "track", "count"],
+      "category": "code_explanation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 31,
+      "query": "How does multi-tenant data isolation work with AccessControlQuerySet?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["mixins.py", "role_privileges.py", "L3_pattern_multi_tenancy.rst"],
+      "expected_content": ["organization", "tenant", "filter", "queryset", "isolation", "AccessControlQuerySet"],
+      "category": "architecture",
+      "difficulty": "hard",
+      "rag_only": true
+    },
+    {
+      "id": 32,
+      "query": "What is the HallPass mechanism for cross-organization access?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["models.py", "L3_pattern_multi_tenancy.rst"],
+      "expected_content": ["HallPass", "cross-organization", "temporary", "access"],
+      "category": "architecture",
+      "difficulty": "hard",
+      "rag_only": true
+    },
+    {
+      "id": 33,
+      "query": "How are user permissions checked using DealershipRequiredMixin?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["role_privileges.py", "mixins.py"],
+      "expected_content": ["permission", "DealershipRequiredMixin", "check", "access", "view"],
+      "category": "implementation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 34,
+      "query": "What are the sample workflow states and transitions?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["samples", "workflows.rst"],
+      "expected_content": ["sample", "workflow", "state", "status"],
+      "category": "discovery",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 35,
+      "query": "How does the FieldEvent serializer handle calendar events?",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["serializers.py", "fieldcalendar"],
+      "expected_content": ["FieldEvent", "serializer", "calendar", "event"],
+      "category": "implementation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+
+    {
+      "id": 40,
+      "query": "FieldEventSerializer REST API serializer",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["serializers.py"],
+      "expected_symbols": ["FieldEventSerializer"],
+      "expected_content": ["serializer", "field", "event", "api"],
+      "category": "file_pattern",
+      "difficulty": "medium",
+      "search_levels": ["file", "symbol"]
+    },
+    {
+      "id": 41,
+      "query": "URL routing configuration in Django urls.py",
+      "expected_repos": [],
+      "expected_files": ["urls.py"],
+      "expected_symbols": ["urlpatterns"],
+      "expected_content": ["path", "url", "route", "include"],
+      "category": "file_pattern",
+      "difficulty": "easy",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 42,
+      "query": "ModelOwnershipMixin for organization ownership",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["mixins.py", "models.py"],
+      "expected_symbols": ["ModelOwnershipMixin"],
+      "expected_content": ["ownership", "organization", "mixin", "model"],
+      "category": "symbol_pattern",
+      "difficulty": "medium",
+      "search_levels": ["symbol", "file"]
+    },
+    {
+      "id": 43,
+      "query": "PRISM weather data integration",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["prismweather", "weather"],
+      "expected_content": ["PRISM", "weather", "data", "climate"],
+      "category": "file_pattern",
+      "difficulty": "hard",
+      "search_levels": ["file", "module"]
+    },
+    {
+      "id": 44,
+      "query": "Invoice and billing models",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["invoices", "models.py"],
+      "expected_symbols": ["Invoice"],
+      "expected_content": ["invoice", "billing", "payment"],
+      "category": "file_pattern",
+      "difficulty": "medium",
+      "search_levels": ["file", "symbol"]
+    },
+    {
+      "id": 45,
+      "query": "Recommendation engine formulas",
+      "expected_repos": ["kbhalerao/labcore"],
+      "expected_files": ["recommendations", "formulas"],
+      "expected_content": ["recommendation", "formula", "calculation"],
+      "category": "file_pattern",
+      "difficulty": "hard",
+      "search_levels": ["file", "module"]
+    },
+
+    {
+      "id": 50,
+      "query": "FarmWorth design guidelines color system and typography",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["design-guidelines.md", "ColorsSemanticSystem.svelte"],
+      "expected_content": ["color", "typography", "Bootstrap", "primary", "palette"],
+      "category": "documentation",
+      "difficulty": "easy",
+      "rag_only": true
+    },
+    {
+      "id": 51,
+      "query": "Svelte patterns for FarmWorth Bootstrap integration",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["svelte-patterns.md"],
+      "expected_content": ["svelte", "Bootstrap", "pattern", "reactive", "store"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 52,
+      "query": "FarmWorth code quality standards and naming conventions",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["code-quality-standards.md", "CodeQualityNamingConventions.svelte"],
+      "expected_content": ["naming", "convention", "code quality", "standard"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 53,
+      "query": "FarmWorth map guidelines and controls layout",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["map-guidelines.md", "MapsControlsLayout.svelte", "MapsColorSystem.svelte"],
+      "expected_content": ["map", "control", "layout", "tile", "zoom"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 54,
+      "query": "FarmWorth dark mode implementation guidelines",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["dark-mode-guidelines.md"],
+      "expected_content": ["dark mode", "theme", "color", "toggle"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 55,
+      "query": "FarmWorth UIUX development process and workflow",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["uiux-development-process.md", "DevelopmentWorkflow.svelte", "ProcessOverview.svelte"],
+      "expected_content": ["UIUX", "process", "workflow", "development"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    },
+    {
+      "id": 56,
+      "query": "Agriculture glossary terms and definitions",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["agriculture-glossary.md", "GlossaryGrid.svelte"],
+      "expected_content": ["agriculture", "glossary", "term", "definition"],
+      "category": "documentation",
+      "difficulty": "easy",
+      "rag_only": true
+    },
+    {
+      "id": 57,
+      "query": "FarmWorth component catalog buttons cards modals",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["component-catalog.md", "ComponentsButtons.svelte", "ComponentsCards.svelte", "ComponentsModals.svelte"],
+      "expected_content": ["component", "button", "card", "modal"],
+      "category": "documentation",
+      "difficulty": "easy",
+      "rag_only": true
+    },
+    {
+      "id": 58,
+      "query": "FormsAccessibilityGuidelines and form patterns in FarmWorth",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["FormsAccessibilityGuidelines.svelte", "FormsPatterns.svelte"],
+      "expected_content": ["form", "accessibility", "WCAG", "input", "validation"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 59,
+      "query": "UI polish micro-interactions and loading states",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["MicroInteractions.svelte", "LoadingStates.svelte", "HoverStates.svelte"],
+      "expected_content": ["animation", "loading", "hover", "transition", "interaction"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 60,
+      "query": "LayoutGridSystem and responsive breakpoints",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["LayoutGridSystem.svelte", "LayoutResponsiveBreakpoints.svelte"],
+      "expected_content": ["grid", "responsive", "breakpoint", "layout", "Bootstrap"],
+      "category": "svelte",
+      "difficulty": "medium",
+      "search_levels": ["file"]
+    },
+    {
+      "id": 61,
+      "query": "a11y-audit and uiux-review Claude commands",
+      "expected_repos": ["PeoplesCompany/farmworth_frontend"],
+      "expected_files": ["a11y-audit.md", "uiux-review.md", "design-check.md"],
+      "expected_content": ["accessibility", "audit", "review", "WCAG", "checklist"],
+      "category": "documentation",
+      "difficulty": "medium",
+      "rag_only": true
+    }
+  ]
+}

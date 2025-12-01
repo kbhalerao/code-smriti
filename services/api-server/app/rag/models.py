@@ -15,6 +15,7 @@ class SearchLevel(str, Enum):
     FILE = "file"          # file_index - individual files
     MODULE = "module"      # module_summary - folders/directories
     REPO = "repo"          # repo_summary - repository overview
+    DOC = "doc"            # document - documentation files (RST, MD, etc.)
 
 
 # Maps SearchLevel to V4 document types
@@ -23,6 +24,7 @@ LEVEL_TO_DOCTYPE = {
     SearchLevel.FILE: "file_index",
     SearchLevel.MODULE: "module_summary",
     SearchLevel.REPO: "repo_summary",
+    SearchLevel.DOC: "document",
 }
 
 

@@ -1,0 +1,1965 @@
+{
+  "timestamp": "2025-11-30T16:59:10.698916",
+  "config": {
+    "api_url": "http://localhost",
+    "levels": [
+      "symbol",
+      "file",
+      "module",
+      "repo"
+    ],
+    "question_count": 12
+  },
+  "summary": {
+    "symbol": {
+      "total_questions": 12,
+      "hit_rate": 0.9166666666666666,
+      "avg_precision_at_1": 0.5,
+      "avg_precision_at_3": 0.5555555555555555,
+      "avg_precision_at_5": 0.5,
+      "avg_mrr": 0.6694444444444444,
+      "avg_score": 14.548980246119164
+    },
+    "file": {
+      "total_questions": 12,
+      "hit_rate": 0.9166666666666666,
+      "avg_precision_at_1": 0.5,
+      "avg_precision_at_3": 0.5277777777777778,
+      "avg_precision_at_5": 0.5,
+      "avg_mrr": 0.6322751322751322,
+      "avg_score": 14.579703699271642
+    },
+    "module": {
+      "total_questions": 12,
+      "hit_rate": 0.8333333333333334,
+      "avg_precision_at_1": 0.3333333333333333,
+      "avg_precision_at_3": 0.3611111111111111,
+      "avg_precision_at_5": 0.3833333333333333,
+      "avg_mrr": 0.46468253968253964,
+      "avg_score": 15.282150486899878
+    },
+    "repo": {
+      "total_questions": 12,
+      "hit_rate": 0.9166666666666666,
+      "avg_precision_at_1": 0.5833333333333334,
+      "avg_precision_at_3": 0.5277777777777778,
+      "avg_precision_at_5": 0.5166666666666667,
+      "avg_mrr": 0.6902777777777778,
+      "avg_score": 13.811730602003374
+    }
+  },
+  "results_by_level": {
+    "symbol": [
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.4,
+        "mrr": 1.0,
+        "avg_score": 13.919697726898164,
+        "top_score": 14.689897597961398,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "job_counter decorator",
+        "category": "symbol_specific",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "decorators.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "network_helpers/consumer_helpers.py",
+            "symbol_name": "job_counter",
+            "score": 14.689897597961398
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "common/consumer_decorators.py",
+            "symbol_name": "job_counter",
+            "score": 14.57596308105466
+          },
+          {
+            "repo_id": "kbhalerao/fertisavern",
+            "file_path": "team/views.py",
+            "symbol_name": "organization_admin_access_control",
+            "score": 14.021057189636203
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 1.0,
+        "avg_score": 15.680670029937719,
+        "top_score": 17.38421160095212,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "FilteredQuerySetMixin class",
+        "category": "symbol_specific",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "role_privileges.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 17.38421160095212
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 16.74603086822507
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredObjectMixin",
+            "score": 16.479285300903292
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.6,
+        "mrr": 1.0,
+        "avg_score": 15.518773044280977,
+        "top_score": 15.697709144287082,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "authenticate user function",
+        "category": "symbol_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "login",
+          "backend"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/CropProfits",
+            "file_path": "backend/accounts/views.py",
+            "symbol_name": "GET /api/accounts/me/",
+            "score": 15.697709144287082
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_backend",
+            "file_path": "integrations/github/Controllers/github_auth.py",
+            "symbol_name": "get_github_user_info",
+            "score": 15.644679130248996
+          },
+          {
+            "repo_id": "kbhalerao/devanand",
+            "file_path": "devanand/people/permissions.py",
+            "symbol_name": "IsAuthenticatedDeveloper.has_permission",
+            "score": 15.622808517150851
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.2,
+        "mrr": 0.2,
+        "avg_score": 15.914697170257568,
+        "top_score": 16.207717895507812,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "Django models for user management",
+        "category": "file_pattern",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "models.py",
+          "associates"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "deprecated/userlayers/admin.py",
+            "symbol_name": null,
+            "score": 16.207717895507812
+          },
+          {
+            "repo_id": "kbhalerao/atlaspmp-backend-poc",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 16.019962310791016
+          },
+          {
+            "repo_id": "kbhalerao/fertisavern",
+            "file_path": "dashboard/migrations",
+            "symbol_name": null,
+            "score": 15.967851638793945
+          }
+        ]
+      },
+      {
+        "hit": false,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.0,
+        "avg_score": 12.762574828796359,
+        "top_score": 13.03220087402341,
+        "result_count": 10,
+        "relevant_count": 0,
+        "query": "Celery task definitions",
+        "category": "file_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "tasks.py",
+          "celery"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ecinfo/Atlas-PMP_frontend",
+            "file_path": "src/feature/projects/utils/sprintTransformers.ts",
+            "symbol_name": "arrow_function",
+            "score": 13.03220087402341
+          },
+          {
+            "repo_id": "PeoplesCompany/public-farmworth",
+            "file_path": "src/routes/mapbinder/[id]/+page.svelte",
+            "symbol_name": "aerial_maps_configuration",
+            "score": 12.878485740356417
+          },
+          {
+            "repo_id": "JessiePBhalerao/firstseedtests",
+            "file_path": "efg/apps/elastic/examples.py",
+            "symbol_name": "yield_average_aggregation",
+            "score": 12.873856605224582
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.8,
+        "mrr": 0.5,
+        "avg_score": 15.26618084390257,
+        "top_score": 16.018775046997042,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "API endpoints for samples",
+        "category": "file_pattern",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "views.py",
+          "api.py",
+          "samples"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/code-smriti",
+            "file_path": "4-consume/mcp-server/server.py",
+            "symbol_name": "GET /api/status",
+            "score": 16.018775046997042
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "fieldcalendar/apiviews/apiviews.py",
+            "symbol_name": "GET /api/clients/<pk>/requests",
+            "score": 15.735765517883273
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "fieldcalendar/apiviews/apiviews.py",
+            "symbol_name": "GET /api/clients/<pk>/requests",
+            "score": 15.73244100921628
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 0.5,
+        "avg_score": 13.939040953033444,
+        "top_score": 15.149862350158664,
+        "result_count": 10,
+        "relevant_count": 7,
+        "query": "authentication module",
+        "category": "module_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "authentication",
+          "login"
+        ],
+        "top_results": [
+          {
+            "repo_id": "JessiePBhalerao/firstseedtests",
+            "file_path": "efg/apps/associates/models.py",
+            "symbol_name": "user_role_permission_assignment",
+            "score": 15.149862350158664
+          },
+          {
+            "repo_id": "jayp-eci/labcoredemo",
+            "file_path": "tests/auth",
+            "symbol_name": null,
+            "score": 14.381095886230469
+          },
+          {
+            "repo_id": "kbhalerao/code-smriti",
+            "file_path": "4-consume/api-server/app/auth/__init__.py",
+            "symbol_name": null,
+            "score": 14.262282371520996
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.4,
+        "mrr": 0.5,
+        "avg_score": 13.41227498144529,
+        "top_score": 13.813591064147921,
+        "result_count": 10,
+        "relevant_count": 5,
+        "query": "test utilities",
+        "category": "module_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "test",
+          "tests",
+          "conftest"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": "src/lib/components/mapbinder/insightsv2/insightsUtils.js",
+            "symbol_name": "dynamic_yield_value_formatting",
+            "score": 13.813591064147921
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "listings/tests/test_fwlisting_search_api.py",
+            "symbol_name": "FWListingSearchAPITestCase.test_property_types_filter",
+            "score": 13.755751670532199
+          },
+          {
+            "repo_id": "JessiePBhalerao/firstseedtests",
+            "file_path": "efg/apps/reports/utils.py",
+            "symbol_name": "maturitytest_by_params",
+            "score": 13.727248252563449
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.2,
+        "mrr": 1.0,
+        "avg_score": 13.839840138183586,
+        "top_score": 14.719429076843234,
+        "result_count": 10,
+        "relevant_count": 1,
+        "query": "laboratory information management system",
+        "category": "repo_overview",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "formulas/models.py",
+            "symbol_name": "lab_measurement_query",
+            "score": 14.719429076843234
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "formulas/models.py",
+            "symbol_name": "lab_measurement_query_sample",
+            "score": 14.372240127258273
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/migrations",
+            "symbol_name": null,
+            "score": 14.238245964050293
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.4,
+        "mrr": 0.3333333333333333,
+        "avg_score": 14.375700950622559,
+        "top_score": 14.523469924926758,
+        "result_count": 10,
+        "relevant_count": 2,
+        "query": "Django multi-tenant application",
+        "category": "repo_concept",
+        "level": "symbol",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 14.523469924926758
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 14.425973892211914
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "soils/apps.py",
+            "symbol_name": null,
+            "score": 14.378778457641602
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 15.730685199432344,
+        "top_score": 17.031219543151828,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "WebSocket consumer for real-time updates",
+        "category": "tech_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "consumer",
+          "websocket"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundAutoZoneConsumer",
+            "score": 17.031219543151828
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundAutoZoneConsumer",
+            "score": 16.928410590820285
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundRegressionConsumer",
+            "score": 15.96854120605466
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 1.0,
+        "mrr": 1.0,
+        "avg_score": 14.227627086639405,
+        "top_score": 14.478795051574707,
+        "result_count": 10,
+        "relevant_count": 10,
+        "query": "database migration",
+        "category": "tech_pattern",
+        "level": "symbol",
+        "expected_repos": [],
+        "expected_files": [
+          "migration",
+          "migrations"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "datamigrations/models.py",
+            "symbol_name": null,
+            "score": 14.478795051574707
+          },
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "example_site/person/migrations",
+            "symbol_name": null,
+            "score": 14.467775344848633
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "products/migrations/0059_auto_20220531_2026.py",
+            "symbol_name": null,
+            "score": 14.460762977600098
+          }
+        ]
+      }
+    ],
+    "file": [
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.4,
+        "mrr": 1.0,
+        "avg_score": 12.561015415191651,
+        "top_score": 13.133747100830078,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "job_counter decorator",
+        "category": "symbol_specific",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "decorators.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "network_helpers/consumer_helpers.py",
+            "symbol_name": "job_counter",
+            "score": 13.133747100830078
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "common/consumer_decorators.py",
+            "symbol_name": "job_counter",
+            "score": 13.01981258392334
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 12.71921443939209
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 14.280134582519532,
+        "top_score": 15.8280611038208,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "FilteredQuerySetMixin class",
+        "category": "symbol_specific",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "role_privileges.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.8280611038208
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.18988037109375
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "docs/source/modules/associates.rst",
+            "symbol_name": null,
+            "score": 15.014408111572266
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 0.5,
+        "avg_score": 14.02415771484375,
+        "top_score": 14.462018013000488,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "authenticate user function",
+        "category": "symbol_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "login",
+          "backend"
+        ],
+        "top_results": [
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 14.462018013000488
+          },
+          {
+            "repo_id": "kbhalerao/CropProfits",
+            "file_path": "backend/accounts/views.py",
+            "symbol_name": "GET /api/accounts/me/",
+            "score": 14.141558647155762
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_backend",
+            "file_path": "integrations/github/Controllers/github_auth.py",
+            "symbol_name": "get_github_user_info",
+            "score": 14.088528633117676
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 0.5,
+        "avg_score": 18.11979158910318,
+        "top_score": 18.48313330205484,
+        "result_count": 10,
+        "relevant_count": 5,
+        "query": "Django models for user management",
+        "category": "file_pattern",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "models.py",
+          "associates"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "deprecated/userlayers/admin.py",
+            "symbol_name": null,
+            "score": 18.48313330205484
+          },
+          {
+            "repo_id": "kbhalerao/evolvechiro",
+            "file_path": "availity/models.py",
+            "symbol_name": null,
+            "score": 18.201727853141264
+          },
+          {
+            "repo_id": "kbhalerao/fertisavern",
+            "file_path": "api/models.py",
+            "symbol_name": null,
+            "score": 18.133591637931303
+          }
+        ]
+      },
+      {
+        "hit": false,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.0,
+        "avg_score": 11.679608534368082,
+        "top_score": 13.288187012992339,
+        "result_count": 10,
+        "relevant_count": 0,
+        "query": "Celery task definitions",
+        "category": "file_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "tasks.py",
+          "celery"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": "src/routes/(app)/design-guidelines/agriculture-glossary/glossary-data.js",
+            "symbol_name": null,
+            "score": 13.288187012992339
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": ".claude/prompts/gemini-agricultural-glossary-extraction.md",
+            "symbol_name": null,
+            "score": 12.406281471252441
+          },
+          {
+            "repo_id": "kbhalerao/evolvechiro",
+            "file_path": "ct_installations/monitoring/TROUBLESHOOTING_COMMANDS.md",
+            "symbol_name": null,
+            "score": 11.559558868408203
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.14285714285714285,
+        "avg_score": 15.301193134944658,
+        "top_score": 17.3231839993815,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "API endpoints for samples",
+        "category": "file_pattern",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "views.py",
+          "api.py",
+          "samples"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ecinfo/Atlas-PMP_frontend",
+            "file_path": "src/feature/prReview/services/constants.ts",
+            "symbol_name": null,
+            "score": 17.3231839993815
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_frontend",
+            "file_path": "src/feature/auth/services/constants.ts",
+            "symbol_name": null,
+            "score": 16.90619944127603
+          },
+          {
+            "repo_id": "kbhalerao/topsoil",
+            "file_path": "chemicals/urls.py",
+            "symbol_name": null,
+            "score": 16.106578812919096
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 14.010967443975016,
+        "top_score": 16.537697778068022,
+        "result_count": 10,
+        "relevant_count": 7,
+        "query": "authentication module",
+        "category": "module_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "authentication",
+          "login"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/code-smriti",
+            "file_path": "4-consume/api-server/app/auth/__init__.py",
+            "symbol_name": null,
+            "score": 16.537697778068022
+          },
+          {
+            "repo_id": "jayp-eci/labcoredemo",
+            "file_path": "tests/auth",
+            "symbol_name": null,
+            "score": 14.381095886230469
+          },
+          {
+            "repo_id": "kbhalerao/cropProfit",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 14.092220306396484
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 1.0,
+        "mrr": 1.0,
+        "avg_score": 13.42250212923787,
+        "top_score": 14.804239259086089,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "test utilities",
+        "category": "module_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "test",
+          "tests",
+          "conftest"
+        ],
+        "top_results": [
+          {
+            "repo_id": "woodardjoshua/508hCoverCrop",
+            "file_path": "clus/tests.py",
+            "symbol_name": null,
+            "score": 14.804239259086089
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier2apps/weather/tests.py",
+            "symbol_name": null,
+            "score": 14.656853661857085
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "datamigrations/tests.py",
+            "symbol_name": null,
+            "score": 14.634509072623686
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.1111111111111111,
+        "avg_score": 13.769497583898112,
+        "top_score": 15.224965081534819,
+        "result_count": 10,
+        "relevant_count": 1,
+        "query": "laboratory information management system",
+        "category": "repo_overview",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/admin.py",
+            "symbol_name": null,
+            "score": 15.224965081534819
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/migrations",
+            "symbol_name": null,
+            "score": 14.238245964050293
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/models",
+            "symbol_name": null,
+            "score": 14.078631401062012
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.2,
+        "mrr": 1.0,
+        "avg_score": 16.54125059636636,
+        "top_score": 16.654193864188628,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "Django multi-tenant application",
+        "category": "repo_concept",
+        "level": "file",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "soils/apps.py",
+            "symbol_name": null,
+            "score": 16.654193864188628
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/apps.py",
+            "symbol_name": null,
+            "score": 16.645357117972807
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "soils/apps.py",
+            "symbol_name": null,
+            "score": 16.58265493901773
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.6,
+        "mrr": 0.3333333333333333,
+        "avg_score": 14.784435174052325,
+        "top_score": 16.28300093205972,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "WebSocket consumer for real-time updates",
+        "category": "tech_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "consumer",
+          "websocket"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier2apps/notifications/routing.py",
+            "symbol_name": null,
+            "score": 16.28300093205972
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "clients/routing.py",
+            "symbol_name": null,
+            "score": 16.152545914969878
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundAutoZoneConsumer",
+            "score": 15.475069046020508
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 1.0,
+        "mrr": 1.0,
+        "avg_score": 16.461890492759185,
+        "top_score": 16.754210458121733,
+        "result_count": 10,
+        "relevant_count": 10,
+        "query": "database migration",
+        "category": "tech_pattern",
+        "level": "file",
+        "expected_repos": [],
+        "expected_files": [
+          "migration",
+          "migrations"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "datamigrations/models.py",
+            "symbol_name": null,
+            "score": 16.754210458121733
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "products/migrations/0059_auto_20220531_2026.py",
+            "symbol_name": null,
+            "score": 16.736178384147124
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_backend",
+            "file_path": "projects/migrations/0033_companyproject_vector.py",
+            "symbol_name": null,
+            "score": 16.493557916007475
+          }
+        ]
+      }
+    ],
+    "module": [
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.4,
+        "mrr": 1.0,
+        "avg_score": 12.561015415191651,
+        "top_score": 13.133747100830078,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "job_counter decorator",
+        "category": "symbol_specific",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "decorators.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "network_helpers/consumer_helpers.py",
+            "symbol_name": "job_counter",
+            "score": 13.133747100830078
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "common/consumer_decorators.py",
+            "symbol_name": "job_counter",
+            "score": 13.01981258392334
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 12.71921443939209
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 14.280134582519532,
+        "top_score": 15.8280611038208,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "FilteredQuerySetMixin class",
+        "category": "symbol_specific",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "role_privileges.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.8280611038208
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.18988037109375
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "docs/source/modules/associates.rst",
+            "symbol_name": null,
+            "score": 15.014408111572266
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.6,
+        "mrr": 0.3333333333333333,
+        "avg_score": 14.369056567234011,
+        "top_score": 17.29688986820192,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "authenticate user function",
+        "category": "symbol_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "login",
+          "backend"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": "src/routes/api/session",
+            "symbol_name": null,
+            "score": 17.29688986820192
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 14.462018013000488
+          },
+          {
+            "repo_id": "kbhalerao/CropProfits",
+            "file_path": "backend/accounts/views.py",
+            "symbol_name": "GET /api/accounts/me/",
+            "score": 14.141558647155762
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.2,
+        "mrr": 0.25,
+        "avg_score": 17.648537249774787,
+        "top_score": 19.49952086490602,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "Django models for user management",
+        "category": "file_pattern",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "models.py",
+          "associates"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/atlaspmp-backend-poc",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 19.49952086490602
+          },
+          {
+            "repo_id": "kbhalerao/fertisavern",
+            "file_path": "dashboard/migrations",
+            "symbol_name": null,
+            "score": 19.44741019290895
+          },
+          {
+            "repo_id": "kbhalerao/atlaspmp-backend-poc",
+            "file_path": "users/migrations",
+            "symbol_name": null,
+            "score": 19.426346388282486
+          }
+        ]
+      },
+      {
+        "hit": false,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.0,
+        "avg_score": 12.147375219428957,
+        "top_score": 14.705936994971939,
+        "result_count": 10,
+        "relevant_count": 0,
+        "query": "Celery task definitions",
+        "category": "file_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "tasks.py",
+          "celery"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/rabo_topsoil",
+            "file_path": "src/routes/(app)/calculator/[id]",
+            "symbol_name": null,
+            "score": 14.705936994971939
+          },
+          {
+            "repo_id": "ContinuumAgInc/rabo_topsoil",
+            "file_path": "src/routes/(app)/calculator",
+            "symbol_name": null,
+            "score": 14.4862953094861
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": ".claude/prompts/gemini-agricultural-glossary-extraction.md",
+            "symbol_name": null,
+            "score": 12.406281471252441
+          }
+        ]
+      },
+      {
+        "hit": false,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.0,
+        "avg_score": 16.463713372524058,
+        "top_score": 17.432847586097427,
+        "result_count": 10,
+        "relevant_count": 0,
+        "query": "API endpoints for samples",
+        "category": "file_pattern",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "views.py",
+          "api.py",
+          "samples"
+        ],
+        "top_results": [
+          {
+            "repo_id": "GMSLab/drawtools",
+            "file_path": "src/routes/api/search/clientslist",
+            "symbol_name": null,
+            "score": 17.432847586097427
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil_frontend",
+            "file_path": "src/routes/api/states",
+            "symbol_name": null,
+            "score": 17.42750510257692
+          },
+          {
+            "repo_id": "JessiePBhalerao/firstseedtests",
+            "file_path": "efg/apps/archive/tests",
+            "symbol_name": null,
+            "score": 17.24451121372194
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 1.0,
+        "avg_score": 17.165133848609635,
+        "top_score": 17.860654440345474,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "authentication module",
+        "category": "module_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "authentication",
+          "login"
+        ],
+        "top_results": [
+          {
+            "repo_id": "jayp-eci/labcoredemo",
+            "file_path": "tests/auth",
+            "symbol_name": null,
+            "score": 17.860654440345474
+          },
+          {
+            "repo_id": "kbhalerao/cropProfit",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 17.57177886051149
+          },
+          {
+            "repo_id": "kbhalerao/sdxweather",
+            "file_path": "src/routes/api/auth",
+            "symbol_name": null,
+            "score": 17.171834555091568
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.8,
+        "mrr": 0.5,
+        "avg_score": 13.677222763229253,
+        "top_score": 15.839359846534439,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "test utilities",
+        "category": "module_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "test",
+          "tests",
+          "conftest"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "samples/templatetags",
+            "symbol_name": null,
+            "score": 15.839359846534439
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "tests",
+            "symbol_name": null,
+            "score": 15.722999182166763
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "samples/tests",
+            "symbol_name": null,
+            "score": 15.664479818763443
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.1,
+        "avg_score": 16.870340433540054,
+        "top_score": 17.7178045181653,
+        "result_count": 10,
+        "relevant_count": 1,
+        "query": "laboratory information management system",
+        "category": "repo_overview",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/migrations",
+            "symbol_name": null,
+            "score": 17.7178045181653
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/models",
+            "symbol_name": null,
+            "score": 17.558189955177017
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps",
+            "symbol_name": null,
+            "score": 17.134107199134537
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.2,
+        "mrr": 0.25,
+        "avg_score": 16.437231306327647,
+        "top_score": 18.003028479041763,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "Django multi-tenant application",
+        "category": "repo_concept",
+        "level": "module",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 18.003028479041763
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 17.90553244632692
+          },
+          {
+            "repo_id": "kbhalerao/agwx",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 17.757890310706802
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.14285714285714285,
+        "avg_score": 16.176297239555186,
+        "top_score": 17.339233007850357,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "WebSocket consumer for real-time updates",
+        "category": "tech_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "consumer",
+          "websocket"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier2apps/notifications",
+            "symbol_name": null,
+            "score": 17.339233007850357
+          },
+          {
+            "repo_id": "kbhalerao/rma_adm",
+            "file_path": "rmaviewer/src/routes",
+            "symbol_name": null,
+            "score": 17.235919561805435
+          },
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": "src/routes/api/dropbox/preferences",
+            "symbol_name": null,
+            "score": 16.927538481177994
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 1.0,
+        "mrr": 1.0,
+        "avg_score": 15.589747844863775,
+        "top_score": 17.947333898963638,
+        "result_count": 10,
+        "relevant_count": 10,
+        "query": "database migration",
+        "category": "tech_pattern",
+        "level": "module",
+        "expected_repos": [],
+        "expected_files": [
+          "migration",
+          "migrations"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "example_site/person/migrations",
+            "symbol_name": null,
+            "score": 17.947333898963638
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "organizations/migrations",
+            "symbol_name": null,
+            "score": 17.52614077609987
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "organizations/migrations",
+            "symbol_name": null,
+            "score": 17.463142958106705
+          }
+        ]
+      }
+    ],
+    "repo": [
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.4,
+        "mrr": 1.0,
+        "avg_score": 12.561015415191651,
+        "top_score": 13.133747100830078,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "job_counter decorator",
+        "category": "symbol_specific",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "decorators.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "network_helpers/consumer_helpers.py",
+            "symbol_name": "job_counter",
+            "score": 13.133747100830078
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "common/consumer_decorators.py",
+            "symbol_name": "job_counter",
+            "score": 13.01981258392334
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 12.71921443939209
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 14.280134582519532,
+        "top_score": 15.8280611038208,
+        "result_count": 10,
+        "relevant_count": 6,
+        "query": "FilteredQuerySetMixin class",
+        "category": "symbol_specific",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "role_privileges.py"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.8280611038208
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "orders/apiviews.py",
+            "symbol_name": "FilteredQuerySetMixin",
+            "score": 15.18988037109375
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "docs/source/modules/associates.rst",
+            "symbol_name": null,
+            "score": 15.014408111572266
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 0.5,
+        "avg_score": 14.02415771484375,
+        "top_score": 14.462018013000488,
+        "result_count": 10,
+        "relevant_count": 3,
+        "query": "authenticate user function",
+        "category": "symbol_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "login",
+          "backend"
+        ],
+        "top_results": [
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "uilevents/labelmaker/templates/labelmaker/default_url.txt",
+            "symbol_name": null,
+            "score": 14.462018013000488
+          },
+          {
+            "repo_id": "kbhalerao/CropProfits",
+            "file_path": "backend/accounts/views.py",
+            "symbol_name": "GET /api/accounts/me/",
+            "score": 14.141558647155762
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_backend",
+            "file_path": "integrations/github/Controllers/github_auth.py",
+            "symbol_name": "get_github_user_info",
+            "score": 14.088528633117676
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.2,
+        "mrr": 0.2,
+        "avg_score": 15.914697170257568,
+        "top_score": 16.207717895507812,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "Django models for user management",
+        "category": "file_pattern",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "models.py",
+          "associates"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "deprecated/userlayers/admin.py",
+            "symbol_name": null,
+            "score": 16.207717895507812
+          },
+          {
+            "repo_id": "kbhalerao/atlaspmp-backend-poc",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 16.019962310791016
+          },
+          {
+            "repo_id": "kbhalerao/fertisavern",
+            "file_path": "dashboard/migrations",
+            "symbol_name": null,
+            "score": 15.967851638793945
+          }
+        ]
+      },
+      {
+        "hit": false,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.0,
+        "mrr": 0.0,
+        "avg_score": 11.472535991668702,
+        "top_score": 12.406281471252441,
+        "result_count": 10,
+        "relevant_count": 0,
+        "query": "Celery task definitions",
+        "category": "file_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "tasks.py",
+          "celery"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworth_frontend",
+            "file_path": ".claude/prompts/gemini-agricultural-glossary-extraction.md",
+            "symbol_name": null,
+            "score": 12.406281471252441
+          },
+          {
+            "repo_id": "kbhalerao/evolvechiro",
+            "file_path": "ct_installations/monitoring/TROUBLESHOOTING_COMMANDS.md",
+            "symbol_name": null,
+            "score": 11.559558868408203
+          },
+          {
+            "repo_id": "kbhalerao/asktom-chatbot",
+            "file_path": "keywords.txt",
+            "symbol_name": null,
+            "score": 11.535948753356934
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.0,
+        "precision_at_5": 0.4,
+        "mrr": 0.25,
+        "avg_score": 14.236096572875976,
+        "top_score": 15.047768592834473,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "API endpoints for samples",
+        "category": "file_pattern",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [
+          "views.py",
+          "api.py",
+          "samples"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ecinfo/Atlas-PMP_frontend",
+            "file_path": "src/feature/prReview/services/constants.ts",
+            "symbol_name": null,
+            "score": 15.047768592834473
+          },
+          {
+            "repo_id": "ecinfo/Atlas-PMP_frontend",
+            "file_path": "src/feature/auth/services/constants.ts",
+            "symbol_name": null,
+            "score": 14.630784034729004
+          },
+          {
+            "repo_id": "kbhalerao/code-smriti",
+            "file_path": "4-consume/mcp-server/server.py",
+            "symbol_name": "GET /api/status",
+            "score": 14.462624549865723
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 13.783425903320312,
+        "top_score": 14.381095886230469,
+        "result_count": 10,
+        "relevant_count": 7,
+        "query": "authentication module",
+        "category": "module_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "auth",
+          "authentication",
+          "login"
+        ],
+        "top_results": [
+          {
+            "repo_id": "jayp-eci/labcoredemo",
+            "file_path": "tests/auth",
+            "symbol_name": null,
+            "score": 14.381095886230469
+          },
+          {
+            "repo_id": "kbhalerao/code-smriti",
+            "file_path": "4-consume/api-server/app/auth/__init__.py",
+            "symbol_name": null,
+            "score": 14.262282371520996
+          },
+          {
+            "repo_id": "kbhalerao/cropProfit",
+            "file_path": "users",
+            "symbol_name": null,
+            "score": 14.092220306396484
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.6666666666666666,
+        "precision_at_5": 0.6,
+        "mrr": 1.0,
+        "avg_score": 12.304566860198975,
+        "top_score": 12.528823852539062,
+        "result_count": 10,
+        "relevant_count": 5,
+        "query": "test utilities",
+        "category": "module_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "test",
+          "tests",
+          "conftest"
+        ],
+        "top_results": [
+          {
+            "repo_id": "woodardjoshua/508hCoverCrop",
+            "file_path": "clus/tests.py",
+            "symbol_name": null,
+            "score": 12.528823852539062
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier2apps/weather/tests.py",
+            "symbol_name": null,
+            "score": 12.381438255310059
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "samples/templatetags",
+            "symbol_name": null,
+            "score": 12.359801292419434
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.2,
+        "mrr": 1.0,
+        "avg_score": 14.23145688315916,
+        "top_score": 19.844558074145326,
+        "result_count": 10,
+        "relevant_count": 2,
+        "query": "laboratory information management system",
+        "category": "repo_overview",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": null,
+            "symbol_name": null,
+            "score": 19.844558074145326
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/migrations",
+            "symbol_name": null,
+            "score": 14.238245964050293
+          },
+          {
+            "repo_id": "kbhalerao/agkit.io-backend",
+            "file_path": "tier3apps/lims/models",
+            "symbol_name": null,
+            "score": 14.078631401062012
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 0.0,
+        "precision_at_3": 0.3333333333333333,
+        "precision_at_5": 0.4,
+        "mrr": 0.3333333333333333,
+        "avg_score": 14.375700950622559,
+        "top_score": 14.523469924926758,
+        "result_count": 10,
+        "relevant_count": 2,
+        "query": "Django multi-tenant application",
+        "category": "repo_concept",
+        "level": "repo",
+        "expected_repos": [
+          "kbhalerao/labcore"
+        ],
+        "expected_files": [],
+        "top_results": [
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 14.523469924926758
+          },
+          {
+            "repo_id": "bmwyman/uilevents",
+            "file_path": "(root)",
+            "symbol_name": null,
+            "score": 14.425973892211914
+          },
+          {
+            "repo_id": "kbhalerao/labcore",
+            "file_path": "soils/apps.py",
+            "symbol_name": null,
+            "score": 14.378778457641602
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 0.8,
+        "mrr": 1.0,
+        "avg_score": 14.32935209274292,
+        "top_score": 15.475069046020508,
+        "result_count": 10,
+        "relevant_count": 4,
+        "query": "WebSocket consumer for real-time updates",
+        "category": "tech_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "consumer",
+          "websocket"
+        ],
+        "top_results": [
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundAutoZoneConsumer",
+            "score": 15.475069046020508
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundAutoZoneConsumer",
+            "score": 15.372260093688965
+          },
+          {
+            "repo_id": "ContinuumAgInc/topsoil2.0",
+            "file_path": "clients/consumers/backgroundconsumers.py",
+            "symbol_name": "BackgroundRegressionConsumer",
+            "score": 14.41239070892334
+          }
+        ]
+      },
+      {
+        "hit": true,
+        "precision_at_1": 1.0,
+        "precision_at_3": 1.0,
+        "precision_at_5": 1.0,
+        "mrr": 1.0,
+        "avg_score": 14.227627086639405,
+        "top_score": 14.478795051574707,
+        "result_count": 10,
+        "relevant_count": 10,
+        "query": "database migration",
+        "category": "tech_pattern",
+        "level": "repo",
+        "expected_repos": [],
+        "expected_files": [
+          "migration",
+          "migrations"
+        ],
+        "top_results": [
+          {
+            "repo_id": "PeoplesCompany/farmworthdb",
+            "file_path": "datamigrations/models.py",
+            "symbol_name": null,
+            "score": 14.478795051574707
+          },
+          {
+            "repo_id": "kbhalerao/django-address",
+            "file_path": "example_site/person/migrations",
+            "symbol_name": null,
+            "score": 14.467775344848633
+          },
+          {
+            "repo_id": "jayp-eci/labcore",
+            "file_path": "products/migrations/0059_auto_20220531_2026.py",
+            "symbol_name": null,
+            "score": 14.460762977600098
+          }
+        ]
+      }
+    ]
+  }
+}

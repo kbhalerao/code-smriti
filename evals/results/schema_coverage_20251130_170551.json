@@ -1,0 +1,183 @@
+{
+  "timestamp": "2025-11-30T17:05:05.959471",
+  "evaluations": {
+    "repo_coverage": {
+      "total_repos": 95,
+      "repos_with_summary": 95,
+      "missing_summaries": [],
+      "coverage_pct": 100.0,
+      "pass": true
+    },
+    "module_coverage": {
+      "total_modules": 4108,
+      "repos_with_modules": 95,
+      "avg_modules_per_repo": 43.242105263157896,
+      "repos_with_few_modules": [
+        "kbhalerao/pdf-filler",
+        "PeoplesCompany/landgate",
+        "kbhalerao/yieldguide-kev-durable-object",
+        "kbhalerao/claude-idea",
+        "JessiePBhalerao/django-seed-elastic",
+        "CHETANECINFOSOLUTIONS/lsbdata",
+        "policy-design-lab/farmdoc-service",
+        "kbhalerao/devops_reference",
+        "kbhalerao/farmdoc-insurance",
+        "kbhalerao/fema_regen",
+        "kbhalerao/cdl_api",
+        "kbhalerao/geolocate-cloudflare-worker",
+        "kbhalerao/ssurgo",
+        "kbhalerao/fastapi-skeleton"
+      ],
+      "top_repos": [
+        {
+          "count": 417,
+          "repo_id": "PeoplesCompany/farmworth_frontend"
+        },
+        {
+          "count": 315,
+          "repo_id": "kbhalerao/pinionfe"
+        },
+        {
+          "count": 275,
+          "repo_id": "jayp-eci/pinionfe"
+        },
+        {
+          "count": 244,
+          "repo_id": "ContinuumAgInc/topsoil2.0"
+        },
+        {
+          "count": 203,
+          "repo_id": "kbhalerao/labcore"
+        }
+      ],
+      "pass": false
+    },
+    "file_coverage": {
+      "total_files": 13698,
+      "repos_with_files": 95,
+      "avg_files_per_repo": 144.18947368421053,
+      "missing_embeddings": 0,
+      "missing_content": 0,
+      "top_repos": [
+        {
+          "count": 1539,
+          "repo_id": "ContinuumAgInc/topsoil2.0"
+        },
+        {
+          "count": 1332,
+          "repo_id": "kbhalerao/labcore"
+        },
+        {
+          "count": 1286,
+          "repo_id": "jayp-eci/labcore"
+        },
+        {
+          "count": 887,
+          "repo_id": "PeoplesCompany/farmworth_frontend"
+        },
+        {
+          "count": 562,
+          "repo_id": "JessiePBhalerao/firstseedtests"
+        }
+      ],
+      "pass": true
+    },
+    "symbol_coverage": {
+      "total_symbols": 28122,
+      "repos_with_symbols": 94,
+      "avg_symbols_per_repo": 299.17021276595744,
+      "unknown_symbol_names": 0,
+      "symbol_types": {
+        "cache": 7,
+        "calculation": 726,
+        "transform": 1164,
+        "integration": 1821,
+        "authentication": 2,
+        "validation": 901,
+        "state_machine": 6,
+        "workflow": 1999,
+        "rpc": 16,
+        "aggregation": 1,
+        "conversion": 2,
+        "resolver": 14,
+        "background_task": 2,
+        "lifespan": 1,
+        "data_management": 1,
+        "data transformation": 29,
+        "normalization": 1,
+        "endpoint": 1590,
+        "search": 2,
+        "data_validation": 1,
+        "sql": 86,
+        "html": 92,
+        "state management": 1,
+        "class": 181,
+        "retrieval": 1,
+        "json": 3,
+        "data_transformation": 7,
+        "ui_state": 1,
+        "csv": 3,
+        "filtering": 6,
+        "filter": 2,
+        "mapping": 1,
+        "build": 3,
+        "shell": 3,
+        "style": 1,
+        "update": 1,
+        "creation": 3,
+        "state_management": 1,
+        "schema": 445,
+        "function": 5367,
+        "configuration": 4,
+        "tool": 1,
+        "lookup": 1,
+        "json_schema": 80,
+        "error_handling": 1,
+        "action": 1,
+        "auto_save": 1,
+        "authorization": 336,
+        "arrow_function": 804,
+        "query_building": 2,
+        "method": 12261,
+        "middleware": 84,
+        "query": 2,
+        "transformation": 13,
+        "http_request": 2,
+        "xml": 1,
+        "websocket": 34
+      },
+      "top_repos": [
+        {
+          "count": 3946,
+          "repo_id": "ContinuumAgInc/topsoil2.0"
+        },
+        {
+          "count": 3202,
+          "repo_id": "kbhalerao/labcore"
+        },
+        {
+          "count": 2909,
+          "repo_id": "jayp-eci/labcore"
+        },
+        {
+          "count": 1879,
+          "repo_id": "JessiePBhalerao/firstseedtests"
+        },
+        {
+          "count": 1159,
+          "repo_id": "PeoplesCompany/farmworth_frontend"
+        }
+      ],
+      "pass": true
+    },
+    "quality_metrics": {
+      "enrichment_distribution": {
+        "basic": 23,
+        "llm_summary": 46000
+      },
+      "llm_summary_pct": 99.95002498750625,
+      "pass": true
+    }
+  },
+  "overall_pass": true
+}

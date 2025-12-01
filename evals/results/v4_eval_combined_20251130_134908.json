@@ -1,0 +1,48 @@
+{
+  "timestamp": "2025-11-30T13:49:03.315882",
+  "questions_file": "evals/v4_eval_questions.json",
+  "evaluations": {
+    "search": {
+      "status": "completed",
+      "summary": {
+        "symbol": {
+          "total_questions": 20,
+          "hit_rate": 0.0,
+          "avg_precision_at_1": 0.0,
+          "avg_precision_at_3": 0.0,
+          "avg_precision_at_5": 0.0,
+          "avg_mrr": 0.0,
+          "avg_score": 0.0
+        },
+        "file": {
+          "total_questions": 20,
+          "hit_rate": 0.0,
+          "avg_precision_at_1": 0.0,
+          "avg_precision_at_3": 0.0,
+          "avg_precision_at_5": 0.0,
+          "avg_mrr": 0.0,
+          "avg_score": 0.0
+        },
+        "module": {
+          "total_questions": 20,
+          "hit_rate": 0.0,
+          "avg_precision_at_1": 0.0,
+          "avg_precision_at_3": 0.0,
+          "avg_precision_at_5": 0.0,
+          "avg_mrr": 0.0,
+          "avg_score": 0.0
+        },
+        "repo": {
+          "total_questions": 20,
+          "hit_rate": 0.0,
+          "avg_precision_at_1": 0.0,
+          "avg_precision_at_3": 0.0,
+          "avg_precision_at_5": 0.0,
+          "avg_mrr": 0.0,
+          "avg_score": 0.0
+        }
+      }
+    }
+  },
+  "duration_seconds": 5.383692
+}

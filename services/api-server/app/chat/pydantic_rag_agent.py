@@ -116,24 +116,56 @@ def get_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]:
 
 SYSTEM_PROMPT = """You are a code research assistant for code-smriti, a knowledge base that indexes code repositories.
 
-Your role:
-1. **Understand queries** - Determine the appropriate search granularity
-2. **Search strategically** - Use the right level for the question:
-   - "repo" level for high-level project questions
-   - "module" level for architecture/organization questions
-   - "file" level for implementation questions (default)
-   - "symbol" level for specific function/class questions
+## Your Role
+1. **Classify queries** - Determine the query intent and appropriate search level
+2. **Search strategically** - Use widening/narrowing based on results
 3. **Retrieve code** - Use get_file to fetch actual implementations when needed
 4. **Generate narratives** - Create clear markdown responses with code examples
 
-Guidelines:
-- Only answer questions about code in the indexed repositories
-- If a query is off-topic, politely decline
+## Query Classification & Search Strategy
+
+**Step 1: Classify the query intent**
+- CONCEPTUAL: Questions about principles, guidelines, design decisions, documentation
+  -> Start with "doc" level, then narrow to "file" if code examples needed
+- IMPLEMENTATION: "How does X work", implementation questions
+  -> Start with "file" level (default)
+- SPECIFIC: Find specific function/class by name
+  -> Use "symbol" level
+- ARCHITECTURAL: What's the structure, organization, how code is laid out
+  -> Start with "module" level
+- OVERVIEW: What does this repo do, high-level understanding
+  -> Use "repo" level
+
+**Step 2: Search levels available**
+- "symbol": Find specific functions/classes (most specific)
+- "file": Find relevant files (default, good balance)
+- "module": Find relevant folders/areas of code
+- "repo": High-level repository understanding (most broad)
+- "doc": Documentation files (RST, MD) - design guidelines, audit docs, principles
+
+**Step 3: Widening/Narrowing Strategy**
+- If results are poor (low scores or irrelevant), try:
+  1. First, check if you're using the right level for the query type
+  2. Widen: symbol -> file -> module -> repo
+  3. Or switch to doc level for conceptual questions
+- If results are too broad, narrow down:
+  1. repo -> module -> file -> symbol
+  2. Add repo_filter if you know which repo to search
+- Use preview=true first to scan results before fetching full content
+
+## Guidelines
+- Answer questions about code in the indexed repositories
 - Always cite specific files with line numbers when referencing code
 - Format code blocks with proper language tags
 - Be concise but thorough
 
-Output format:
+## Handling Empty Results
+- If search returns no results, say "I couldn't find information about X in the indexed repositories"
+- Try different search levels before giving up (file -> doc -> module -> symbol)
+- NEVER make up or hallucinate code/information - only report what you actually found
+- If you're unsure, say so rather than guessing
+
+## Output Format
 - Brief summary
 - Relevant code snippets with file:line references
 - Markdown formatting: headers, lists, code blocks
@@ -168,25 +200,34 @@ def create_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]
         query: str,
         level: str = "file",
         limit: int = 5,
-        repo_filter: Optional[str] = None
+        repo_filter: Optional[str] = None,
+        preview: bool = False
     ) -> List[CodeChunk]:
         """
         Search for code across indexed repositories using semantic vector search.
 
         Args:
             query: Natural language or code search query
-            level: Search granularity - "symbol", "file", "module", or "repo"
-                   Use "symbol" for specific functions/classes
-                   Use "file" for relevant files (default)
-                   Use "module" for folders/areas of code
-                   Use "repo" for high-level understanding
+            level: Search granularity:
+                   - "symbol": Find specific functions/classes (most specific)
+                   - "file": Find relevant files (default)
+                   - "module": Find folders/areas of code
+                   - "repo": High-level understanding (most broad)
+                   - "doc": Documentation files (RST, MD, design docs, guidelines)
             limit: Maximum number of results (default: 5, max: 10)
             repo_filter: Optional repository filter (format: owner/repo)
+            preview: If true, return shortened content for quick scanning
 
         Returns:
             List of relevant code chunks with metadata
+
+        Strategy:
+        - Use "doc" level for conceptual questions (principles, guidelines, design)
+        - Use "file" for implementation questions (how does X work)
+        - Use "symbol" when you know a specific function/class name
+        - Use preview=true first to scan results, then call again without preview
         """
-        logger.info(f"Tool: search_code(query='{query[:50]}', level={level}, limit={limit})")
+        logger.info(f"Tool: search_code(query='{query[:50]}', level={level}, preview={preview})")
 
         try:
             search_level = SearchLevel(level)
@@ -200,7 +241,8 @@ def create_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]
             level=search_level,
             repo_filter=repo_filter,
             limit=min(limit, 10),
-            tenant_id=ctx.deps.tenant_id
+            tenant_id=ctx.deps.tenant_id,
+            preview=preview
         )
 
         # Convert to CodeChunk for LLM consumption
@@ -463,23 +505,15 @@ class CodeSmritiRAGAgent:
             self.conversation_history = self.conversation_history[-6:]
 
     def _is_valid_query(self, query: str) -> bool:
-        """Check if query is code-related."""
-        query_lower = query.lower()
+        """Check if query is code-related.
 
-        off_topic = ['weather', 'joke', 'recipe', 'movie', 'sports', 'news']
-        if any(word in query_lower for word in off_topic):
-            return False
-
-        code_keywords = [
-            'code', 'function', 'class', 'api', 'implement', 'how does',
-            'show me', 'example', 'authentication', 'database', 'endpoint',
-            'route', 'handler', 'service', 'component', 'module', 'package',
-            'bug', 'error', 'fix', 'refactor', 'optimize', 'test'
-        ]
-        if any(keyword in query_lower for keyword in code_keywords):
-            return True
-
-        return len(query.split()) >= 3
+        NOTE: All queries are now treated as valid. The worst case is
+        "I couldn't find information about X in the indexed repositories"
+        rather than outright rejection. This prevents false negatives
+        like rejecting "PRISM weather data integration" because it
+        contains the word "weather".
+        """
+        return True
 
     def _build_prompt_with_history(self, query: str) -> str:
         """Build prompt with conversation history."""

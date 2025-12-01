@@ -1,8 +1,8 @@
 # V4 RAG Tools Design
 
-**Version**: 1.0
-**Date**: 2025-11-29
-**Status**: Design
+**Version**: 1.1
+**Date**: 2025-11-30
+**Status**: Production
 
 ## Overview
 
@@ -145,9 +145,10 @@ class FileInfo:
 ```python
 search_code(
     query: str,
-    level: Literal["symbol", "file", "module", "repo"] = "file",
+    level: Literal["symbol", "file", "module", "repo", "doc"] = "file",
     repo_filter: str = None,
-    limit: int = 5
+    limit: int = 5,
+    preview: bool = False  # Return truncated content for quick scanning
 ) -> List[SearchResult]
 ```
 
@@ -158,6 +159,18 @@ search_code(
 | `file` | `file_index` | Find relevant files |
 | `module` | `module_summary` | Find relevant folders/areas |
 | `repo` | `repo_summary` | High-level project understanding |
+| `doc` | `document` | Documentation files (RST, MD, design docs) |
+
+**Query Routing Strategy**:
+| Query Intent | Recommended Level |
+|--------------|-------------------|
+| "How does X work" / implementation | `file` (default) |
+| "Find function/class X" | `symbol` |
+| "What principles/guidelines" / conceptual | `doc` |
+| "What is in X folder" | `module` |
+| "What repos have X" / overview | `repo` |
+
+**Preview Mode**: Use `preview=True` for quick context scanning before fetching full content. Useful when you need to evaluate multiple results before deep-diving.
 
 **Returns**:
 ```python
@@ -220,15 +233,14 @@ class FileContent:
 
 ---
 
-### 5. `ask_codebase` (LLM Mode Only)
+### 5. `ask_codebase`
 
 **Purpose**: High-level RAG query - search + LLM synthesis in one call.
 
 **Signature**:
 ```python
 ask_codebase(
-    query: str,
-    level: Literal["symbol", "file", "module", "repo"] = "file"
+    query: str
 ) -> str
 ```
 
@@ -238,7 +250,7 @@ ask_codebase(
 - Simple questions in LLM mode
 - When user wants a synthesized answer, not raw search results
 
-**Note**: This tool does NOT exist in MCP mode. Claude Code performs its own synthesis.
+**Note**: In MCP mode, this calls the backend LLM for synthesis. In LLM mode, the agent synthesizes directly.
 
 ---
 
@@ -248,13 +260,11 @@ ask_codebase(
 |------|:--------:|:--------:|-------|
 | `list_repos` | ✅ | ✅ | Identical |
 | `explore_structure` | ✅ | ✅ | Identical - navigate directories |
-| `search_code` | ✅ | ✅ | Identical - with level parameter |
+| `search_code` | ✅ | ✅ | Identical - with level + preview parameters |
 | `get_file` | ✅ | ✅ | Identical - fetch actual code |
-| `ask_codebase` | ✅ | N/A | MCP calls backend LLM; in LLM mode the agent IS the LLM |
+| `ask_codebase` | ✅ | ✅ | MCP calls backend LLM; LLM mode synthesizes directly |
 
-Both modes have full access to all navigation and search tools. The only difference is `ask_codebase`:
-- **MCP Mode**: Calls the backend LLM for synthesis (useful when Claude wants a second opinion)
-- **LLM Mode**: The agent itself synthesizes answers, so this tool is unnecessary
+Both modes have full access to all navigation and search tools.
 
 ## Progressive Disclosure Patterns
 
@@ -355,3 +365,41 @@ The api-server exposes REST endpoints that both MCP server and PydanticAI agent 
 3. Progressive disclosure works (can drill down/roll up)
 4. Both modes share same underlying tool implementations
 5. `explore_structure` correctly lists files from repo on disk
+
+## Implementation Notes
+
+### Couchbase FTS Hybrid Search
+
+**Critical**: Couchbase 7.6.2 KNN filter alone does NOT pre-filter results. You must use hybrid search:
+
+```json
+{
+  "query": {"term": "symbol_index", "field": "type"},
+  "knn": [{
+    "field": "embedding",
+    "vector": [...],
+    "k": 10
+  }],
+  "knn_operator": "and",
+  "size": 10,
+  "fields": ["*"]
+}
+```
+
+The combination of `query` + `knn` + `knn_operator: "and"` ensures:
+1. First, a text query filters by document type
+2. Then, KNN is performed only on filtered results
+3. This enables proper level-based search (symbol vs file vs module vs repo vs doc)
+
+### FTS Index Requirements
+
+The `code_vector_index` must have `keyword_analyzer` on the `type` field for all document types. Without this, the standard analyzer tokenizes values like `symbol_index` into `["symbol", "index"]` breaking exact matching.
+
+See: `scripts/setup/code_vector_index.json`
+
+### Preview Mode
+
+The `preview` parameter truncates content to ~200 characters. Use this for:
+1. Quick scanning of multiple results
+2. Context management (reduce token usage)
+3. Deciding which results to fetch in full with `get_file`

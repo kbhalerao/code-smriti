@@ -1,0 +1,125 @@
+{
+  "type": "fulltext-index",
+  "name": "code_vector_index",
+  "sourceType": "gocbcore",
+  "sourceName": "code_kosha",
+  "planParams": {
+    "maxPartitionsPerPIndex": 1024,
+    "indexPartitions": 1,
+    "nodePlanParams": {"": {}}
+  },
+  "params": {
+    "doc_config": {
+      "docid_prefix_delim": "",
+      "docid_regexp": "",
+      "mode": "type_field",
+      "type_field": "type"
+    },
+    "mapping": {
+      "analysis": {
+        "analyzers": {
+          "keyword_analyzer": {
+            "char_filters": [],
+            "token_filters": ["to_lower"],
+            "tokenizer": "single",
+            "type": "custom"
+          }
+        }
+      },
+      "default_analyzer": "standard",
+      "default_datetime_parser": "dateTimeOptional",
+      "default_field": "_all",
+      "default_mapping": {"dynamic": false, "enabled": false},
+      "default_type": "_default",
+      "docvalues_dynamic": false,
+      "index_dynamic": false,
+      "store_dynamic": false,
+      "type_field": "type",
+      "types": {
+        "code_chunk": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "chunk_type": {"dynamic": false, "enabled": true, "fields": [{"index": true, "name": "chunk_type", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "file_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "file_path", "type": "text"}]},
+            "language": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "language", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]}
+          }
+        },
+        "commit": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "author": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "author", "type": "text"}]},
+            "commit_hash": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "commit_hash", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]}
+          }
+        },
+        "document": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "doc_type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "doc_type", "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "file_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "file_path", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]}
+          }
+        },
+        "file_index": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "file_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "file_path", "type": "text"}]}
+          }
+        },
+        "symbol_index": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "file_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "file_path", "type": "text"}]},
+            "symbol_name": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "symbol_name", "type": "text"}]},
+            "symbol_type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "symbol_type", "type": "text"}]}
+          }
+        },
+        "module_summary": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "module_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "module_path", "type": "text"}]}
+          }
+        },
+        "repo_summary": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]}
+          }
+        }
+      }
+    },
+    "store": {"indexType": "scorch", "segmentVersion": 16}
+  }
+}
