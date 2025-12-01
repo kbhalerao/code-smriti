@@ -1,44 +1,48 @@
 # V4 Ingestion Pipeline
 
-**Version**: 1.0
+**Version**: 1.1
 **Date**: 2025-11-30
 **Status**: Production
 
 ## Overview
 
-The V4 ingestion pipeline processes repositories into a hierarchical document structure with LLM-generated summaries and vector embeddings. Documents are organized bottom-up: symbols aggregate into files, files into modules, modules into repo summary.
+The V4 ingestion pipeline processes repositories into a hierarchical document structure with LLM-generated summaries and vector embeddings. The pipeline handles both **code** and **documentation**:
+
+- **Code**: Parsed with tree-sitter, enriched with LLM summaries, organized bottom-up (symbols → files → modules → repo)
+- **Documentation**: Markdown, RST, and text files split semantically by headers
 
 ## Quick Start
 
 ```bash
 cd services/ingestion-worker
 
-# Single repo (dry run first)
-python ingest_v4.py --repo owner/name --dry-run
+# RECOMMENDED: Unified script (code + docs)
+./ingest.sh --repo owner/name --dry-run    # Single repo preview
+./ingest.sh --repo owner/name              # Single repo full
+./ingest.sh --all                          # All repos
+./ingest.sh --all --skip-existing          # Resume after failure
 
-# Single repo (full ingestion)
-python ingest_v4.py --repo owner/name
+# Code only (skip docs)
+./ingest.sh --all --code-only --output results.json
 
-# All repos in REPOS_PATH
-python ingest_v4.py --all
+# Docs only (after code is indexed)
+./ingest.sh --all --docs-only
 
-# Resume after failure (skip already indexed)
-python ingest_v4.py --all --skip-existing
-
-# Save results to JSON
-python ingest_v4.py --all --output /tmp/results.json
+# Individual scripts (advanced)
+python ingest_v4.py --repo owner/name      # Code only
+python v4/ingest_docs.py --repo owner/name # Docs only
 ```
 
 ## Pipeline Phases
 
-The pipeline executes 5 phases for each repository:
+The unified pipeline executes 6 phases for each repository:
 
 ```
-Phase 1: Discover Files
-    └── Scan repo for supported extensions (.py, .js, .ts, etc.)
+Phase 1: Discover Code Files
+    └── Scan repo for code extensions (.py, .js, .ts, .svelte, etc.)
     └── Filter out vendor, node_modules, .git, etc.
 
-Phase 2: Process Files (parallel)
+Phase 2: Process Code Files (parallel)
     └── Parse with tree-sitter → extract symbols
     └── Generate file summary via LLM
     └── Generate symbol summaries for functions/classes >= 5 lines
@@ -49,28 +53,59 @@ Phase 3: Bottom-Up Aggregation
     └── Aggregate module summaries → create repo_summary
     └── Set parent/children relationships
 
-Phase 4: Generate Embeddings
-    └── Embed all documents using nomic-embed-text (768d)
+Phase 4: Generate Code Embeddings
+    └── Embed all code documents using nomic-embed-text (768d)
     └── Batch processing (64 docs/batch)
 
-Phase 5: Store Documents
+Phase 5: Store Code Documents
     └── Upsert to Couchbase with document_id deduplication
     └── Delete prior documents for repo (atomic replace)
+
+Phase 6: Documentation Ingestion (ingest_docs.py)
+    └── Discover .md, .rst, .txt files
+    └── Split by headers using semantic-text-splitter
+    └── Generate embeddings per chunk
+    └── Store as "document" type records
 ```
 
+## Document Types Created
+
+| Type | Source | Description |
+|------|--------|-------------|
+| `file_index` | Code | Source file with symbol list and summary |
+| `symbol_index` | Code | Individual function/class (≥5 lines) |
+| `module_summary` | Code | Directory-level aggregation |
+| `repo_summary` | Code | Repository overview |
+| `document` | Docs | Markdown/RST/text chunks split by headers |
+
 ## CLI Options
+
+### Unified Script (`ingest.sh`)
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--repo OWNER/NAME` | Ingest single repository | - |
 | `--all` | Ingest all repos in REPOS_PATH | - |
 | `--dry-run` | Process but don't store to database | False |
+| `--code-only` | Skip documentation ingestion | False |
+| `--docs-only` | Skip code ingestion | False |
 | `--no-llm` | Disable LLM (basic summaries only) | False |
 | `--no-embeddings` | Disable embedding generation | False |
 | `--skip-existing` | Skip repos with existing V4 documents | False |
 | `--llm-provider` | LLM backend: `lmstudio` or `ollama` | lmstudio |
 | `--concurrency N` | Parallel file processors | 4 |
-| `--output FILE` | Save results JSON to file | - |
+| `--output FILE` | Save code results JSON to file | - |
+
+### Code Script (`ingest_v4.py`)
+
+Same options as above except `--code-only` and `--docs-only`.
+
+### Docs Script (`v4/ingest_docs.py`)
+
+| Option | Description |
+|--------|-------------|
+| `--repo OWNER/NAME` | Process single repo (default: all) |
+| `--dry-run` | Preview without writing |
 
 ## Configuration
 
@@ -270,16 +305,45 @@ python ingest_v4.py --repo owner/name
 
 ```
 services/ingestion-worker/
-├── ingest_v4.py              # CLI entry point
+├── ingest.sh                 # UNIFIED: Runs code + docs ingestion
+├── ingest_v4.py              # Code ingestion CLI
 ├── config.py                 # Environment config
 ├── llm_enricher.py           # LLM provider configs
-└── v4/
-    ├── pipeline.py           # Main orchestrator
-    ├── schemas.py            # Document dataclasses
-    ├── file_processor.py     # File → FileIndex + SymbolIndex
-    ├── aggregator.py         # Bottom-up summary aggregation
-    ├── llm_enricher.py       # V4-specific LLM prompts
-    └── quality.py            # Quality tracking
+├── llm_chunker.py            # Semantic chunking for underchunked files
+│
+├── v4/
+│   ├── pipeline.py           # Code pipeline orchestrator
+│   ├── schemas.py            # Document dataclasses
+│   ├── file_processor.py     # File → FileIndex + SymbolIndex
+│   ├── aggregator.py         # Bottom-up summary aggregation
+│   ├── llm_enricher.py       # V4-specific LLM prompts
+│   ├── quality.py            # Quality tracking
+│   └── ingest_docs.py        # Documentation ingestion
+│
+├── parsers/
+│   ├── code_parser.py        # Tree-sitter parsing
+│   └── document_parser.py    # Markdown/RST parsing
+│
+├── embeddings/
+│   └── local_generator.py    # nomic-embed-text-v1.5
+│
+└── storage/
+    └── couchbase_client.py   # V4 storage methods
+```
+
+## Incremental Updates
+
+For ongoing maintenance after initial ingestion:
+
+```bash
+# Update single repo (deletes old docs, re-ingests)
+./ingest.sh --repo owner/name
+
+# Update all repos, skipping unchanged (by commit hash)
+./ingest.sh --all --skip-existing
+
+# Re-run docs only (faster, no LLM needed)
+./ingest.sh --all --docs-only
 ```
 
 ## Related Documentation
