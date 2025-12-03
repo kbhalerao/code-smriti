@@ -286,8 +286,35 @@ class LLMChunker:
         self.base_url = base_url
         self.model = model
         self.temperature = temperature
-        self.client = httpx.AsyncClient(timeout=180.0)
+        self._client = None  # Lazy init to avoid event loop issues
+        self._client_loop = None  # Track which loop the client was created on
         logger.info(f"LLM Chunker initialized: {model}")
+
+    @property
+    def client(self):
+        """Get httpx client, creating fresh one if needed for current event loop."""
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        # Check if we need a new client:
+        # 1. No client exists
+        # 2. Loop changed
+        # 3. Previous loop was closed
+        needs_new_client = (
+            self._client is None or
+            self._client_loop is not current_loop or
+            (self._client_loop is not None and self._client_loop.is_closed())
+        )
+
+        if needs_new_client:
+            # Discard old client (don't await close - it's bound to closed loop)
+            self._client = None
+            self._client = httpx.AsyncClient(timeout=180.0)
+            self._client_loop = current_loop
+
+        return self._client
 
     async def _call_llm(self, prompt: str) -> str:
         """Call LM Studio using /v1/responses API (better performance with thinking models)"""
@@ -337,14 +364,25 @@ class LLMChunker:
         if json_match:
             response = json_match.group(1)
 
+        response = response.strip()
+
         try:
-            result = json.loads(response.strip())
+            result = json.loads(response)
             if isinstance(result, list):
                 return result
             return []
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse LLM response as JSON: {e}")
-            return []
+            # Try fixing invalid escape sequences (common LLM issue)
+            try:
+                # Fix invalid escapes by replacing single backslashes not followed by valid escape chars
+                fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', response)
+                result = json.loads(fixed)
+                if isinstance(result, list):
+                    return result
+                return []
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse LLM response as JSON: {e}")
+                return []
 
     async def analyze_file(
         self,
@@ -511,8 +549,15 @@ class LLMChunker:
         }
 
     async def close(self):
-        """Close HTTP client"""
-        await self.client.aclose()
+        """Close HTTP client if it exists and loop is valid."""
+        if self._client is not None:
+            try:
+                await self._client.aclose()
+            except Exception:
+                pass  # Ignore errors from closed loop
+            finally:
+                self._client = None
+                self._client_loop = None
 
 
 async def test_chunker():
