@@ -8,11 +8,12 @@ from couchbase.exceptions import DocumentExistsException, DocumentNotFoundExcept
 from fastapi import APIRouter, HTTPException, status
 from loguru import logger
 
-from .utils import create_access_token, get_password_hash, verify_password, verify_token
+from .utils import create_access_token, create_refresh_token, get_password_hash, verify_password, verify_token
 from ..config import settings
 from ..database import get_cluster, get_users_collection
 from ..models import (
     LoginRequest,
+    RefreshTokenRequest,
     RegisterRequest,
     TokenResponse,
     AuthResponse,
@@ -108,7 +109,7 @@ async def login(request: LoginRequest):
         # Non-critical, just log it
         logger.warning(f"Failed to update last_login: {e}")
 
-    # Generate JWT token
+    # Generate JWT tokens
     token_data = {
         "sub": user_doc["user_id"],
         "user_id": user_doc["user_id"],
@@ -116,12 +117,14 @@ async def login(request: LoginRequest):
         "tenant_id": "code_kosha",
     }
     access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
 
     logger.info(f"User logged in: {request.email}")
 
     return AuthResponse(
         success=True,
         token=access_token,
+        refresh_token=refresh_token,
         user=_user_doc_to_safe_info(user_doc),
     )
 
@@ -130,3 +133,50 @@ async def login(request: LoginRequest):
 async def get_current_user_info():
     """Get current user info (placeholder - requires auth middleware)"""
     return {"message": "Use JWT token for authentication"}
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(request: RefreshTokenRequest):
+    """
+    Refresh an access token using a valid refresh token.
+
+    Returns a new access token without requiring re-authentication.
+
+    Example:
+        curl -X POST http://localhost:8000/api/auth/refresh \
+          -H "Content-Type: application/json" \
+          -d '{"refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}'
+    """
+    # Verify the refresh token
+    payload = verify_token(request.refresh_token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Ensure it's a refresh token, not an access token
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type - refresh token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create new access token with same user data
+    token_data = {
+        "sub": payload["sub"],
+        "user_id": payload["user_id"],
+        "email": payload["email"],
+        "tenant_id": payload.get("tenant_id", "code_kosha"),
+    }
+    new_access_token = create_access_token(data=token_data)
+
+    logger.info(f"Token refreshed for user: {payload['email']}")
+
+    return TokenResponse(
+        access_token=new_access_token,
+        token_type="bearer",
+    )

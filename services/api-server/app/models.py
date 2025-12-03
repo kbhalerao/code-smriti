@@ -105,10 +105,16 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class RefreshTokenRequest(BaseModel):
+    """Request to refresh an access token."""
+    refresh_token: str
+
+
 class AuthResponse(BaseModel):
     """Authentication response with user data."""
     success: bool = True
     token: str
+    refresh_token: str
     user: "SafeUserInfo"
 
 
