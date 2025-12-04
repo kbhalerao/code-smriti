@@ -1,0 +1,112 @@
+{
+  "python": {
+    "granite": {
+      "latency_ms": 2620.7374170189723,
+      "json_valid": true,
+      "parsed": {
+        "summary": "This file provides a Bottom-Up Aggregator to aggregate summaries from bottom to top in a repository, including symbol summaries, file summaries, module summaries, and repo summaries.",
+        "purpose": "To aggregate file summaries into module and repo summaries using LLM when available with fallback to structural summaries.",
+        "key_elements": [
+          "BottomUpAggregator",
+          "FileIndex",
+          "ModuleSummary",
+          "RepoSummary"
+        ],
+        "quality_notes": null
+      },
+      "raw": "```json\n{\n  \"summary\": \"This file provides a Bottom-Up Aggregator to aggregate summaries from bottom to top in a repository, including symbol summaries, file summaries, module summaries, and repo summaries.\",\n  \"purpose\": \"To aggregate file summaries into module and repo summaries using LLM when available with fallback to structural summaries.\",\n  \"key_elements\": [\"BottomUpAggregator\", \"FileIndex\", \"ModuleSummary\", \"RepoSummary\"],\n  \"quality_notes\": null\n}\n```"
+    },
+    "qwen": {
+      "latency_ms": 2733.387083048001,
+      "json_valid": true,
+      "parsed": {
+        "summary": "This file implements a bottom-up aggregator that combines file, module, and repository summaries using LLM-enhanced or structural fallback methods, following the folder hierarchy to build comprehensive documentation.",
+        "purpose": "To generate high-level summaries of code repositories by aggregating content from files, submodules, and the entire repository, prioritizing LLM-based enrichment when available.",
+        "key_elements": [
+          "BottomUpAggregator",
+          "aggregate_module_summary",
+          "aggregate_repo_summary",
+          "build_folder_tree",
+          "get_folder_hierarchy",
+          "llm_enricher",
+          "QualityTracker"
+        ],
+        "quality_notes": null
+      },
+      "raw": "{\n  \"summary\": \"This file implements a bottom-up aggregator that combines file, module, and repository summaries using LLM-enhanced or structural fallback methods, following the folder hierarchy to build comprehensive documentation.\",\n  \"purpose\": \"To generate high-level summaries of code repositories by aggregating content from files, submodules, and the entire repository, prioritizing LLM-based enrichment when available.\",\n  \"key_elements\": [\n    \"BottomUpAggregator\",\n    \"aggregate_module_summary\",\n    \"aggregate_repo_summary\",\n    \"build_folder_tree\",\n    \"get_folder_hierarchy\",\n    \"llm_enricher\",\n    \"QualityTracker\"\n  ],\n  \"quality_notes\": null\n}"
+    },
+    "minimax": {
+      "latency_ms": 31149.706792086363,
+      "json_valid": true,
+      "parsed": {
+        "summary": "Aggregates file and module summaries into higher-level repository summaries using LLM when available, with fallback to structural methods.",
+        "purpose": "Builds hierarchical repository summaries by combining bottom-up file summaries into module and repo-level documents following folder structure.",
+        "key_elements": [
+          "BottomUpAggregator class",
+          "aggregate_module_summary method",
+          "_llm_module_summary method",
+          "_fallback_module_summary method",
+          "build_folder_tree method"
+        ],
+        "quality_notes": null
+      },
+      "raw": "\n\n{\n  \"summary\": \"Aggregates file and module summaries into higher-level repository summaries using LLM when available, with fallback to structural methods.\",\n  \"purpose\": \"Builds hierarchical repository summaries by combining bottom-up file summaries into module and repo-level documents following folder structure.\",\n  \"key_elements\": [\n    \"BottomUpAggregator class\",\n    \"aggregate_module_summary method\",\n    \"_llm_module_summary method\",\n    \"_fallback_module_summary method\",\n    \"build_folder_tree method\"\n  ],\n  \"quality_notes\": null\n}"
+    }
+  },
+  "rst": {
+    "granite": {
+      "latency_ms": 1374.1149170091376,
+      "json_valid": true,
+      "parsed": {
+        "summary": "This file provides a guide to masked arrays in NumPy, detailing their history, main differences from regular arrays, new features, and performance considerations.",
+        "purpose": "To educate users on the use and optimization of masked arrays within NumPy",
+        "key_elements": [
+          "masked arrays",
+          "NumPy",
+          "performance"
+        ],
+        "quality_notes": null
+      },
+      "raw": "{\n  \"summary\": \"This file provides a guide to masked arrays in NumPy, detailing their history, main differences from regular arrays, new features, and performance considerations.\",\n  \"purpose\": \"To educate users on the use and optimization of masked arrays within NumPy\",\n  \"key_elements\": [\"masked arrays\", \"NumPy\", \"performance\"],\n  \"quality_notes\": null\n}"
+    },
+    "qwen": {
+      "latency_ms": 1704.5166250318289,
+      "json_valid": true,
+      "parsed": {
+        "summary": "This file provides a guide to using masked arrays in NumPy, detailing changes, new features, and performance considerations.",
+        "purpose": "To explain the evolution and usage of masked arrays in NumPy, focusing on improvements and optimization strategies.",
+        "key_elements": [
+          "masked arrays",
+          "subclassing of ndarray",
+          "fill_value as a property",
+          "mask handling",
+          "mr_ function",
+          "anom method",
+          "performance benchmarking"
+        ],
+        "quality_notes": "No issues found; content is clear and focused on implementation details and best practices."
+      },
+      "raw": "{\n  \"summary\": \"This file provides a guide to using masked arrays in NumPy, detailing changes, new features, and performance considerations.\",\n  \"purpose\": \"To explain the evolution and usage of masked arrays in NumPy, focusing on improvements and optimization strategies.\",\n  \"key_elements\": [\n    \"masked arrays\",\n    \"subclassing of ndarray\",\n    \"fill_value as a property\",\n    \"mask handling\",\n    \"mr_ function\",\n    \"anom method\",\n    \"performance benchmarking\"\n  ],\n  \"quality_notes\": \"No issues found; content is clear and focused on implementation details and best practices.\"\n}"
+    },
+    "minimax": {
+      "latency_ms": 12953.278332948685,
+      "json_valid": true,
+      "parsed": {
+        "summary": "This rst file serves as a guide to NumPy masked arrays, documenting key differences from ndarray subclassing, new features (mr_, anom), and performance considerations for filling vs. non-filling operations.",
+        "purpose": "To explain changes to MaskedArray behavior, introduce new utilities, and discuss optimization trade-offs for masked array processing.",
+        "key_elements": [
+          "MaskedArray",
+          "_data (ndarray subclass)",
+          "fill_value (property)",
+          "mask/nomask",
+          "mr_ function",
+          "anom method",
+          "put, putmask, take methods",
+          "numpy.ma.divide"
+        ],
+        "quality_notes": "Minimal formatting; lacks examples and detailed benchmarks beyond a single divide timing."
+      },
+      "raw": "\n\n{\n  \"summary\": \"This rst file serves as a guide to NumPy masked arrays, documenting key differences from ndarray subclassing, new features (mr_, anom), and performance considerations for filling vs. non-filling operations.\",\n  \"purpose\": \"To explain changes to MaskedArray behavior, introduce new utilities, and discuss optimization trade-offs for masked array processing.\",\n  \"key_elements\": [\n    \"MaskedArray\",\n    \"_data (ndarray subclass)\",\n    \"fill_value (property)\",\n    \"mask/nomask\",\n    \"mr_ function\",\n    \"anom method\",\n    \"put, putmask, take methods\",\n    \"numpy.ma.divide\"\n  ],\n  \"quality_notes\": \"Minimal formatting; lacks examples and detailed benchmarks beyond a single divide timing.\"\n}"
+    }
+  }
+}

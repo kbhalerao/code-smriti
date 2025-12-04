@@ -10,6 +10,12 @@ Usage:
     python incremental_v4.py --repo owner/name  # Single repo
     python incremental_v4.py --dry-run          # Preview changes (runs LLM, skips DB)
     python incremental_v4.py --threshold 0.10   # 10% threshold
+    python incremental_v4.py --status           # Check if ingestion is running
+
+Features:
+    - File-based locking prevents overlapping runs
+    - Rotating log files in logs/
+    - Run history stored in Couchbase (ingestion_log documents)
 
 Strategy:
     1. git fetch origin for each repo
@@ -35,13 +41,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from loguru import logger
-
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 from llm_enricher import LMSTUDIO_CONFIG, OLLAMA_CONFIG
-from v4.incremental import IncrementalUpdater
+from v4.incremental.runner import IngestionRunner, LockError, check_running
 
 
 def main():
@@ -78,33 +82,59 @@ def main():
         default="lmstudio",
         help="LLM provider (default: lmstudio)"
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Check if an ingestion is currently running"
+    )
+    parser.add_argument(
+        "--trigger",
+        choices=["manual", "scheduled", "webhook"],
+        default="manual",
+        help="How this run was triggered (for logging)"
+    )
 
     args = parser.parse_args()
 
-    # Configure logging
-    logger.remove()
-    logger.add(
-        sys.stderr,
-        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level="INFO"
-    )
+    # Status check mode
+    if args.status:
+        running_info = check_running()
+        if running_info:
+            print(f"Ingestion is RUNNING")
+            print(f"  PID: {running_info.get('pid', 'unknown')}")
+            print(f"  Started: {running_info.get('started', 'unknown')}")
+            sys.exit(0)
+        else:
+            print("No ingestion running")
+            sys.exit(0)
 
     # Select LLM config
     llm_config = LMSTUDIO_CONFIG if args.llm_provider == "lmstudio" else OLLAMA_CONFIG
 
-    # Initialize and run updater
-    updater = IncrementalUpdater(
+    # Initialize runner (handles locking and logging)
+    runner = IngestionRunner(
         threshold=args.threshold,
         dry_run=args.dry_run,
         enable_llm=not args.no_llm,
-        llm_config=llm_config
+        llm_config=llm_config,
+        trigger=args.trigger
     )
 
-    results = updater.run(repo_filter=args.repo)
+    try:
+        results = runner.run(repo_filter=args.repo)
 
-    # Exit with error if any failures
-    if any(r.status == 'error' for r in results):
-        sys.exit(1)
+        # Exit with error if any failures
+        if any(r.status == 'error' for r in results):
+            sys.exit(1)
+
+    except LockError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        print("Use --status to check the running process", file=sys.stderr)
+        sys.exit(2)
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user", file=sys.stderr)
+        sys.exit(130)
 
 
 if __name__ == "__main__":

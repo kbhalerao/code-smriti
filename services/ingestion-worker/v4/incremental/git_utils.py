@@ -64,9 +64,12 @@ class GitOperations:
             return None
 
     @staticmethod
-    def get_origin_head(repo_path: Path, branch: str = 'main') -> Optional[str]:
-        """Get origin's HEAD commit (tries main, then master)"""
-        for b in [branch, 'master']:
+    def get_origin_head(repo_path: Path, branch: str = None) -> Optional[str]:
+        """Get origin's HEAD commit (uses default branch from origin/HEAD)"""
+        if branch is None:
+            branch = GitOperations.get_default_branch(repo_path)
+
+        for b in [branch, 'main', 'master']:
             commit = GitOperations.get_head_commit(repo_path, f'origin/{b}')
             if commit:
                 return commit

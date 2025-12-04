@@ -4,7 +4,7 @@ Repository lifecycle management: discovery, cloning, deletion.
 
 import shutil
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 
 from loguru import logger
 
@@ -180,6 +180,7 @@ class RepoLifecycle:
             return 0
 
         try:
+            from couchbase.options import QueryOptions
             query = """
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
@@ -187,10 +188,17 @@ class RepoLifecycle:
                   AND type IN ['file_index', 'symbol_index']
             """
             result = self.cb_client.cluster.query(
-                query, repo_id=repo_id, file_path=file_path
+                query,
+                QueryOptions(named_parameters={"repo_id": repo_id, "file_path": file_path})
             )
-            metrics = result.metadata().metrics()
-            return metrics.mutation_count() if metrics else 0
+            # Consume results to ensure query completes
+            _ = list(result)
+            # Now metadata is available
+            try:
+                metrics = result.metadata().metrics()
+                return metrics.mutation_count() if metrics else 0
+            except Exception:
+                return 0  # Metrics not available, but delete likely succeeded
         except Exception as e:
             logger.error(f"Error deleting docs for {file_path}: {e}")
             return 0
@@ -201,6 +209,7 @@ class RepoLifecycle:
             return 0
 
         try:
+            from couchbase.options import QueryOptions
             query = """
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
@@ -208,10 +217,16 @@ class RepoLifecycle:
                   AND type = 'document'
             """
             result = self.cb_client.cluster.query(
-                query, repo_id=repo_id, file_path=file_path
+                query,
+                QueryOptions(named_parameters={"repo_id": repo_id, "file_path": file_path})
             )
-            metrics = result.metadata().metrics()
-            return metrics.mutation_count() if metrics else 0
+            # Consume results to ensure query completes
+            _ = list(result)
+            try:
+                metrics = result.metadata().metrics()
+                return metrics.mutation_count() if metrics else 0
+            except Exception:
+                return 0
         except Exception as e:
             logger.error(f"Error deleting doc chunks for {file_path}: {e}")
             return 0
@@ -274,10 +289,11 @@ class RepoLifecycle:
             return 0
 
     def get_old_file_summary(self, repo_id: str, file_path: str) -> Optional[str]:
-        """Fetch existing file_index summary from database"""
+        """Fetch existing file_index content (summary) from database"""
         try:
+            from couchbase.options import QueryOptions
             query = """
-                SELECT summary
+                SELECT content
                 FROM `code_kosha`
                 WHERE repo_id = $repo_id
                   AND file_path = $file_path
@@ -285,10 +301,11 @@ class RepoLifecycle:
                 LIMIT 1
             """
             result = self.cb_client.cluster.query(
-                query, repo_id=repo_id, file_path=file_path
+                query,
+                QueryOptions(named_parameters={"repo_id": repo_id, "file_path": file_path})
             )
             for row in result:
-                return row.get('summary', '')
+                return row.get('content', '')
             return None
         except Exception:
             return None
@@ -306,6 +323,28 @@ class RepoLifecycle:
             result = self.cb_client.cluster.query(query, repo_id=repo_id)
             for row in result:
                 return row.get('summary', '')
+            return None
+        except Exception:
+            return None
+
+    def get_old_file_embedding(self, repo_id: str, file_path: str) -> Optional[List[float]]:
+        """Fetch existing file_index embedding from database for similarity comparison"""
+        try:
+            from couchbase.options import QueryOptions
+            query = """
+                SELECT embedding
+                FROM `code_kosha`
+                WHERE repo_id = $repo_id
+                  AND file_path = $file_path
+                  AND type = 'file_index'
+                LIMIT 1
+            """
+            result = self.cb_client.cluster.query(
+                query,
+                QueryOptions(named_parameters={"repo_id": repo_id, "file_path": file_path})
+            )
+            for row in result:
+                return row.get('embedding')
             return None
         except Exception:
             return None

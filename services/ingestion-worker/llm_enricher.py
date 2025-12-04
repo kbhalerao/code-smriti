@@ -80,10 +80,37 @@ class LLMEnricher:
 
     def __init__(self, config: LLMConfig = OLLAMA_CONFIG):
         self.config = config
-        self.client = httpx.AsyncClient(timeout=config.timeout_seconds)
+        self._client = None  # Lazy init to avoid event loop issues
+        self._client_loop = None  # Track which loop the client was created on
         self._consecutive_failures = 0
         self._max_consecutive_failures = 5  # Circuit breaker threshold
         logger.info(f"LLM Enricher initialized: {config.provider}/{config.model} (timeout={config.timeout_seconds}s)")
+
+    @property
+    def client(self):
+        """Get httpx client, creating fresh one if needed for current event loop."""
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        # Check if we need a new client:
+        # 1. No client exists
+        # 2. Loop changed
+        # 3. Previous loop was closed
+        needs_new_client = (
+            self._client is None or
+            self._client_loop is not current_loop or
+            (self._client_loop is not None and self._client_loop.is_closed())
+        )
+
+        if needs_new_client:
+            # Discard old client (don't await close - it's bound to closed loop)
+            self._client = None
+            self._client = httpx.AsyncClient(timeout=self.config.timeout_seconds)
+            self._client_loop = current_loop
+
+        return self._client
 
     async def _call_ollama(self, prompt: str) -> str:
         """Call Ollama API"""
@@ -427,7 +454,9 @@ Write clear documentation (150-300 words)."""
 
     async def close(self):
         """Close HTTP client"""
-        await self.client.aclose()
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
 
 async def test_enricher():

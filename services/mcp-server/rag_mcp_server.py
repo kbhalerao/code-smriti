@@ -12,14 +12,24 @@ Tools:
 """
 
 import os
+from pathlib import Path
 from typing import Literal
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables - try multiple locations
+script_dir = Path(__file__).parent
+repo_root = script_dir.parent.parent
+
+# Try script directory first, then repo root
+for env_path in [script_dir / ".env", repo_root / ".env"]:
+    if env_path.exists():
+        load_dotenv(env_path)
+        break
+else:
+    load_dotenv()  # Fallback to default behavior
 
 # Initialize FastMCP server
 mcp = FastMCP("code-smriti")

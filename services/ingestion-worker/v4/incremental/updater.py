@@ -74,7 +74,7 @@ class IncrementalUpdater:
             github_token=config.github_token
         )
         self.significance = SignificanceChecker(
-            llm_enricher=self.pipeline.aggregator.llm_enricher if enable_llm else None,
+            embedding_generator=self.pipeline.embedding_generator,
             enabled=enable_llm
         )
 
@@ -121,7 +121,31 @@ class IncrementalUpdater:
                 modules.add(module_path)
         return modules
 
-    def process_repo(self, repo_id: str, repo_path: Path) -> UpdateResult:
+    def _delete_old_file_docs(self, repo_id: str, file_path: str, new_commit: str):
+        """Delete old file/symbol docs, excluding the newly inserted commit."""
+        try:
+            from couchbase.options import QueryOptions
+            query = """
+                DELETE FROM `code_kosha`
+                WHERE repo_id = $repo_id
+                  AND file_path = $file_path
+                  AND type IN ['file_index', 'symbol_index']
+                  AND commit_hash != $new_commit
+            """
+            result = self.cb_client.cluster.query(
+                query,
+                QueryOptions(named_parameters={
+                    "repo_id": repo_id,
+                    "file_path": file_path,
+                    "new_commit": new_commit
+                })
+            )
+            # Consume to ensure execution
+            _ = list(result)
+        except Exception as e:
+            logger.warning(f"Could not delete old docs for {file_path}: {e}")
+
+    def process_repo(self, repo_id: str, repo_path: Path, loop=None) -> UpdateResult:
         """Process a single repository with incremental update logic."""
         start_time = datetime.now()
         logger.info(f"\nProcessing {repo_id}")
@@ -153,7 +177,15 @@ class IncrementalUpdater:
             logger.info(f"  New repo - full ingestion")
             if not self.dry_run:
                 self.git.pull(repo_path)
-                self.pipeline.process_repository(repo_id, str(repo_path))
+                owns_loop = loop is None
+                if owns_loop:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.pipeline.ingest_repository(repo_path, repo_id))
+                finally:
+                    if owns_loop:
+                        loop.close()
             return UpdateResult(
                 repo_id=repo_id,
                 status='full_reingest',
@@ -182,7 +214,15 @@ class IncrementalUpdater:
             logger.info(f"  {changes.total_changed} files changed ({change_ratio:.1%}) > {self.threshold:.0%} threshold - full re-ingestion")
             if not self.dry_run:
                 self.git.pull(repo_path)
-                self.pipeline.process_repository(repo_id, str(repo_path))
+                owns_loop = loop is None
+                if owns_loop:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.pipeline.ingest_repository(repo_path, repo_id))
+                finally:
+                    if owns_loop:
+                        loop.close()
             return UpdateResult(
                 repo_id=repo_id,
                 status='full_reingest',
@@ -229,67 +269,93 @@ class IncrementalUpdater:
         file_indices = []
         all_symbol_indices = []
 
-        for file_path in code_to_process:
-            full_path = repo_path / file_path
-            if not full_path.exists():
-                continue
+        # Use a SINGLE event loop for ALL async operations in this surgical update
+        # This is critical because httpx.AsyncClient binds to the loop it's used with
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-            # Get old summary for significance check
-            old_file_summary = self.repo_lifecycle.get_old_file_summary(repo_id, file_path)
-            file_diff = self.git.get_file_diff(repo_path, base_commit, origin_head, file_path)
+        # Track files we successfully process (for deferred delete)
+        processed_files = []
 
-            # Delete existing docs for atomic replace
-            self.repo_lifecycle.delete_file_docs(repo_id, file_path)
+        try:
+            for file_path in code_to_process:
+                full_path = repo_path / file_path
+                if not full_path.exists():
+                    continue
 
-            try:
-                file_index, symbol_indices = asyncio.run(
-                    self.pipeline.file_processor.process(
-                        file_path=full_path,
-                        repo_path=repo_path,
-                        repo_id=repo_id,
-                        commit_hash=origin_head,
-                        parent_module_id=""
+                # Get old summary and embedding for significance check
+                old_file_summary = self.repo_lifecycle.get_old_file_summary(repo_id, file_path)
+                old_file_embedding = self.repo_lifecycle.get_old_file_embedding(repo_id, file_path)
+                file_diff = self.git.get_file_diff(repo_path, base_commit, origin_head, file_path)
+
+                try:
+                    file_index, symbol_indices = loop.run_until_complete(
+                        self.pipeline.file_processor.process(
+                            file_path=full_path,
+                            repo_path=repo_path,
+                            repo_id=repo_id,
+                            commit_hash=origin_head,
+                            parent_module_id=""
+                        )
                     )
-                )
 
-                if file_index:
-                    file_indices.append(file_index)
-                    all_symbol_indices.extend(symbol_indices)
-                    files_processed += 1
+                    if file_index:
+                        file_indices.append(file_index)
+                        all_symbol_indices.extend(symbol_indices)
+                        processed_files.append(file_path)
+                        files_processed += 1
 
-                    # Check if significant
-                    new_summary = file_index.summary if hasattr(file_index, 'summary') else ""
-                    if self.significance.is_significant(old_file_summary or "", new_summary, file_diff, "file"):
-                        any_significant_change = True
-                        logger.debug(f"    Processed {file_path} (significant change)")
-                    else:
-                        logger.debug(f"    Processed {file_path} (minor change)")
+                        # Check if significant (using embedding similarity when available)
+                        new_summary = file_index.content if hasattr(file_index, 'content') else ""
+                        if self.significance.is_significant(
+                            old_file_summary or "",
+                            new_summary,
+                            file_diff,
+                            "file",
+                            old_embedding=old_file_embedding
+                        ):
+                            any_significant_change = True
+                            logger.info(f"    Processed {file_path} (significant change)")
+                        else:
+                            logger.info(f"    Processed {file_path} (minor change)")
 
-            except Exception as e:
-                logger.error(f"    Error processing {file_path}: {e}")
+                except Exception as e:
+                    logger.error(f"    Error processing {file_path}: {e}")
 
-        # 7c. Generate embeddings and store
-        all_docs = file_indices + all_symbol_indices
-        if all_docs:
-            if self.pipeline.embedding_generator:
-                self.pipeline.embedding_generator.generate_embeddings_batch(all_docs)
+            # 7c. Generate embeddings and store
+            all_docs = file_indices + all_symbol_indices
+            if all_docs:
+                if self.pipeline.embedding_generator:
+                    for doc in all_docs:
+                        # Get text for embedding
+                        text = getattr(doc, '_embedding_text', None) or getattr(doc, 'content', '')
+                        if text:
+                            doc.embedding = self.pipeline.embedding_generator.generate_embedding(text)
 
-            for doc in all_docs:
-                doc_dict = doc.to_dict()
-                self.cb_client.collection.upsert(doc.document_id, doc_dict)
+                # Upsert new docs first
+                for doc in all_docs:
+                    doc_dict = doc.to_dict()
+                    self.cb_client.collection.upsert(doc.document_id, doc_dict)
 
-        # 7d. Regenerate summaries only if significant changes
-        if any_significant_change or code_deleted:
-            affected_modules = self.get_affected_modules(code_to_process + code_deleted)
-            logger.info(f"    Regenerating summaries ({len(affected_modules)} modules affected)")
-            self._regenerate_summaries(repo_id, origin_head, affected_modules)
-        else:
-            logger.info(f"    Skipping summary regeneration (no significant file changes)")
+                # Now delete old versions (excluding new commit) - safe because new docs are already saved
+                for file_path in processed_files:
+                    self._delete_old_file_docs(repo_id, file_path, origin_head)
 
-        # 7e. Process changed doc files
-        if docs_to_process or docs_deleted:
-            self._process_doc_changes(repo_id, repo_path, docs_to_process, docs_deleted)
-            files_processed += len(docs_to_process)
+            # 7d. Regenerate summaries only if significant changes (INSIDE same loop)
+            if any_significant_change or code_deleted:
+                affected_modules = self.get_affected_modules(code_to_process + code_deleted)
+                logger.info(f"    Regenerating summaries ({len(affected_modules)} modules affected)")
+                self._regenerate_summaries(repo_id, origin_head, affected_modules, loop)
+            else:
+                logger.info(f"    Skipping summary regeneration (no significant file changes)")
+
+            # 7e. Process changed doc files (INSIDE same loop)
+            if docs_to_process or docs_deleted:
+                self._process_doc_changes(repo_id, repo_path, docs_to_process, docs_deleted, loop)
+                files_processed += len(docs_to_process)
+
+        finally:
+            loop.close()
 
         duration = (datetime.now() - start_time).total_seconds()
         logger.info(f"  Completed in {duration:.1f}s: {files_processed} processed, {files_deleted} deleted")
@@ -302,7 +368,7 @@ class IncrementalUpdater:
             duration_seconds=duration
         )
 
-    def _regenerate_summaries(self, repo_id: str, commit_hash: str, affected_modules: Set[str]):
+    def _regenerate_summaries(self, repo_id: str, commit_hash: str, affected_modules: Set[str], loop=None):
         """Regenerate module_summary and repo_summary."""
         try:
             # Get all file_indices for this repo
@@ -324,25 +390,42 @@ class IncrementalUpdater:
                 old_repo_summary = self.repo_lifecycle.get_old_repo_summary(repo_id)
 
             # Convert to schema objects
-            from v4.schemas import FileIndex
+            from v4.schemas import FileIndex, make_file_id
             file_index_objects = []
             for row in file_indices:
+                # SELECT * nests fields under bucket name 'code_kosha'
+                doc = row.get('code_kosha', row)
+                metadata = doc.get('metadata', {})
                 fi = FileIndex(
-                    repo_id=row.get('repo_id'),
-                    file_path=row.get('file_path'),
-                    language=row.get('language'),
-                    summary=row.get('summary', ''),
-                    symbols=row.get('symbols', []),
-                    imports=row.get('imports', []),
-                    line_count=row.get('line_count', 0),
-                    commit_hash=commit_hash
+                    document_id=doc.get('document_id') or make_file_id(
+                        doc.get('repo_id'), doc.get('file_path'), commit_hash
+                    ),
+                    repo_id=doc.get('repo_id'),
+                    file_path=doc.get('file_path'),
+                    commit_hash=commit_hash,
+                    content=doc.get('content', ''),
+                    language=metadata.get('language', doc.get('language', 'unknown')),
+                    line_count=metadata.get('line_count', doc.get('line_count', 0)),
+                    imports=metadata.get('imports', doc.get('imports', [])),
                 )
                 file_index_objects.append(fi)
 
-            # Regenerate summaries
-            module_summaries, repo_summary = self.pipeline.aggregator.aggregate_all(
-                file_index_objects, repo_id, commit_hash
-            )
+            # Regenerate summaries (async method) - use passed loop or create new one
+            # OPTIMIZATION: Only regenerate affected modules, reuse existing for others
+            owns_loop = loop is None
+            if owns_loop:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            try:
+                module_summaries, repo_summary = loop.run_until_complete(
+                    self.pipeline.aggregator.aggregate_all(
+                        file_index_objects, repo_id, commit_hash,
+                        affected_modules=affected_modules  # Only LLM for these
+                    )
+                )
+            finally:
+                if owns_loop:
+                    loop.close()
 
             # Dry-run: show comparison
             if self.dry_run:
@@ -376,7 +459,10 @@ class IncrementalUpdater:
             # Generate embeddings and store
             all_summaries = module_summaries + [repo_summary]
             if self.pipeline.embedding_generator:
-                self.pipeline.embedding_generator.generate_embeddings_batch(all_summaries)
+                for summary in all_summaries:
+                    text = getattr(summary, 'content', '')
+                    if text:
+                        summary.embedding = self.pipeline.embedding_generator.generate_embedding(text)
 
             for summary in all_summaries:
                 doc = summary.to_dict()
@@ -390,18 +476,29 @@ class IncrementalUpdater:
         repo_id: str,
         repo_path: Path,
         docs_to_process: List[str],
-        docs_deleted: List[str]
+        docs_deleted: List[str],
+        loop=None
     ):
         """Process documentation file changes."""
         from v4.ingest_docs import DocumentIngester
 
         doc_ingester = DocumentIngester(dry_run=self.dry_run)
 
-        for file_path in docs_to_process:
-            full_path = repo_path / file_path
-            if full_path.exists():
-                self.repo_lifecycle.delete_doc_chunks(repo_id, file_path, self.dry_run)
-                asyncio.run(doc_ingester.process_doc(full_path, repo_path, repo_id))
+        # Use passed loop or create new one
+        owns_loop = loop is None
+        if owns_loop:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        try:
+            for file_path in docs_to_process:
+                full_path = repo_path / file_path
+                if full_path.exists():
+                    self.repo_lifecycle.delete_doc_chunks(repo_id, file_path, self.dry_run)
+                    loop.run_until_complete(doc_ingester.process_doc(full_path, repo_path, repo_id))
+        finally:
+            if owns_loop:
+                loop.close()
 
     def run(self, repo_filter: Optional[str] = None) -> List[UpdateResult]:
         """Run incremental update for all repos."""

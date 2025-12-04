@@ -84,7 +84,8 @@ class BottomUpAggregator:
         child_module_summaries: List[ModuleSummary],
         repo_id: str,
         commit_hash: str,
-        parent_module_id: str
+        parent_module_id: str,
+        use_llm: bool = True
     ) -> ModuleSummary:
         """
         Create a module_summary by aggregating file and nested module summaries.
@@ -96,6 +97,7 @@ class BottomUpAggregator:
             repo_id: Repository identifier
             commit_hash: Git commit hash
             parent_module_id: document_id of parent (repo or parent module)
+            use_llm: Whether to use LLM for this module (False = fallback only)
 
         Returns:
             ModuleSummary document
@@ -108,8 +110,8 @@ class BottomUpAggregator:
 
         all_summaries = file_summaries + nested_summaries
 
-        # Generate module summary
-        if self.enable_llm and self.quality_tracker.llm_available and all_summaries:
+        # Generate module summary (only use LLM if enabled AND use_llm flag is True)
+        if use_llm and self.enable_llm and self.quality_tracker.llm_available and all_summaries:
             summary, enrichment = await self._llm_module_summary(
                 module_path, all_summaries, repo_id
             )
@@ -394,7 +396,8 @@ class BottomUpAggregator:
         self,
         file_indices: List[FileIndex],
         repo_id: str,
-        commit_hash: str
+        commit_hash: str,
+        affected_modules: set = None
     ) -> tuple[List[ModuleSummary], RepoSummary]:
         """
         Build complete hierarchy from file indices.
@@ -403,6 +406,7 @@ class BottomUpAggregator:
             file_indices: All file_index documents
             repo_id: Repository identifier
             commit_hash: Git commit hash
+            affected_modules: If provided, only use LLM for these modules (optimization)
 
         Returns:
             (module_summaries, repo_summary)
@@ -424,6 +428,12 @@ class BottomUpAggregator:
 
         module_summaries = {}  # {path: ModuleSummary}
         repo_doc_id = make_repo_id(repo_id, commit_hash)
+
+        # Log optimization stats
+        if affected_modules is not None:
+            llm_count = len(affected_modules & all_folders)
+            fallback_count = len(all_folders) - llm_count
+            logger.info(f"  Module regeneration: {llm_count} LLM, {fallback_count} fallback (of {len(all_folders)} total)")
 
         for folder_path in folder_order:
             # Get direct files in this folder
@@ -457,13 +467,19 @@ class BottomUpAggregator:
 
             # Create module summary
             if direct_files or child_modules:
+                # Optimization: only use LLM for affected modules
+                use_llm = (affected_modules is None) or (folder_path in affected_modules)
+                if affected_modules and not use_llm:
+                    logger.debug(f"  Skipping LLM for unaffected module: {folder_path}")
+
                 module_summary = await self.aggregate_module_summary(
                     module_path=folder_path or "(root)",
                     file_indices=direct_files,
                     child_module_summaries=child_modules,
                     repo_id=repo_id,
                     commit_hash=commit_hash,
-                    parent_module_id=parent_id
+                    parent_module_id=parent_id,
+                    use_llm=use_llm
                 )
                 module_summaries[folder_path] = module_summary
 
