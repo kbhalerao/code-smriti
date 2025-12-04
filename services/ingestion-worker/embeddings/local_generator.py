@@ -69,7 +69,8 @@ class LocalEmbeddingGenerator:
             embedding = self.model.encode(
                 text_with_prefix,
                 convert_to_tensor=False,
-                show_progress_bar=False
+                show_progress_bar=False,
+                normalize_embeddings=True  # Normalize for dot_product similarity
             )
 
             return embedding.tolist()
@@ -175,7 +176,8 @@ class LocalEmbeddingGenerator:
                     prefixed_batch,
                     convert_to_tensor=False,
                     show_progress_bar=False,
-                    batch_size=batch_size
+                    batch_size=batch_size,
+                    normalize_embeddings=True  # Normalize for dot_product similarity
                 )
 
                 # Assign embeddings immediately to free memory

@@ -314,6 +314,99 @@ UNDERCHUNK_MIN_SIZE = 5000    # chars
 UNDERCHUNK_MIN_DENSITY = 100  # lines per chunk
 ```
 
+## LLM Model Benchmarks
+
+Benchmarked on 2025-12-02 using local LM Studio models for JSON summarization tasks.
+
+### Test Setup
+- **Task**: File summarization with structured JSON output
+- **Test files**: Python code (500 lines), RST documentation
+- **Prompt**: Simplified prompt optimized for smaller models (flat JSON, explicit format)
+
+### Results
+
+| Model | Size | Context | Python Latency | RST Latency | JSON Valid | Quality |
+|-------|------|---------|----------------|-------------|------------|---------|
+| **Qwen3 30B** | 17 GB | 262K | 2.7s | 1.7s | 100% | Best (includes methods, catches edge cases) |
+| **Granite 4 H Tiny** | 4 GB | 65K | 2.6s | 1.4s | 100% | Good (concise, classes only) |
+| **MiniMax M2** | 129 GB | 131K | 31s | 13s | 100% | Same as Qwen (no advantage) |
+
+### Observations
+
+1. **Qwen3 30B (current default)**: Best quality-to-speed ratio. Slightly more detailed key_elements, catches code issues like truncation limits. JSON failure rate <1%.
+
+2. **Granite 4 H Tiny**: Viable fallback. Nearly identical speed when Qwen is idle, 90% of the quality. Good for parallel processing when Qwen is busy with other tasks.
+
+3. **MiniMax M2**: No quality advantage over Qwen at 10x the latency. Skip for batch enrichment.
+
+### Prompt Engineering Notes
+
+Smaller models perform better with:
+- Flat JSON structure (no nested objects)
+- Explicit format examples in prompt
+- Lower temperature (0.1 vs 0.3)
+- No "think step by step" instructions (wastes tokens)
+- Self-contained prompt (no system message preamble)
+
+### Recommendation
+
+- **Primary**: Qwen3 30B for all enrichment tasks
+- **Fallback**: Granite 4 H Tiny if Qwen unavailable or for parallel batch jobs
+- **Skip**: MiniMax M2 (overkill for this use case)
+
+## Embedding Normalization (Critical)
+
+The Couchbase FTS vector index uses `dot_product` similarity. For dot product to work correctly as a similarity measure, **all embeddings must be normalized to unit length (L2 norm = 1)**.
+
+### Why Normalization Matters
+
+Without normalization:
+- `dot_product(a, b) = ||a|| * ||b|| * cos(θ)` — includes magnitude
+- Vectors with larger norms dominate search results regardless of semantic similarity
+- `repo_filter` effectively becomes ignored because wrong repos can outscore correct ones
+
+With normalization:
+- `dot_product(a, b) = cos(θ)` — pure semantic similarity
+- Scores range from -1 to 1 (typically 0 to 1 for similar content)
+- Filtering works correctly because scores reflect actual relevance
+
+### Implementation
+
+All embedding generation must use `normalize_embeddings=True`:
+
+```python
+# Ingestion (local_generator.py)
+embedding = self.model.encode(
+    f"search_document: {text}",  # Document prefix
+    normalize_embeddings=True     # CRITICAL
+)
+
+# Search queries (tools.py)
+query_embedding = embedding_model.encode(
+    f"search_query: {query}",     # Query prefix (different!)
+    normalize_embeddings=True      # CRITICAL
+)
+```
+
+### Bi-Encoder Prefixes
+
+The nomic-ai/nomic-embed-text-v1.5 model is a bi-encoder that expects different prefixes:
+- **Documents**: `search_document: {content}` — used during ingestion
+- **Queries**: `search_query: {query}` — used during search
+
+Using the wrong prefix degrades retrieval quality.
+
+### Backfill Script
+
+If embeddings become denormalized, run:
+
+```bash
+python scripts/normalize_embeddings.py          # Full normalization
+python scripts/normalize_embeddings.py --dry-run # Check status only
+```
+
+This updates all embeddings in-place using subdocument mutations for efficiency.
+
 ## Error Handling
 
 ### LLM Failures
@@ -395,7 +488,10 @@ services/ingestion-worker/
 ├── llm_chunker.py                  # is_underchunked() + LLM chunking
 │
 ├── embeddings/
-│   └── local_generator.py          # nomic-embed (reuse as-is)
+│   └── local_generator.py          # nomic-embed with normalization
+│
+├── scripts/
+│   └── normalize_embeddings.py     # Backfill script for normalizing existing embeddings
 │
 └── storage/
     └── couchbase_client.py         # Add V4 methods

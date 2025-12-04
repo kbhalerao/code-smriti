@@ -295,10 +295,11 @@ async def search_code(
         doc_type = LEVEL_TO_DOCTYPE[level]
 
         # Generate query embedding
-        query_with_prefix = f"search_document: {query}"
+        # Use search_query prefix for queries (bi-encoder expects different prefixes)
+        query_with_prefix = f"search_query: {query}"
         query_embedding = embedding_model.encode(
             query_with_prefix,
-            normalize_embeddings=True
+            normalize_embeddings=True  # Must match DB embeddings (normalized)
         ).tolist()
 
         # Build FTS request with hybrid search (query + knn)
