@@ -9,7 +9,11 @@ from typing import List, Optional, Set
 
 from loguru import logger
 
-from .models import ChangeSet, UpdateResult
+from .models import (
+    ChangeSet, UpdateResult,
+    STATUS_SKIPPED, STATUS_EXCLUDED, STATUS_UPDATED,
+    STATUS_FULL_REINGEST, STATUS_EMPTY, STATUS_ERROR, STATUS_DELETED
+)
 from .git_utils import GitOperations
 from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
@@ -81,6 +85,9 @@ class IncrementalUpdater:
         # Store config reference
         self.config = config
 
+        # Load exclusions
+        self.exclusions = self.repo_lifecycle.load_exclusions()
+
     def filter_supported_files(
         self,
         files: List[str],
@@ -150,9 +157,19 @@ class IncrementalUpdater:
         start_time = datetime.now()
         logger.info(f"\nProcessing {repo_id}")
 
+        # 0. Check exclusion list
+        if repo_id in self.exclusions:
+            logger.info(f"  Skipping - excluded in config")
+            return UpdateResult(
+                repo_id=repo_id,
+                status=STATUS_EXCLUDED,
+                reason='in_exclusion_list',
+                duration_seconds=(datetime.now() - start_time).total_seconds()
+            )
+
         # 1. Fetch latest from origin
         if not self.git.fetch(repo_path):
-            return UpdateResult(repo_id=repo_id, status='error', error='Git fetch failed')
+            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git fetch failed')
 
         # 2. Get commits
         local_head = self.git.get_head_commit(repo_path)
@@ -160,15 +177,16 @@ class IncrementalUpdater:
         stored_commit = self.repo_lifecycle.get_stored_commit(repo_id)
 
         if not origin_head:
-            return UpdateResult(repo_id=repo_id, status='error', error='Could not determine origin HEAD')
+            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Could not determine origin HEAD')
 
         # 3. Check if update needed
         if stored_commit and local_head == origin_head == stored_commit:
             logger.info(f"  Skipping - no changes (commit: {stored_commit[:8]})")
             return UpdateResult(
                 repo_id=repo_id,
-                status='skipped',
+                status=STATUS_SKIPPED,
                 reason='no_changes',
+                commit=stored_commit,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
@@ -188,8 +206,9 @@ class IncrementalUpdater:
                         loop.close()
             return UpdateResult(
                 repo_id=repo_id,
-                status='full_reingest',
+                status=STATUS_FULL_REINGEST,
                 reason='new_repo',
+                commit=origin_head,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
@@ -201,8 +220,9 @@ class IncrementalUpdater:
             logger.info(f"  Skipping - no file changes")
             return UpdateResult(
                 repo_id=repo_id,
-                status='skipped',
+                status=STATUS_SKIPPED,
                 reason='no_file_changes',
+                commit=origin_head,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
@@ -225,8 +245,9 @@ class IncrementalUpdater:
                         loop.close()
             return UpdateResult(
                 repo_id=repo_id,
-                status='full_reingest',
+                status=STATUS_FULL_REINGEST,
                 reason=f'threshold_exceeded ({change_ratio:.1%})',
+                commit=origin_head,
                 files_processed=changes.total_changed,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
@@ -258,8 +279,9 @@ class IncrementalUpdater:
             logger.info(f"  [DRY RUN] Would process {len(code_to_process)} code files, {len(docs_to_process)} doc files")
             return UpdateResult(
                 repo_id=repo_id,
-                status='updated',
+                status=STATUS_UPDATED,
                 reason='dry_run',
+                commit=origin_head,
                 files_processed=len(code_to_process) + len(docs_to_process),
                 files_deleted=files_deleted,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
@@ -362,9 +384,11 @@ class IncrementalUpdater:
 
         return UpdateResult(
             repo_id=repo_id,
-            status='updated',
+            status=STATUS_UPDATED,
+            commit=origin_head,
             files_processed=files_processed,
             files_deleted=files_deleted,
+            docs_created=len(file_indices) + len(all_symbol_indices),
             duration_seconds=duration
         )
 
@@ -535,7 +559,7 @@ class IncrementalUpdater:
         logger.info(f"  Orphaned in DB:     {len(orphaned_in_db)}")
 
         results = []
-        stats = {'cloned': 0, 'skipped': 0, 'updated': 0, 'full_reingest': 0, 'deleted': 0, 'error': 0}
+        stats = {'cloned': 0, 'skipped': 0, 'excluded': 0, 'updated': 0, 'full_reingest': 0, 'empty': 0, 'deleted': 0, 'error': 0}
 
         # Phase 2: Clone new repos
         if new_repos:
@@ -549,7 +573,7 @@ class IncrementalUpdater:
                     repos_to_process.add(repo_id)
                     stats['cloned'] += 1
                 else:
-                    results.append(UpdateResult(repo_id=repo_id, status='error', error='Clone failed'))
+                    results.append(UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Clone failed'))
                     stats['error'] += 1
 
         # Phase 3: Delete orphaned repos
@@ -560,7 +584,7 @@ class IncrementalUpdater:
 
             for repo_id in sorted(orphaned_in_db):
                 deleted = self.repo_lifecycle.delete_repo_docs(repo_id, self.dry_run)
-                results.append(UpdateResult(repo_id=repo_id, status='deleted', reason='orphaned', files_deleted=deleted))
+                results.append(UpdateResult(repo_id=repo_id, status=STATUS_DELETED, reason='orphaned', files_deleted=deleted))
                 stats['deleted'] += 1
 
         # Phase 4: Process repos
@@ -577,7 +601,7 @@ class IncrementalUpdater:
                 stats[result.status] = stats.get(result.status, 0) + 1
             except Exception as e:
                 logger.error(f"Failed to process {repo_id}: {e}")
-                results.append(UpdateResult(repo_id=repo_id, status='error', error=str(e)))
+                results.append(UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error=str(e)))
                 stats['error'] += 1
 
         # Summary
@@ -587,8 +611,10 @@ class IncrementalUpdater:
         logger.info(f"Total repos processed: {len(results)}")
         logger.info(f"  Cloned:        {stats['cloned']}")
         logger.info(f"  Skipped:       {stats['skipped']}")
+        logger.info(f"  Excluded:      {stats['excluded']}")
         logger.info(f"  Updated:       {stats['updated']}")
         logger.info(f"  Full reingest: {stats['full_reingest']}")
+        logger.info(f"  Empty:         {stats['empty']}")
         logger.info(f"  Deleted:       {stats['deleted']}")
         logger.info(f"  Errors:        {stats['error']}")
 

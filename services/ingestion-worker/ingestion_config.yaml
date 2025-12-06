@@ -1,0 +1,27 @@
+# Ingestion Configuration
+# This file controls the incremental ingestion process
+
+# Repos to exclude from processing entirely
+# These repos will be skipped without fetching or checking for changes
+exclude:
+  # Empty repos (no indexable code files)
+  - PeoplesCompany/peoples-core-sdi
+  - PeoplesCompany/peoples-infra
+  - PeoplesCompany/peoples-sdi
+  - arunshejul88/Soil-Diagnostics
+  - kbhalerao/BlueFeatherAD5933Driver
+  - kbhalerao/SCNSim
+  - kbhalerao/SpreetaDriver
+  - kbhalerao/arthasastra
+  - kbhalerao/labcore.github.io
+  - kbhalerao/manobodh
+  - kbhalerao/smartbarn2025
+  - kbhalerao/soildxios
+
+  # Git issues (could not determine origin HEAD)
+  - PeoplesCompany/farmworth
+  - PeoplesCompany/insights-national-map
+  - PeoplesCompany/mapcomponent
+  - jayp-eci/sdxweather
+  - kbhalerao/errorlog
+  - kbhalerao/smartbarn

@@ -3,10 +3,16 @@ Repository lifecycle management: discovery, cloning, deletion.
 """
 
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Union
 
+import yaml
 from loguru import logger
+
+
+# Document IDs for tracking documents
+REPO_COMMITS_INDEX_DOC_ID = "repo_commits_index"
 
 
 class RepoLifecycle:
@@ -255,7 +261,18 @@ class RepoLifecycle:
     # =========================================================================
 
     def get_stored_commit(self, repo_id: str) -> Optional[str]:
-        """Get stored commit hash from repo_summary document"""
+        """
+        Get stored commit hash for a repo.
+
+        First checks the commits index (fast path), then falls back to
+        querying repo_summary documents (legacy path).
+        """
+        # Fast path: check commits index
+        commit = self.get_commit_from_index(repo_id)
+        if commit:
+            return commit
+
+        # Fallback: query repo_summary (legacy, for repos not yet in index)
         try:
             query = """
                 SELECT commit_hash
@@ -348,3 +365,124 @@ class RepoLifecycle:
             return None
         except Exception:
             return None
+
+    # =========================================================================
+    # Exclusion List Management
+    # =========================================================================
+
+    def load_exclusions(self, config_path: Optional[Path] = None) -> Set[str]:
+        """
+        Load exclusion list from ingestion_config.yaml.
+
+        Args:
+            config_path: Path to config file. Defaults to ingestion_config.yaml
+                        in the ingestion-worker directory.
+
+        Returns:
+            Set of repo_ids to exclude from processing.
+        """
+        if config_path is None:
+            # Default to ingestion_config.yaml in the ingestion-worker directory
+            ingestion_worker_dir = Path(__file__).parent.parent.parent
+            config_path = ingestion_worker_dir / "ingestion_config.yaml"
+
+        if not config_path.exists():
+            logger.debug(f"No exclusion config found at {config_path}")
+            return set()
+
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f) or {}
+
+            exclusions = set(config.get('exclude', []))
+            if exclusions:
+                logger.info(f"Loaded {len(exclusions)} exclusions from config")
+            return exclusions
+
+        except Exception as e:
+            logger.warning(f"Failed to load exclusion config: {e}")
+            return set()
+
+    # =========================================================================
+    # Commit Index Management
+    # =========================================================================
+
+    def get_commit_from_index(self, repo_id: str) -> Optional[str]:
+        """
+        Fast lookup of last processed commit from the commits index.
+
+        The commits index is a single document that maps repo_id -> commit_hash
+        for fast lookups without querying across all repo_summary documents.
+
+        Args:
+            repo_id: The repository identifier (owner/repo)
+
+        Returns:
+            The commit hash if found, None otherwise.
+        """
+        try:
+            doc = self.cb_client.collection.get(REPO_COMMITS_INDEX_DOC_ID)
+            repos = doc.content_as[dict].get('repos', {})
+            return repos.get(repo_id)
+        except Exception:
+            # Document doesn't exist or repo not in index
+            return None
+
+    def update_commits_index(self, commits: Dict[str, str], dry_run: bool = False) -> bool:
+        """
+        Update the commits index with new commit hashes.
+
+        This performs a read-modify-write to merge new commits into the index.
+
+        Args:
+            commits: Dict mapping repo_id -> commit_hash
+            dry_run: If True, skip the actual write
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not commits:
+            return True
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would update commits index for {len(commits)} repos")
+            return True
+
+        try:
+            # Try to get existing document
+            try:
+                doc = self.cb_client.collection.get(REPO_COMMITS_INDEX_DOC_ID)
+                existing = doc.content_as[dict]
+            except Exception:
+                # Document doesn't exist yet, create new
+                existing = {
+                    "document_id": REPO_COMMITS_INDEX_DOC_ID,
+                    "type": "repo_commits_index",
+                    "repos": {}
+                }
+
+            # Merge new commits
+            existing['repos'].update(commits)
+            existing['updated_at'] = datetime.now().isoformat()
+
+            # Write back
+            self.cb_client.collection.upsert(REPO_COMMITS_INDEX_DOC_ID, existing)
+            logger.debug(f"Updated commits index for {len(commits)} repos")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to update commits index: {e}")
+            return False
+
+    def get_commits_index(self) -> Dict[str, str]:
+        """
+        Get the entire commits index.
+
+        Returns:
+            Dict mapping repo_id -> commit_hash for all indexed repos.
+        """
+        try:
+            doc = self.cb_client.collection.get(REPO_COMMITS_INDEX_DOC_ID)
+            return doc.content_as[dict].get('repos', {})
+        except Exception:
+            return {}

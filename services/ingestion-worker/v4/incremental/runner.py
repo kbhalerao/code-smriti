@@ -35,8 +35,10 @@ class IngestionRun:
     # Stats
     repos_processed: int = 0
     repos_skipped: int = 0
+    repos_excluded: int = 0
     repos_updated: int = 0
     repos_full_reingest: int = 0
+    repos_empty: int = 0
     repos_cloned: int = 0
     repos_deleted: int = 0
     repos_error: int = 0
@@ -47,12 +49,43 @@ class IngestionRun:
     # Errors
     errors: List[dict] = field(default_factory=list)
 
+    # Per-repo details for the ingestion_run document
+    repos: dict = field(default_factory=dict)
+
     def to_couchbase_doc(self) -> dict:
-        """Convert to Couchbase document format."""
+        """Convert to Couchbase document format (legacy ingestion_log)."""
         doc = asdict(self)
         doc["type"] = "ingestion_log"
         doc["document_id"] = f"ingestion_log:{self.run_id}"
         return doc
+
+    def to_ingestion_run_doc(self) -> dict:
+        """Convert to new ingestion_run document format with per-repo details."""
+        return {
+            "document_id": f"ingestion_run:{self.run_id}",
+            "type": "ingestion_run",
+            "run_id": self.run_id,
+            "timestamp": self.started_at,
+            "completed_at": self.completed_at,
+            "duration_seconds": self.duration_seconds,
+            "trigger": self.trigger,
+            "dry_run": self.dry_run,
+            "status": self.status,
+            "stats": {
+                "processed": self.repos_processed,
+                "skipped": self.repos_skipped,
+                "excluded": self.repos_excluded,
+                "updated": self.repos_updated,
+                "full_reingest": self.repos_full_reingest,
+                "empty": self.repos_empty,
+                "deleted": self.repos_deleted,
+                "error": self.repos_error,
+                "files_processed": self.files_processed,
+                "files_deleted": self.files_deleted,
+            },
+            "repos": self.repos,
+            "errors": self.errors if self.errors else None,
+        }
 
 
 class LockError(Exception):
@@ -187,12 +220,30 @@ class IngestionRunner:
         except:
             return None
 
-    def _save_run_record(self, cb_client):
-        """Save run record to Couchbase."""
+    def _save_run_record(self, cb_client, repo_lifecycle=None):
+        """Save run record to Couchbase and update commits index."""
         if self._run_record and not self.dry_run:
             try:
-                doc = self._run_record.to_couchbase_doc()
-                cb_client.collection.upsert(doc["document_id"], doc)
+                # Save legacy ingestion_log document
+                legacy_doc = self._run_record.to_couchbase_doc()
+                cb_client.collection.upsert(legacy_doc["document_id"], legacy_doc)
+
+                # Save new ingestion_run document with per-repo details
+                run_doc = self._run_record.to_ingestion_run_doc()
+                cb_client.collection.upsert(run_doc["document_id"], run_doc)
+                logger.info(f"Saved ingestion_run document: {run_doc['document_id']}")
+
+                # Update commits index with all processed repos
+                if repo_lifecycle and self._run_record.repos:
+                    commits = {}
+                    for repo_id, repo_data in self._run_record.repos.items():
+                        commit = repo_data.get('commit')
+                        if commit:
+                            commits[repo_id] = commit
+                    if commits:
+                        repo_lifecycle.update_commits_index(commits)
+                        logger.info(f"Updated commits index for {len(commits)} repos")
+
             except Exception as e:
                 logger.error(f"Failed to save run record: {e}")
 
@@ -231,6 +282,7 @@ class IngestionRunner:
         start_time = datetime.now()
         results = []
         cb_client = None
+        repo_lifecycle = None
 
         try:
             # Initialize updater
@@ -241,18 +293,24 @@ class IngestionRunner:
                 llm_config=self.llm_config
             )
             cb_client = updater.cb_client
+            repo_lifecycle = updater.repo_lifecycle
 
             # Run the update
             results = updater.run(repo_filter=repo_filter)
 
-            # Collect stats
+            # Collect stats and build per-repo details
             for r in results:
+                # Count by status
                 if r.status == 'skipped':
                     self._run_record.repos_skipped += 1
+                elif r.status == 'excluded':
+                    self._run_record.repos_excluded += 1
                 elif r.status == 'updated':
                     self._run_record.repos_updated += 1
                 elif r.status == 'full_reingest':
                     self._run_record.repos_full_reingest += 1
+                elif r.status == 'empty':
+                    self._run_record.repos_empty += 1
                 elif r.status == 'deleted':
                     self._run_record.repos_deleted += 1
                 elif r.status == 'error':
@@ -264,6 +322,9 @@ class IngestionRunner:
 
                 self._run_record.files_processed += r.files_processed
                 self._run_record.files_deleted += r.files_deleted
+
+                # Store per-repo details (using to_dict which excludes repo_id)
+                self._run_record.repos[r.repo_id] = r.to_dict()
 
             self._run_record.repos_processed = len(results)
             self._run_record.status = "completed" if self._run_record.repos_error == 0 else "completed_with_errors"
@@ -284,9 +345,9 @@ class IngestionRunner:
             self._run_record.completed_at = datetime.now().isoformat()
             self._run_record.duration_seconds = (datetime.now() - start_time).total_seconds()
 
-            # Save to Couchbase
+            # Save to Couchbase and update commits index
             if cb_client:
-                self._save_run_record(cb_client)
+                self._save_run_record(cb_client, repo_lifecycle)
 
             # Release lock
             self._release_lock()
