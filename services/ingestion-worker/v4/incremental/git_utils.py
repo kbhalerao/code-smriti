@@ -77,7 +77,7 @@ class GitOperations:
 
     @staticmethod
     def get_default_branch(repo_path: Path) -> str:
-        """Detect default branch (main or master)"""
+        """Detect default branch from origin/HEAD"""
         try:
             result = subprocess.run(
                 ['git', 'symbolic-ref', 'refs/remotes/origin/HEAD'],
@@ -87,7 +87,15 @@ class GitOperations:
                 timeout=10
             )
             if result.returncode == 0:
-                return result.stdout.strip().split('/')[-1]
+                # Output is like "refs/remotes/origin/aj/Lightsail_deployment"
+                # Remove the prefix to get the branch name (may contain slashes)
+                ref = result.stdout.strip()
+                prefix = 'refs/remotes/origin/'
+                if ref.startswith(prefix):
+                    return ref[len(prefix):]
+                # Fallback: take everything after last 'origin/'
+                if 'origin/' in ref:
+                    return ref.split('origin/', 1)[1]
         except Exception:
             pass
         return 'main'
