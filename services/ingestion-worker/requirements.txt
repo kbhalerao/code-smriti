@@ -6,9 +6,14 @@ sentence-transformers>=2.2.0
 torch>=2.1.0
 einops>=0.7.0
 
-# Code parsing
-tree-sitter==0.20.4  # Pin to 0.20.x - compatible with tree-sitter-languages
-tree-sitter-languages>=1.10.2  # Pre-built language bindings
+# Code parsing - using individual tree-sitter packages (0.22+ API)
+tree-sitter>=0.23
+tree-sitter-python>=0.23
+tree-sitter-javascript>=0.23
+tree-sitter-typescript>=0.23
+tree-sitter-html>=0.23
+tree-sitter-css>=0.23
+tree-sitter-svelte>=1.0.2
 
 # GitHub API
 PyGithub>=2.1.0

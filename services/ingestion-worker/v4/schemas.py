@@ -117,6 +117,7 @@ class SymbolIndex:
 
     # LLM-generated content
     content: str  # Summary for search
+    language: str = ""  # Programming language
     embedding: Optional[List[float]] = None
 
     # Metadata
@@ -145,6 +146,7 @@ class SymbolIndex:
             "commit_hash": self.commit_hash,
             "symbol_name": self.symbol_name,
             "symbol_type": self.symbol_type,
+            "language": self.language,
             "content": self.content,
             "embedding": self.embedding,
             "metadata": {

@@ -164,7 +164,7 @@ class FileProcessor:
         """
         symbols = []
 
-        if language not in ("python", "javascript", "typescript"):
+        if language not in ("python", "javascript", "typescript", "svelte"):
             return symbols
 
         # Create dummy Path for parser (it uses for metadata only)
@@ -179,6 +179,10 @@ class FileProcessor:
                 chunks = await self.code_parser.parse_javascript_file(
                     dummy_path, content, "", file_path, {},
                     is_typescript=(language == "typescript")
+                )
+            elif language == "svelte":
+                chunks = await self.code_parser.parse_svelte_file(
+                    dummy_path, content, "", file_path, {}
                 )
             else:
                 return symbols
@@ -213,7 +217,7 @@ class FileProcessor:
                 if imp:
                     imports.append(imp)
 
-        elif language in ("javascript", "typescript"):
+        elif language in ("javascript", "typescript", "svelte"):
             for match in re.finditer(
                 r"(?:import|require)\s*\(?['\"]([^'\"]+)['\"]",
                 content
@@ -540,6 +544,7 @@ class FileProcessor:
                 commit_hash=commit_hash,
                 symbol_name=symbol.name,
                 symbol_type=symbol.symbol_type,
+                language=language or "",
                 content=summary,
                 start_line=symbol.start_line,
                 end_line=symbol.end_line,

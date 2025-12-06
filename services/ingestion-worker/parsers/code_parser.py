@@ -168,32 +168,36 @@ class CodeParser:
         # Initialize tree-sitter parsers
         self.parsers = {}
 
-        # Try to load tree-sitter-languages
+        # Load individual tree-sitter language packages (tree-sitter 0.22+ API)
         try:
-            from tree_sitter_languages import get_parser
-            self.parsers = {
-                "python": get_parser("python"),
-                "javascript": get_parser("javascript"),
-                "typescript": get_parser("typescript"),
-                "html": get_parser("html"),
-                "css": get_parser("css"),
+            from tree_sitter import Language, Parser
+
+            # Map of language name -> (module_name, language_func_name)
+            language_configs = {
+                "python": ("tree_sitter_python", "language"),
+                "javascript": ("tree_sitter_javascript", "language"),
+                "typescript": ("tree_sitter_typescript", "language_typescript"),
+                "tsx": ("tree_sitter_typescript", "language_tsx"),
+                "html": ("tree_sitter_html", "language"),
+                "css": ("tree_sitter_css", "language"),
+                "svelte": ("tree_sitter_svelte", "language"),
             }
 
-            # Try to add Svelte parser from tree-sitter-svelte
-            try:
-                import tree_sitter_svelte
-                from tree_sitter import Parser
-                svelte_parser = Parser()
-                svelte_parser.set_language(tree_sitter_svelte.language())
-                self.parsers["svelte"] = svelte_parser
-            except ImportError:
-                logger.debug("tree-sitter-svelte not available, will use regex-based Svelte parser")
-            except Exception as e:
-                logger.debug(f"Could not load Svelte parser: {e}")
+            for lang_name, (module_name, func_name) in language_configs.items():
+                try:
+                    mod = __import__(module_name)
+                    lang_func = getattr(mod, func_name)
+                    lang = Language(lang_func())
+                    parser = Parser(lang)
+                    self.parsers[lang_name] = parser
+                except ImportError:
+                    logger.debug(f"{module_name} not available, {lang_name} will use regex fallback")
+                except Exception as e:
+                    logger.debug(f"Could not load {lang_name} parser: {e}")
 
             logger.info(f"✓ Tree-sitter parsers loaded: {list(self.parsers.keys())}")
         except ImportError:
-            logger.warning("tree-sitter-languages not available, will use regex fallback")
+            logger.warning("tree-sitter not available, will use regex fallback")
         except Exception as e:
             logger.warning(f"Failed to load tree-sitter parsers: {e}, will use regex fallback")
 
