@@ -26,6 +26,7 @@ from app.rag.models import (
     SearchLevel,
 )
 from app.rag import tools as rag_tools
+from app.rag import graph_tools
 
 # For LLM mode (ask_codebase)
 from app.chat.pydantic_rag_agent import (
@@ -108,6 +109,32 @@ class ReposResponse(BaseModel):
     repos: List[RepoInfo] = Field(description="List of repositories")
     total_repos: int = Field(description="Total number of repos")
     total_docs: int = Field(description="Total documents across all repos")
+
+
+# Graph-related models
+class AffectedTestsRequest(BaseModel):
+    """Request model for affected_tests endpoint"""
+    changed_files: List[str] = Field(
+        description="List of changed file paths (e.g., ['common/models/__init__.py'])"
+    )
+    cluster_id: str = Field(
+        description="Mother repo ID (e.g., 'kbhalerao/labcore')"
+    )
+
+
+class CriticalityRequest(BaseModel):
+    """Request model for get_criticality endpoint"""
+    module: str = Field(description="Module name (e.g., 'common.models')")
+    cluster_id: str = Field(
+        description="Mother repo ID (e.g., 'kbhalerao/labcore')"
+    )
+
+
+class GraphInfoRequest(BaseModel):
+    """Request model for graph_info endpoint"""
+    cluster_id: str = Field(
+        description="Mother repo ID (e.g., 'kbhalerao/labcore')"
+    )
 
 
 # =============================================================================
@@ -307,3 +334,108 @@ async def health_check():
         "service": "rag-v4",
         "ollama_host": settings.ollama_host
     }
+
+
+# =============================================================================
+# Graph Endpoints
+# =============================================================================
+
+@router.post("/graph/affected-tests", response_model=graph_tools.AffectedTestsResult)
+async def affected_tests_endpoint(
+    request: AffectedTestsRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Find tests affected by file changes.
+
+    Given a list of changed files, uses the dependency graph to find
+    all modules that transitively depend on those files, then filters
+    to test modules.
+
+    Use this to determine the minimum test suite needed after a change.
+    """
+    tenant_id = current_user.get("tenant_id", "code_kosha")
+
+    return await graph_tools.find_affected_tests(
+        db=db,
+        changed_files=request.changed_files,
+        cluster_id=request.cluster_id,
+        tenant_id=tenant_id
+    )
+
+
+@router.post("/graph/criticality", response_model=graph_tools.CriticalityResult)
+async def criticality_endpoint(
+    request: CriticalityRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Get criticality info for a module.
+
+    Returns PageRank-based criticality score, percentile ranking,
+    and list of direct dependents.
+
+    Use this to understand the impact of changing a specific module.
+    """
+    tenant_id = current_user.get("tenant_id", "code_kosha")
+
+    result = await graph_tools.get_criticality(
+        db=db,
+        module=request.module,
+        cluster_id=request.cluster_id,
+        tenant_id=tenant_id
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Module '{request.module}' not found in graph '{request.cluster_id}'"
+        )
+
+    return result
+
+
+@router.post("/graph/info", response_model=graph_tools.GraphInfo)
+async def graph_info_endpoint(
+    request: GraphInfoRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Get summary info about a dependency graph.
+
+    Returns node/edge counts, cross-repo edges, and list of repos
+    in the cluster.
+    """
+    tenant_id = current_user.get("tenant_id", "code_kosha")
+
+    result = await graph_tools.get_graph_info(
+        db=db,
+        cluster_id=request.cluster_id,
+        tenant_id=tenant_id
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Graph not found: {request.cluster_id}"
+        )
+
+    return result
+
+
+@router.get("/graph/clusters")
+async def list_clusters_endpoint(
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    List all available dependency graph clusters.
+    """
+    tenant_id = current_user.get("tenant_id", "code_kosha")
+
+    clusters = await graph_tools.list_clusters(db, tenant_id)
+
+    return {"clusters": clusters}

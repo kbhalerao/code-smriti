@@ -474,5 +474,215 @@ async def get_file(
         return f"Error fetching file: {str(e)}"
 
 
+# =============================================================================
+# Graph Tools
+# =============================================================================
+
+@mcp.tool()
+async def affected_tests(
+    changed_files: list[str],
+    cluster_id: str = "kbhalerao/labcore"
+) -> str:
+    """
+    Find which tests should run given changed files.
+
+    Uses the dependency graph to trace all modules that transitively depend
+    on the changed files, then filters to test modules.
+
+    Args:
+        changed_files: List of file paths that changed (e.g., ["common/models/__init__.py"])
+        cluster_id: Mother repo ID (e.g., "kbhalerao/labcore")
+
+    Returns:
+        List of affected modules and tests to run
+    """
+    try:
+        token = await get_auth_token()
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/graph/affected-tests",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "changed_files": changed_files,
+                    "cluster_id": cluster_id
+                },
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if not data.get("graph_found"):
+                return f"No dependency graph found for cluster '{cluster_id}'. Run all tests."
+
+            changed = data.get("changed_modules", [])
+            affected = data.get("affected_modules", [])
+            tests = data.get("tests_to_run", [])
+
+            output = [f"## Affected Tests for {cluster_id}\n"]
+
+            if changed:
+                output.append(f"**Changed modules:** {len(changed)}")
+                for m in changed[:10]:
+                    output.append(f"  - {m}")
+                if len(changed) > 10:
+                    output.append(f"  - ... and {len(changed) - 10} more")
+                output.append("")
+
+            if affected:
+                output.append(f"**Affected modules:** {len(affected)}")
+                for m in affected[:10]:
+                    output.append(f"  - {m}")
+                if len(affected) > 10:
+                    output.append(f"  - ... and {len(affected) - 10} more")
+                output.append("")
+
+            if tests:
+                output.append(f"**Tests to run:** {len(tests)}")
+                for t in tests:
+                    output.append(f"  - {t}")
+            else:
+                output.append("**No test modules affected**")
+
+            return "\n".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error finding affected tests: {str(e)}"
+    except Exception as e:
+        return f"Error finding affected tests: {str(e)}"
+
+
+@mcp.tool()
+async def get_module_criticality(
+    module: str,
+    cluster_id: str = "kbhalerao/labcore"
+) -> str:
+    """
+    Get criticality info for a module.
+
+    Returns PageRank-based importance score, percentile ranking,
+    and direct dependents.
+
+    Args:
+        module: Module name (e.g., "common.models", "clients.models")
+        cluster_id: Mother repo ID (e.g., "kbhalerao/labcore")
+
+    Returns:
+        Criticality info with score, percentile, and dependents
+    """
+    try:
+        token = await get_auth_token()
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/graph/criticality",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "module": module,
+                    "cluster_id": cluster_id
+                },
+                timeout=30.0
+            )
+
+            if response.status_code == 404:
+                return f"Module '{module}' not found in graph '{cluster_id}'"
+
+            response.raise_for_status()
+            data = response.json()
+
+            score = data.get("score", 0)
+            percentile = data.get("percentile", 0)
+            in_deg = data.get("in_degree", 0)
+            out_deg = data.get("out_degree", 0)
+            repo_id = data.get("repo_id", "")
+            is_test = data.get("is_test", False)
+            dependents = data.get("direct_dependents", [])
+
+            output = [f"## Criticality: {module}\n"]
+            output.append(f"**Repo:** {repo_id}")
+            output.append(f"**Score:** {score:.6f} (percentile: {percentile})")
+            output.append(f"**In-degree:** {in_deg} (modules depend on this)")
+            output.append(f"**Out-degree:** {out_deg} (modules this depends on)")
+            if is_test:
+                output.append("**Type:** Test module")
+            output.append("")
+
+            if dependents:
+                output.append(f"**Direct dependents ({len(dependents)}):**")
+                for d in dependents[:15]:
+                    output.append(f"  - {d}")
+                if len(dependents) > 15:
+                    output.append(f"  - ... and {len(dependents) - 15} more")
+            else:
+                output.append("_No direct dependents (leaf module)_")
+
+            return "\n".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error getting criticality: {str(e)}"
+    except Exception as e:
+        return f"Error getting criticality: {str(e)}"
+
+
+@mcp.tool()
+async def get_graph_info(cluster_id: str = "kbhalerao/labcore") -> str:
+    """
+    Get summary info about a dependency graph.
+
+    Args:
+        cluster_id: Mother repo ID (e.g., "kbhalerao/labcore")
+
+    Returns:
+        Graph summary with node/edge counts and repo breakdown
+    """
+    try:
+        token = await get_auth_token()
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/graph/info",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"cluster_id": cluster_id},
+                timeout=30.0
+            )
+
+            if response.status_code == 404:
+                return f"No dependency graph found for cluster '{cluster_id}'"
+
+            response.raise_for_status()
+            data = response.json()
+
+            output = [f"## Dependency Graph: {cluster_id}\n"]
+            output.append(f"**Nodes:** {data.get('total_nodes', 0)}")
+            output.append(f"**Edges:** {data.get('total_edges', 0)}")
+            output.append(f"**Cross-repo edges:** {data.get('cross_repo_edges', 0)}")
+            output.append(f"**Computed at:** {data.get('computed_at', 'unknown')}")
+            output.append("")
+
+            repos = data.get("repos", {})
+            if repos:
+                output.append("**Repos in cluster:**")
+                for repo_id, info in repos.items():
+                    role = info.get("role", "unknown")
+                    count = info.get("module_count", 0)
+                    output.append(f"  - {repo_id}: {count} modules ({role})")
+
+            return "\n".join(output)
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error getting graph info: {str(e)}"
+    except Exception as e:
+        return f"Error getting graph info: {str(e)}"
+
+
 if __name__ == "__main__":
     mcp.run()

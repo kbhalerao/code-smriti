@@ -32,7 +32,9 @@ REPO_REGISTRY: Dict[str, MotherRepo] = {
     "kbhalerao/labcore": MotherRepo(
         repo_id="kbhalerao/labcore",
         pip_package="labcore",
-        path_markers=["/labcore/", "site-packages/labcore"],
+        # Editable install: pip install -e at Docker entrypoint puts code in src/
+        # Standard install: pip install puts in site-packages/
+        path_markers=["/soildx-labcore/", "/labcore/", "site-packages/labcore"],
         daughters=[
             "kbhalerao/topsoil",
             "kbhalerao/pinionbe",
@@ -67,7 +69,7 @@ def get_daughters(mother_repo_id: str) -> List[str]:
 
 
 def identify_provider_repo(
-    module_path: str,
+    module_path: Optional[str],
     mother_repos: Optional[Dict[str, MotherRepo]] = None,
 ) -> Optional[str]:
     """
@@ -80,6 +82,9 @@ def identify_provider_repo(
     Returns:
         repo_id if path matches a mother repo, None otherwise
     """
+    if not module_path:
+        return None
+
     if mother_repos is None:
         mother_repos = REPO_REGISTRY
 
