@@ -204,6 +204,8 @@ class IncrementalUpdater:
                 finally:
                     if owns_loop:
                         loop.close()
+                # Ingest all commits for new repo
+                self._ingest_commits(repo_id, repo_path)
             return UpdateResult(
                 repo_id=repo_id,
                 status=STATUS_FULL_REINGEST,
@@ -243,6 +245,8 @@ class IncrementalUpdater:
                 finally:
                     if owns_loop:
                         loop.close()
+                # Ingest new commits since last stored
+                self._ingest_commits(repo_id, repo_path, since_commit=stored_commit)
             return UpdateResult(
                 repo_id=repo_id,
                 status=STATUS_FULL_REINGEST,
@@ -379,6 +383,9 @@ class IncrementalUpdater:
         finally:
             loop.close()
 
+        # Ingest new commits since last stored
+        self._ingest_commits(repo_id, repo_path, since_commit=base_commit)
+
         duration = (datetime.now() - start_time).total_seconds()
         logger.info(f"  Completed in {duration:.1f}s: {files_processed} processed, {files_deleted} deleted")
 
@@ -494,6 +501,138 @@ class IncrementalUpdater:
 
         except Exception as e:
             logger.error(f"Error regenerating summaries: {e}")
+
+    def _ingest_commits(
+        self,
+        repo_id: str,
+        repo_path: Path,
+        since_commit: Optional[str] = None
+    ) -> int:
+        """
+        Ingest commits for a repository.
+
+        Args:
+            repo_id: Repository identifier
+            repo_path: Path to repository
+            since_commit: If provided, only ingest commits after this commit
+
+        Returns:
+            Number of commits ingested
+        """
+        import subprocess
+        import hashlib
+        from datetime import timezone
+
+        if self.dry_run:
+            return 0
+
+        # Build git log command
+        format_str = "%H|%ae|%aI|%s"  # hash|author|date|subject
+        cmd = ["git", "log", f"--format={format_str}", "--numstat"]
+        if since_commit:
+            cmd.append(f"{since_commit}..HEAD")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if result.returncode != 0:
+                logger.warning(f"git log failed for {repo_id}: {result.stderr[:100]}")
+                return 0
+
+            # Parse output
+            commits = []
+            lines = result.stdout.strip().split('\n')
+            i = 0
+
+            while i < len(lines):
+                line = lines[i].strip()
+                if not line or '\t' in line:
+                    i += 1
+                    continue
+
+                parts = line.split('|', 3)
+                if len(parts) != 4:
+                    i += 1
+                    continue
+
+                commit_hash, author, date, message = parts
+                lines_added = 0
+                lines_deleted = 0
+                files_changed = []
+
+                i += 1
+                while i < len(lines):
+                    stat_line = lines[i].strip()
+                    if not stat_line:
+                        i += 1
+                        continue
+                    if '|' in stat_line and '\t' not in stat_line:
+                        break
+                    stat_parts = stat_line.split('\t')
+                    if len(stat_parts) >= 3:
+                        try:
+                            add = int(stat_parts[0]) if stat_parts[0] != '-' else 0
+                            delete = int(stat_parts[1]) if stat_parts[1] != '-' else 0
+                            lines_added += add
+                            lines_deleted += delete
+                            files_changed.append(stat_parts[2])
+                        except ValueError:
+                            pass
+                    i += 1
+
+                # Create document
+                doc_key = f"commit:{repo_id}:{commit_hash[:12]}"
+                doc_id = hashlib.sha256(doc_key.encode()).hexdigest()
+
+                commits.append({
+                    "document_id": doc_id,
+                    "type": "commit_index",
+                    "repo_id": repo_id,
+                    "commit_hash": commit_hash,
+                    "commit_date": date,
+                    "author": author,
+                    "content": message,
+                    "metadata": {
+                        "lines_added": lines_added,
+                        "lines_deleted": lines_deleted,
+                        "files_changed": files_changed,
+                        "file_count": len(files_changed),
+                    },
+                    "embedding": None,
+                    "version": {
+                        "schema_version": "v4.0",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                })
+
+            if not commits:
+                return 0
+
+            # Generate embeddings
+            if self.pipeline.embedding_generator:
+                for commit in commits:
+                    text = f"search_document: {commit['content']}"
+                    commit['embedding'] = self.pipeline.embedding_generator.generate_embedding(text)
+
+            # Store
+            for commit in commits:
+                self.cb_client.collection.upsert(commit['document_id'], commit)
+
+            logger.info(f"  Ingested {len(commits)} commits")
+            return len(commits)
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"git log timed out for {repo_id}")
+            return 0
+        except Exception as e:
+            logger.warning(f"Error ingesting commits for {repo_id}: {e}")
+            return 0
 
     def _process_doc_changes(
         self,

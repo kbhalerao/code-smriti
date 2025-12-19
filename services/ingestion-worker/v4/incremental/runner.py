@@ -220,6 +220,26 @@ class IngestionRunner:
         except:
             return None
 
+    def _regenerate_kpi(self):
+        """Regenerate the KPI dashboard after ingestion."""
+        try:
+            import subprocess
+            script_path = Path(__file__).parent.parent.parent / "scripts" / "generate_kpi.py"
+            if script_path.exists():
+                result = subprocess.run(
+                    ["python", str(script_path)],
+                    cwd=script_path.parent.parent,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode == 0:
+                    logger.info("KPI dashboard regenerated")
+                else:
+                    logger.warning(f"KPI generation failed: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"Could not regenerate KPI dashboard: {e}")
+
     def _save_run_record(self, cb_client, repo_lifecycle=None):
         """Save run record to Couchbase and update commits index."""
         if self._run_record and not self.dry_run:
@@ -348,6 +368,9 @@ class IngestionRunner:
             # Save to Couchbase and update commits index
             if cb_client:
                 self._save_run_record(cb_client, repo_lifecycle)
+
+            # Regenerate KPI dashboard
+            self._regenerate_kpi()
 
             # Release lock
             self._release_lock()
