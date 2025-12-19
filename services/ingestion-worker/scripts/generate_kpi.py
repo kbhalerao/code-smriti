@@ -100,22 +100,25 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
     """)
     stats['quarters'] = {r['quarter']: r['commits'] for r in result}
 
-    # Top repos by commits (2025)
+    # Cutoff for last 3 months
+    three_months_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+
+    # Top repos by commits (last 3 months)
     result = cb_client.cluster.query(f"""
         SELECT repo_id, COUNT(*) as commits
         FROM `{bucket}`
-        WHERE type = 'commit_index' AND commit_date >= '2025-01'
+        WHERE type = 'commit_index' AND commit_date >= '{three_months_ago}'
         GROUP BY repo_id
         ORDER BY commits DESC
         LIMIT 5
     """)
     stats['top_repos'] = list(result)
 
-    # Top authors by commits (2025)
+    # Top authors by commits (last 3 months)
     result = cb_client.cluster.query(f"""
         SELECT author, COUNT(*) as commits
         FROM `{bucket}`
-        WHERE type = 'commit_index' AND commit_date >= '2025-01'
+        WHERE type = 'commit_index' AND commit_date >= '{three_months_ago}'
         GROUP BY author
         ORDER BY commits DESC
         LIMIT 10
@@ -436,7 +439,7 @@ def generate_html(stats: dict) -> str:
 
         <section class="two-col">
             <div>
-                <h2>Top Repos (2025)</h2>
+                <h2>Top Repos (L3M)</h2>
                 <table class="leaderboard">
                     <thead>
                         <tr>
@@ -450,7 +453,7 @@ def generate_html(stats: dict) -> str:
                 </table>
             </div>
             <div>
-                <h2>Top Authors (2025)</h2>
+                <h2>Top Authors (L3M)</h2>
                 <table class="leaderboard">
                     <thead>
                         <tr>
