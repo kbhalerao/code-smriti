@@ -110,7 +110,7 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
         WHERE type = 'commit_index' AND commit_date >= '{three_months_ago}'
         GROUP BY repo_id
         ORDER BY commits DESC
-        LIMIT 5
+        LIMIT 10
     """)
     stats['top_repos'] = list(result)
 
