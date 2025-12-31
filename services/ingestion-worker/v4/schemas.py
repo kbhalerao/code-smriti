@@ -318,6 +318,57 @@ class RepoSummary:
         }
 
 
+@dataclass
+class RepoBDR:
+    """
+    V4 repo_bdr document - Business Development Representative brief.
+
+    Generated from repo_summary + README content.
+    Updated weekly or when inputs change significantly.
+    """
+    document_id: str  # bdr:{repo_id}
+    repo_id: str
+
+    # BDR content
+    content: str  # The BDR brief (markdown)
+    reasoning_trace: Optional[str] = None  # Model's thinking process
+
+    # Change detection
+    input_hash: str = ""  # Hash of (repo_summary + readme) to detect changes
+    source_commit: str = ""  # Commit hash when generated
+    last_checked: str = ""  # ISO timestamp of last check (for snooze logic)
+
+    # Embedding for keyword/prospect query matching
+    embedding: Optional[List[float]] = None
+
+    # Generation metadata
+    model: str = ""  # Model used (e.g., nvidia/nemotron-3-nano)
+    generation_tokens: int = 0
+    reasoning_tokens: int = 0
+
+    # Version info
+    version: VersionInfo = field(default_factory=VersionInfo)
+
+    def to_dict(self) -> Dict:
+        return {
+            "document_id": self.document_id,
+            "type": "repo_bdr",
+            "repo_id": self.repo_id,
+            "content": self.content,
+            "reasoning_trace": self.reasoning_trace,
+            "input_hash": self.input_hash,
+            "source_commit": self.source_commit,
+            "last_checked": self.last_checked,
+            "embedding": self.embedding,
+            "metadata": {
+                "model": self.model,
+                "generation_tokens": self.generation_tokens,
+                "reasoning_tokens": self.reasoning_tokens,
+            },
+            "version": self.version.to_dict(),
+        }
+
+
 # Helper functions for document ID generation (content-based hashing)
 
 def _hash_id(key: str) -> str:
@@ -364,3 +415,24 @@ def make_symbol_id(repo_id: str, file_path: str, symbol_name: str, commit: str) 
     """
     key = f"symbol:{repo_id}:{file_path}:{symbol_name}:{commit[:12]}"
     return _hash_id(key)
+
+
+def make_bdr_id(repo_id: str) -> str:
+    """
+    Generate document_id for repo_bdr.
+
+    Hash of: bdr:{repo_id}
+    Note: Not commit-specific since BDR is more stable than code summaries.
+    """
+    key = f"bdr:{repo_id}"
+    return _hash_id(key)
+
+
+def make_bdr_input_hash(repo_summary: str, readme_content: str) -> str:
+    """
+    Generate hash of BDR inputs to detect when regeneration is needed.
+
+    Uses first 1000 chars of each to avoid false positives from minor changes.
+    """
+    key = f"{repo_summary[:1000]}|{readme_content[:1000]}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]

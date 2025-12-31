@@ -439,3 +439,172 @@ async def list_clusters_endpoint(
     clusters = await graph_tools.list_clusters(db, tenant_id)
 
     return {"clusters": clusters}
+
+
+# =============================================================================
+# AgSci Customer-Facing RAG
+# =============================================================================
+
+class AgSciRequest(BaseModel):
+    """Request for AgSci customer-facing queries."""
+    query: str = Field(description="Customer question about AgSci capabilities")
+    limit: int = Field(default=5, ge=1, le=10, description="Max results to consider")
+
+
+class AgSciResponse(BaseModel):
+    """Response from AgSci RAG."""
+    answer: str = Field(description="Synthesized answer")
+    sources: List[str] = Field(description="Source documents used")
+
+
+@router.post("/agsci", response_model=AgSciResponse)
+async def ask_agsci_endpoint(
+    request: AgSciRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Customer-facing RAG for AgSci capabilities and documentation.
+
+    Searches BDR briefs and documentation to help customers understand
+    what AgSci can build for them. Returns business-focused answers,
+    not code.
+
+    Use this for:
+    - Prospect qualification
+    - Capability matching
+    - Documentation questions
+    """
+    import httpx
+
+    tenant_id = current_user.get("tenant_id", "code_kosha")
+    embedding_model = get_embedding_model(settings.embedding_model_name)
+
+    # LM Studio endpoint
+    lm_studio_url = os.getenv("LMSTUDIO_URL", "http://macstudio.local:1234")
+    lm_studio_model = os.getenv("LMSTUDIO_MODEL", "qwen/qwen3-30b-a3b-2507")
+
+    # Step 1: Query expansion with Qwen
+    expansion_prompt = f"""Given this customer question, generate 5-10 search keywords/phrases that would help find relevant capabilities and documentation.
+
+Question: {request.query}
+
+Output only the keywords, one per line. Include:
+- Business terms the customer might use
+- Technical terms that match capabilities
+- Related concepts"""
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            expansion_resp = await client.post(
+                f"{lm_studio_url}/v1/chat/completions",
+                json={
+                    "model": lm_studio_model,
+                    "messages": [{"role": "user", "content": expansion_prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 200
+                }
+            )
+            expansion_resp.raise_for_status()
+            expanded_terms = expansion_resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.warning(f"Query expansion failed: {e}, using original query")
+            expanded_terms = request.query
+
+    # Combine original query with expanded terms
+    search_query = f"{request.query} {expanded_terms}"
+
+    # Step 2: Vector search on repo_bdr and document types
+    query_with_prefix = f"search_query: {search_query}"
+    query_embedding = embedding_model.encode(
+        query_with_prefix,
+        normalize_embeddings=True
+    ).tolist()
+
+    # Search both repo_bdr and document types
+    contexts = []
+    sources = []
+
+    for doc_type in ["repo_bdr", "document"]:
+        fts_request = {
+            "query": {"term": doc_type, "field": "type"},
+            "knn": [{
+                "field": "embedding",
+                "vector": query_embedding,
+                "k": request.limit
+            }],
+            "knn_operator": "and",
+            "fields": ["content", "repo_id", "file_path", "type"],
+            "size": request.limit
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"http://localhost:8094/api/bucket/{tenant_id}/scope/_default/index/embedding_index/query",
+                    auth=("Administrator", os.getenv("COUCHBASE_PASSWORD", "password")),
+                    json=fts_request
+                )
+                resp.raise_for_status()
+                hits = resp.json().get("hits", [])
+
+                for hit in hits:
+                    fields = hit.get("fields", {})
+                    content = fields.get("content", "")
+                    repo_id = fields.get("repo_id", "")
+                    file_path = fields.get("file_path", "")
+
+                    if content:
+                        contexts.append(content[:2000])  # Limit per-doc context
+                        if doc_type == "repo_bdr":
+                            sources.append(f"[BDR] {repo_id}")
+                        else:
+                            sources.append(f"[Doc] {repo_id}/{file_path}")
+
+        except Exception as e:
+            logger.warning(f"Search failed for {doc_type}: {e}")
+
+    if not contexts:
+        return AgSciResponse(
+            answer="I couldn't find relevant information about that. Could you rephrase your question or ask about specific capabilities?",
+            sources=[]
+        )
+
+    # Step 3: Synthesize answer
+    context_text = "\n\n---\n\n".join(contexts[:8])  # Limit total context
+
+    synthesis_prompt = f"""You are helping a customer understand AgSci and its offerings.
+Based on the following context from our documentation and capability briefs, answer the customer's question.
+
+Be helpful, specific, and business-focused. If the context doesn't fully answer the question, say so.
+Do not make up capabilities - only reference what's in the context.
+
+## Context:
+{context_text}
+
+## Customer Question:
+{request.query}
+
+## Answer:"""
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            synth_resp = await client.post(
+                f"{lm_studio_url}/v1/chat/completions",
+                json={
+                    "model": lm_studio_model,
+                    "messages": [{"role": "user", "content": synthesis_prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 1500
+                }
+            )
+            synth_resp.raise_for_status()
+            answer = synth_resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"Synthesis failed: {e}")
+            return AgSciResponse(
+                answer="I encountered an error processing your question. Please try again.",
+                sources=sources
+            )
+
+    return AgSciResponse(answer=answer, sources=list(set(sources)))

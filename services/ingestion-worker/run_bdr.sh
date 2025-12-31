@@ -1,6 +1,6 @@
 #!/bin/bash
-# Wrapper script for scheduled incremental ingestion
-# Called by launchd (com.codesmriti.incremental)
+# Wrapper script for weekly BDR generation
+# Called by launchd (com.codesmriti.bdr)
 
 set -e
 
@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Logging - append to log file
-LOG_FILE="$SCRIPT_DIR/logs/launchd.out.log"
-echo "=== $(date) Starting incremental ingestion ===" >> "$LOG_FILE"
+LOG_FILE="$SCRIPT_DIR/logs/bdr.out.log"
+echo "=== $(date) Starting BDR generation ===" >> "$LOG_FILE"
 
 # Essential environment for launchd
 export HOME="/Users/kaustubh"
@@ -41,13 +41,9 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python"
 
 echo "Using: $PYTHON" >> "$LOG_FILE"
 
-# Run incremental ingestion
-$PYTHON -u "$SCRIPT_DIR/incremental_v4.py" "$@" >> "$LOG_FILE" 2>&1
+# Run BDR generation
+$PYTHON -u "$SCRIPT_DIR/generate_bdr.py" >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
-
-# Regenerate KPI dashboard after ingestion
-echo "Regenerating KPI dashboard..." >> "$LOG_FILE"
-$PYTHON -u "$SCRIPT_DIR/scripts/generate_kpi.py" >> "$LOG_FILE" 2>&1 || echo "KPI generation failed" >> "$LOG_FILE"
 
 echo "=== $(date) Finished with exit code $EXIT_CODE ===" >> "$LOG_FILE"
 exit $EXIT_CODE

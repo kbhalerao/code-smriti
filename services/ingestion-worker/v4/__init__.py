@@ -11,11 +11,14 @@ Key improvements over V3:
 
 from .schemas import (
     RepoSummary,
+    RepoBDR,
     ModuleSummary,
     FileIndex,
     SymbolIndex,
     SymbolRef,
     QualityInfo,
+    make_bdr_id,
+    make_bdr_input_hash,
 )
 from .quality import QualityTracker, EnrichmentLevel
 from .file_processor import FileProcessor
@@ -25,6 +28,7 @@ from .pipeline import V4Pipeline
 
 __all__ = [
     "RepoSummary",
+    "RepoBDR",
     "ModuleSummary",
     "FileIndex",
     "SymbolIndex",
@@ -36,6 +40,8 @@ __all__ = [
     "BottomUpAggregator",
     "V4LLMEnricher",
     "V4Pipeline",
+    "make_bdr_id",
+    "make_bdr_input_hash",
 ]
 
 SCHEMA_VERSION = "v4.0"

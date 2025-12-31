@@ -475,6 +475,64 @@ async def get_file(
 
 
 # =============================================================================
+# AgSci Customer-Facing Tool
+# =============================================================================
+
+@mcp.tool()
+async def ask_agsci(query: str) -> str:
+    """
+    Ask questions about AgSci capabilities and offerings.
+
+    This is the customer-facing tool for understanding what AgSci can build.
+    It searches BDR (Business Development) briefs and documentation to provide
+    business-focused answers.
+
+    Use this tool when:
+    - A prospect asks what AgSci can build for them
+    - You need to match customer needs to capabilities
+    - The question is about business value, not code implementation
+
+    This tool returns business framing, NOT code. For code-level questions,
+    use search_codebase instead.
+
+    Args:
+        query: Customer question about AgSci capabilities.
+               Examples: "Can you build a GIS platform for farm management?",
+               "What tools do you have for soil sampling workflows?",
+               "How do you handle multi-tenant data isolation?"
+    """
+    try:
+        token = await get_auth_token()
+
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                f"{API_BASE_URL}/api/rag/agsci",
+                headers={"Authorization": f"Bearer {token}"},
+                json={"query": query},
+                timeout=120.0
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            answer = data.get("answer", "No answer received.")
+            sources = data.get("sources", [])
+
+            result = answer
+            if sources:
+                result += "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources)
+
+            return result
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            clear_token_on_auth_error()
+            return "Authentication failed. Please check credentials."
+        return f"Error querying AgSci: {str(e)}"
+    except Exception as e:
+        return f"Error querying AgSci: {str(e)}"
+
+
+# =============================================================================
 # Graph Tools
 # =============================================================================
 

@@ -156,6 +156,51 @@ class LLMEnricher:
             return data["text"]
         raise ValueError(f"Could not extract text from responses API: {data}")
 
+    async def _call_lmstudio_with_reasoning(self, prompt: str) -> dict:
+        """
+        Call LM Studio and return both reasoning trace and output.
+
+        Returns:
+            dict with 'reasoning' (str or None) and 'output' (str) keys
+        """
+        response = await self.client.post(
+            f"{self.config.base_url}/v1/responses",
+            json={
+                "model": self.config.model,
+                "input": prompt,
+                "temperature": self.config.temperature,
+                "max_output_tokens": self.config.max_tokens
+            }
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        reasoning_text = None
+        output_text = None
+
+        for item in data.get("output", []):
+            if item.get("type") == "reasoning":
+                # Extract reasoning trace
+                for block in item.get("content", []):
+                    if block.get("type") == "reasoning_text":
+                        reasoning_text = block.get("text", "")
+                        break
+            elif item.get("type") == "message":
+                # Extract final output
+                for block in item.get("content", []):
+                    if block.get("type") == "output_text":
+                        output_text = block.get("text", "")
+                        break
+
+        if output_text is None:
+            raise ValueError(f"Could not extract output from responses API: {data}")
+
+        return {
+            "reasoning": reasoning_text,
+            "output": output_text,
+            "usage": data.get("usage", {})
+        }
+
     async def generate(self, prompt: str) -> str:
         """
         Generate text using configured LLM with retry logic and circuit breaker.
@@ -199,6 +244,50 @@ class LLMEnricher:
                     await asyncio.sleep(1.0 * (attempt + 1))
                 else:
                     break  # Client error, don't retry
+
+            except Exception as e:
+                last_error = e
+                self._consecutive_failures += 1
+                logger.error(f"LLM call failed (attempt {attempt + 1}): {e}")
+                if attempt < self.config.max_retries:
+                    await asyncio.sleep(1.0 * (attempt + 1))
+
+        raise last_error or Exception("LLM call failed")
+
+    async def generate_with_reasoning(self, prompt: str) -> dict:
+        """
+        Generate text with reasoning trace (for thinking models like Nemotron).
+
+        Only works with lmstudio provider using /v1/responses API.
+
+        Returns:
+            dict with 'reasoning' (str or None), 'output' (str), 'usage' (dict)
+        """
+        if self.config.provider != "lmstudio":
+            # Fallback for non-lmstudio providers
+            output = await self.generate(prompt)
+            return {"reasoning": None, "output": output, "usage": {}}
+
+        # Circuit breaker check
+        if self._consecutive_failures >= self._max_consecutive_failures:
+            raise LLMUnavailableError("LLM unavailable - circuit breaker open")
+
+        last_error = None
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                result = await self._call_lmstudio_with_reasoning(prompt)
+                self._consecutive_failures = 0
+                return result
+
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                self._consecutive_failures += 1
+                logger.warning(f"LLM HTTP error {e.response.status_code} (attempt {attempt + 1}): {e}")
+                if e.response.status_code >= 500:
+                    if attempt < self.config.max_retries:
+                        await asyncio.sleep(1.0 * (attempt + 1))
+                else:
+                    break
 
             except Exception as e:
                 last_error = e
