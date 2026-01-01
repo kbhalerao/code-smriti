@@ -22,12 +22,9 @@ resp.raise_for_status()
 data = resp.json()
 index_def = data['indexDefs']['indexDefs']['code_vector_index']
 
-# Check if repo_bdr already exists
+# Always apply mapping to ensure consistent index state
 existing_types = list(index_def['params']['mapping']['types'].keys())
 print('Existing types:', existing_types)
-
-if 'repo_bdr' in existing_types:
-    print('repo_bdr already exists, updating mapping...')
 
 # Add repo_bdr type mapping (with store=true for repo_id)
 repo_bdr_mapping = {

@@ -525,22 +525,24 @@ Output only the keywords, one per line. Include:
     contexts = []
     sources = []
 
+    # KNN search with filter INSIDE knn object (proper pre-filtering)
+    # Search repo_bdr and document types separately to get best of each
+    couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
+    fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
+
     for doc_type in ["repo_bdr", "document"]:
         fts_request = {
-            "query": {"term": doc_type, "field": "type"},
             "knn": [{
                 "field": "embedding",
                 "vector": query_embedding,
-                "k": request.limit
+                "k": request.limit,
+                "filter": {"term": doc_type, "field": "type"}  # Pre-filter inside knn
             }],
-            "knn_operator": "and",
             "fields": ["content", "repo_id", "file_path", "type"],
             "size": request.limit
         }
 
         try:
-            couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
-            fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     fts_url,
@@ -557,7 +559,7 @@ Output only the keywords, one per line. Include:
                     file_path = fields.get("file_path", "")
 
                     if content:
-                        contexts.append(content[:2000])  # Limit per-doc context
+                        contexts.append(content[:2000])
                         if doc_type == "repo_bdr":
                             sources.append(f"[BDR] {repo_id}")
                         else:
