@@ -31,6 +31,42 @@ Key files:
 
 Use `search_document:` prefix for indexed documents and `search_query:` prefix for search queries.
 
+## Couchbase FTS Testing
+
+When testing FTS queries from the command line, use Python to handle authentication (the password has special characters that break shell escaping):
+
+```bash
+cd services/ingestion-worker && uv run python -c "
+import httpx
+import os
+from dotenv import load_dotenv
+
+load_dotenv('/Users/kaustubh/Documents/code/code-smriti/.env')
+password = os.environ['COUCHBASE_PASSWORD']
+
+resp = httpx.post(
+    'http://localhost:8094/api/index/code_vector_index/query',
+    auth=('Administrator', password),
+    json={
+        'query': {'term': 'repo_bdr', 'field': 'type'},
+        'fields': ['content', 'repo_id'],
+        'size': 3
+    }
+)
+for hit in resp.json().get('hits', []):
+    print(hit.get('fields', {}))
+"
+```
+
+Key endpoints:
+- **FTS queries**: `http://localhost:8094/api/index/{index_name}/query`
+- **Index count**: `http://localhost:8094/api/index/{index_name}/count`
+- **Index list**: `http://localhost:8094/api/index`
+
+Auth is always `Administrator` + `COUCHBASE_PASSWORD` from `.env`.
+
+See `docs/FTS_VECTOR_SEARCH.md` for hybrid search strategies and troubleshooting.
+
 ## Local LLM Setup (LM Studio)
 
 LM Studio provides local LLM inference on port 1234, proxied via nginx at `/llm/*`.
