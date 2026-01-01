@@ -539,10 +539,12 @@ Output only the keywords, one per line. Include:
         }
 
         try:
+            couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
+            fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
-                    f"http://localhost:8094/api/bucket/{tenant_id}/scope/_default/index/embedding_index/query",
-                    auth=("Administrator", os.getenv("COUCHBASE_PASSWORD", "password")),
+                    fts_url,
+                    auth=(os.getenv("COUCHBASE_USER", "Administrator"), os.getenv("COUCHBASE_PASSWORD", "password")),
                     json=fts_request
                 )
                 resp.raise_for_status()
