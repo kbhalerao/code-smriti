@@ -23,6 +23,15 @@ from config import WorkerConfig
 
 config = WorkerConfig()
 
+# Authors to exclude from leaderboard (bots, internal tooling accounts)
+EXCLUDED_AUTHORS = [
+    "bhalerao@soildiagnostics.com",
+    "noreply@anthropic.com",
+    "kaustubh@macstudio.home.arpa",
+    "kaustubh@soildiagnostics.com",
+    "jessie.bhalerao@gmail.com",
+]
+
 
 def query_stats(cb_client: CouchbaseClient) -> dict:
     """Query all stats needed for the dashboard."""
@@ -114,11 +123,14 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
     """)
     stats['top_repos'] = list(result)
 
-    # Top authors by commits (last 3 months)
+    # Top authors by commits (last 3 months), excluding bots/internal accounts
+    excluded = json.dumps(EXCLUDED_AUTHORS)
     result = cb_client.cluster.query(f"""
         SELECT author, COUNT(*) as commits
         FROM `{bucket}`
-        WHERE type = 'commit_index' AND commit_date >= '{three_months_ago}'
+        WHERE type = 'commit_index'
+          AND commit_date >= '{three_months_ago}'
+          AND author NOT IN {excluded}
         GROUP BY author
         ORDER BY commits DESC
         LIMIT 10
