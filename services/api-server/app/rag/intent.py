@@ -238,10 +238,7 @@ class IntentClassifier:
                         "model": self.model,
                         "messages": messages,
                         "tools": [tool],
-                        "tool_choice": {
-                            "type": "function",
-                            "function": {"name": "classify_query"}
-                        },
+                        "tool_choice": "required",  # LM Studio only supports string values
                         "temperature": 0.1,
                         "max_tokens": 300
                     }
