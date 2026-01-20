@@ -654,12 +654,14 @@ class IncrementalUpdater:
             asyncio.set_event_loop(loop)
 
         try:
+            loop.run_until_complete(doc_ingester.initialize())
             for file_path in docs_to_process:
                 full_path = repo_path / file_path
                 if full_path.exists():
                     self.repo_lifecycle.delete_doc_chunks(repo_id, file_path, self.dry_run)
                     loop.run_until_complete(doc_ingester.process_doc(full_path, repo_path, repo_id))
         finally:
+            loop.run_until_complete(doc_ingester.close())
             if owns_loop:
                 loop.close()
 
