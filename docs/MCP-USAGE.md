@@ -2,42 +2,107 @@
 
 *Smriti (स्मृति): Sanskrit for "memory, remembrance"*
 
-Guide for connecting CodeSmriti to various MCP clients (Claude Desktop, VSCode, custom applications).
+Guide for connecting CodeSmriti to MCP clients (Claude Code, Claude Desktop, custom applications).
 
 ## Overview
 
-CodeSmriti implements the Model Context Protocol (MCP) specification and can be used with any MCP-compatible client. The server supports both:
-- **stdio transport**: For local, single-user connections
-- **HTTP/SSE transport**: For remote, multi-user connections (recommended)
+CodeSmriti provides a codebase intelligence platform with:
+- **Hierarchical document indexing**: repo → module → file → symbol
+- **Two-tier intelligence**: Local LLM (Qwen3) for routine queries, SOTA models for complex reasoning
+- **MCP protocol support**: Works with Claude Code, Claude Desktop, and custom clients
+
+**External URL**: `https://smriti.agsci.com`
+
+## Connecting from Claude Code (Recommended)
+
+Claude Code runs the MCP server locally, which calls the CodeSmriti API.
+
+### 1. Prerequisites
+
+- Python 3.11+
+- CodeSmriti credentials (email/password)
+- Clone the code-smriti repository
+
+### 2. Configure Claude Code
+
+Create or edit `~/.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "code-smriti": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
+      "cwd": "/path/to/code-smriti",
+      "env": {
+        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_USERNAME": "your-email@example.com",
+        "CODESMRITI_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+Alternatively, create a `.env` file in the code-smriti directory:
+
+```bash
+CODESMRITI_API_URL=https://smriti.agsci.com
+CODESMRITI_USERNAME=your-email@example.com
+CODESMRITI_PASSWORD=your-password
+```
+
+### 3. Available MCP Tools
+
+Once connected, Claude Code has access to these tools:
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `list_repos` | Discover indexed repositories | "What repos are indexed?" |
+| `explore_structure` | Navigate directory structure | "Show me the structure of labcore" |
+| `search_codebase` | Semantic search at any level | "Find authentication code" |
+| `get_file` | Retrieve source code | "Show me auth/__init__.py" |
+| `ask_codebase` | Developer Q&A (uses local LLM) | "How does the job queue work?" |
+| `ask_agsci` | Capability/proposal questions | "Can we build a GIS app?" |
+| `affected_tests` | Find tests for changed files | "What tests cover this module?" |
+| `get_module_criticality` | Module importance analysis | "How critical is common.models?" |
+| `get_graph_info` | Dependency graph summary | "Show me the graph for labcore" |
+
+### 4. Verify Connection
+
+In Claude Code, run:
+
+```
+/mcp
+```
+
+You should see `code-smriti` listed as an available server.
+
+Then try:
+
+```
+What repositories are indexed in code-smriti?
+```
+
+Claude will use the `list_repos` tool to query the index.
 
 ## Connecting from Claude Desktop
 
-### Setup for Remote Access (HTTP/SSE)
+### HTTP/SSE Transport
 
-1. **Start CodeSmriti** on your Mac Studio:
-```bash
-cd CodeSmriti
-./scripts/start.sh
-```
+1. **Get API credentials** from your CodeSmriti administrator
 
-2. **Generate an API key** for yourself:
-```bash
-./scripts/generate-api-key.py
-```
+2. **Configure Claude Desktop**:
 
-3. **Configure Claude Desktop** to connect to CodeSmriti:
-
-Edit Claude Desktop's MCP settings file:
+Edit the MCP settings file:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Add CodeSmriti server configuration:
 
 ```json
 {
   "mcpServers": {
     "codesmriti": {
-      "url": "http://YOUR_MAC_IP:8080/mcp",
+      "url": "https://smriti.agsci.com/mcp",
       "transport": {
         "type": "http",
         "headers": {
@@ -49,9 +114,9 @@ Add CodeSmriti server configuration:
 }
 ```
 
-4. **Restart Claude Desktop**
+3. **Restart Claude Desktop**
 
-5. **Verify Connection**:
+4. **Verify Connection**:
    - Open Claude Desktop
    - Type: "List available tools from CodeSmriti"
    - You should see the MCP tools available
@@ -94,6 +159,8 @@ Found design doc explaining our rate limiting strategy...
 
 ### Using Continue.dev Extension
 
+Continue.dev supports MCP servers via stdio transport (same as Claude Code).
+
 1. **Install Continue.dev** extension in VSCode
 
 2. **Configure Continue** to use CodeSmriti:
@@ -102,24 +169,17 @@ Edit `~/.continue/config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "codesmriti": {
-      "url": "http://YOUR_MAC_IP:8080/mcp",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
+  "mcpServers": [
+    {
+      "name": "code-smriti",
+      "command": "uv",
+      "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
+      "cwd": "/path/to/code-smriti",
+      "env": {
+        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_USERNAME": "your-email@example.com",
+        "CODESMRITI_PASSWORD": "your-password"
       }
-    }
-  },
-  "tools": [
-    {
-      "name": "search_code",
-      "description": "Search CodeSmriti's indexed codebase",
-      "server": "codesmriti"
-    },
-    {
-      "name": "add_note",
-      "description": "Add a memory note to CodeSmriti",
-      "server": "codesmriti"
     }
   ]
 }
@@ -127,8 +187,8 @@ Edit `~/.continue/config.json`:
 
 3. **Use in VSCode**:
    - Open Continue chat panel
-   - Ask: "@codesmriti search for authentication examples"
-   - Continue will use the MCP tools to search CodeSmriti
+   - The MCP tools will be available automatically
+   - Ask questions about your indexed codebases
 
 ## Connecting from Custom Applications
 
@@ -136,20 +196,24 @@ Edit `~/.continue/config.json`:
 
 ```python
 import httpx
-import json
 
 class CodeSmritiClient:
-    def __init__(self, base_url: str, api_key: str):
-        self.base_url = base_url
+    def __init__(self, base_url: str, token: str):
+        """
+        Args:
+            base_url: API URL (e.g., "https://smriti.agsci.com")
+            token: JWT access token from /api/auth/login
+        """
+        self.base_url = base_url.rstrip("/")
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
 
     def search_codebase(self, query: str, level: str = "file",
                         repo_filter: str = None, limit: int = 5, preview: bool = False):
         """
-        Search for code in CodeSmriti at specified granularity.
+        Search for code at specified granularity.
 
         Args:
             query: Search query (semantic or keyword)
@@ -204,22 +268,58 @@ class CodeSmritiClient:
         response.raise_for_status()
         return response.json()
 
-    def ask_codebase(self, query: str):
-        """Ask a question and get an LLM-synthesized answer."""
+    def ask_code(self, query: str, conversation_history: list = None):
+        """
+        Ask a developer question about the codebase.
+        Uses unified RAG pipeline with intent classification.
+        """
+        payload = {"query": query}
+        if conversation_history:
+            payload["conversation_history"] = conversation_history
+
         response = httpx.post(
-            f"{self.base_url}/api/rag/",
+            f"{self.base_url}/api/rag/ask/code",
             headers=self.headers,
-            json={"query": query, "stream": False},
-            timeout=120.0
+            json=payload,
+            timeout=180.0  # Extended for multi-step pipeline
         )
         response.raise_for_status()
         return response.json()
 
+    def ask_proposal(self, query: str, conversation_history: list = None):
+        """
+        Ask about capabilities for proposals/sales.
+        Uses unified RAG pipeline with sales persona.
+        """
+        payload = {"query": query}
+        if conversation_history:
+            payload["conversation_history"] = conversation_history
+
+        response = httpx.post(
+            f"{self.base_url}/api/rag/ask/proposal",
+            headers=self.headers,
+            json=payload,
+            timeout=180.0
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+def get_token(base_url: str, username: str, password: str) -> str:
+    """Authenticate and get JWT token."""
+    response = httpx.post(
+        f"{base_url}/api/auth/login",
+        json={"email": username, "password": password},
+        timeout=30.0
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
 # Usage
-client = CodeSmritiClient(
-    base_url="http://YOUR_MAC_IP:8080",
-    api_key="YOUR_API_KEY"
-)
+BASE_URL = "https://smriti.agsci.com"
+token = get_token(BASE_URL, "your-email@example.com", "your-password")
+client = CodeSmritiClient(BASE_URL, token)
 
 # Search for code at file level (default)
 results = client.search_codebase(
@@ -232,24 +332,15 @@ for result in results["results"]:
     print(result["content"][:200])
     print("---")
 
-# Search for specific function at symbol level
-results = client.search_codebase(
-    query="authenticate_user function",
-    level="symbol"
-)
+# Ask a developer question (uses unified RAG pipeline)
+answer = client.ask_code("How does the job queue system work?")
+print(f"Intent: {answer['intent']}")
+print(f"Answer: {answer['answer']}")
+print(f"Sources: {answer['sources']}")
 
-# Search documentation for guidelines
-results = client.search_codebase(
-    query="authentication guidelines",
-    level="doc"
-)
-
-# Get full file content
-file_content = client.get_file(
-    repo_id="owner/repo",
-    file_path="src/auth/middleware.py"
-)
-print(file_content["code"])
+# Ask about capabilities (sales persona)
+capabilities = client.ask_proposal("Can we build a GIS platform for farm management?")
+print(capabilities["answer"])
 ```
 
 ### JavaScript/TypeScript Client Example
@@ -264,18 +355,23 @@ interface SearchOptions {
   preview?: boolean;
 }
 
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 class CodeSmritiClient {
   private baseUrl: string;
-  private apiKey: string;
+  private token: string;
 
-  constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
+  constructor(baseUrl: string, token: string) {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.token = token;
   }
 
   private get headers() {
     return {
-      'Authorization': `Bearer ${this.apiKey}`,
+      'Authorization': `Bearer ${this.token}`,
       'Content-Type': 'application/json'
     };
   }
@@ -296,7 +392,7 @@ class CodeSmritiClient {
   }
 
   async getFile(repoId: string, filePath: string, startLine?: number, endLine?: number) {
-    const payload: any = { repo_id: repoId, file_path: filePath };
+    const payload: Record<string, any> = { repo_id: repoId, file_path: filePath };
     if (startLine) payload.start_line = startLine;
     if (endLine) payload.end_line = endLine;
 
@@ -316,21 +412,38 @@ class CodeSmritiClient {
     return response.data;
   }
 
-  async askCodebase(query: string) {
+  async askCode(query: string, conversationHistory?: ConversationMessage[]) {
     const response = await axios.post(
-      `${this.baseUrl}/api/rag/`,
-      { query, stream: false },
-      { headers: this.headers, timeout: 120000 }
+      `${this.baseUrl}/api/rag/ask/code`,
+      { query, conversation_history: conversationHistory },
+      { headers: this.headers, timeout: 180000 }
+    );
+    return response.data;
+  }
+
+  async askProposal(query: string, conversationHistory?: ConversationMessage[]) {
+    const response = await axios.post(
+      `${this.baseUrl}/api/rag/ask/proposal`,
+      { query, conversation_history: conversationHistory },
+      { headers: this.headers, timeout: 180000 }
     );
     return response.data;
   }
 }
 
+async function getToken(baseUrl: string, email: string, password: string): Promise<string> {
+  const response = await axios.post(
+    `${baseUrl}/api/auth/login`,
+    { email, password },
+    { timeout: 30000 }
+  );
+  return response.data.access_token;
+}
+
 // Usage
-const client = new CodeSmritiClient(
-  'http://YOUR_MAC_IP:8080',
-  'YOUR_API_KEY'
-);
+const BASE_URL = 'https://smriti.agsci.com';
+const token = await getToken(BASE_URL, 'your-email@example.com', 'your-password');
+const client = new CodeSmritiClient(BASE_URL, token);
 
 // Search at file level (default)
 const fileResults = await client.searchCodebase('authentication', {
@@ -339,162 +452,114 @@ const fileResults = await client.searchCodebase('authentication', {
 });
 console.log(fileResults);
 
-// Search at symbol level for specific function
-const symbolResults = await client.searchCodebase('UserModel class', {
-  level: 'symbol'
-});
+// Ask a developer question (uses unified RAG pipeline)
+const answer = await client.askCode('How does the job queue system work?');
+console.log('Intent:', answer.intent);
+console.log('Answer:', answer.answer);
+console.log('Sources:', answer.sources);
 
-// Search documentation
-const docResults = await client.searchCodebase('API guidelines', {
-  level: 'doc'
-});
-
-// Get file content
-const fileContent = await client.getFile('owner/repo', 'src/auth/models.py');
-console.log(fileContent.code);
+// Ask about capabilities (sales persona)
+const capabilities = await client.askProposal('Can we build a GIS platform?');
+console.log(capabilities.answer);
 ```
 
-## Agentic Workflows
+## Two-Tier Intelligence
 
-CodeSmriti is designed for agentic loops where an LLM iteratively uses tools.
+CodeSmriti provides a two-tier intelligence architecture:
 
-### Example: Progressive Research
+### Local LLM Tier (Qwen3)
+- Fast, private, constrained queries
+- Handles routine code questions and specific lookups
+- Tools: `ask_codebase`, `ask_agsci`
+- Uses intent classification + progressive retrieval + synthesis
 
-```python
-# Anthropic Claude SDK example
-from anthropic import Anthropic
+### SOTA Tier (Claude via Claude Code)
+- Complex reasoning and cross-cutting analysis
+- Multi-step debugging and architectural decisions
+- Claude decides when to delegate to local tools vs. reason directly
+- Uses MCP tools to access the indexed knowledge base
 
-client = Anthropic(api_key="...")
+### How It Works
 
-# Configure CodeSmriti as MCP server
-mcp_tools = [
-    {
-        "name": "search_code",
-        "description": "Search CodeSmriti's indexed code",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"},
-                "repo": {"type": "string"},
-                "language": {"type": "string"},
-                "limit": {"type": "integer"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "query_by_hashtag",
-        "description": "Retrieve content by hashtags",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "hashtags": {"type": "array", "items": {"type": "string"}},
-                "content_type": {"type": "string"}
-            },
-            "required": ["hashtags"]
-        }
-    }
-]
+When using Claude Code with CodeSmriti MCP:
 
-messages = [{
-    "role": "user",
-    "content": "Find all our authentication implementations and summarize the common patterns"
-}]
+1. **Claude decides** whether to use local tools or reason directly
+2. **For routine queries**: Claude calls `ask_codebase` (developer) or `ask_agsci` (sales)
+3. **For exploration**: Claude uses `search_codebase`, `explore_structure`, `get_file`
+4. **For complex analysis**: Claude reasons over the retrieved context itself
 
-# Agent loop
-while True:
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=4096,
-        tools=mcp_tools,
-        messages=messages
-    )
+The local LLM handles:
+- Intent classification (code_explanation, architecture, capability_check, etc.)
+- Query expansion (adding synonyms and related terms)
+- Synthesis with citations
 
-    if response.stop_reason == "end_turn":
-        # Agent finished
-        print(response.content[0].text)
-        break
-
-    # Execute tool calls
-    for content_block in response.content:
-        if content_block.type == "tool_use":
-            # Call CodeSmriti
-            tool_result = call_codesmriti_tool(
-                content_block.name,
-                content_block.input
-            )
-
-            # Add result to conversation
-            messages.append({
-                "role": "assistant",
-                "content": response.content
-            })
-            messages.append({
-                "role": "user",
-                "content": [{
-                    "type": "tool_result",
-                    "tool_use_id": content_block.id,
-                    "content": tool_result
-                }]
-            })
-```
+Claude Code handles:
+- Deciding which tools to use
+- Complex multi-step reasoning
+- Cross-repository analysis
+- Architectural recommendations
 
 ## Common Use Cases
 
-### 1. Finding Similar Implementations
+### Developer Persona
 
+**Understanding Code** (intent: `code_explanation`)
 ```
-User: "I need to implement a retry mechanism. Show me similar code in our repos."
+User: "How does the job queue work?"
 
-Assistant uses:
-1. search_codebase("retry mechanism implementation", level="file")
-2. get_file(repo_id, file_path) for the most relevant files
-3. Presents 3-5 best examples with analysis
-```
-
-### 2. Understanding Architecture
-
-```
-User: "What's the structure of the auth module?"
-
-Assistant uses:
-1. search_codebase("authentication architecture", level="module")
-2. explore_structure(repo_id, "auth/")
-3. Provides overview of the module with key files
+Claude uses: ask_codebase("How does the job queue work?")
+→ Intent classification identifies code_explanation
+→ Progressive retrieval at file/symbol level
+→ Local LLM synthesizes answer with citations
 ```
 
-### 3. Onboarding New Engineers
-
+**Architecture Overview** (intent: `architecture`)
 ```
-User: "I'm new to the auth system. Explain how it works."
+User: "What's the structure of the API server?"
 
-Assistant uses:
-1. search_codebase("authentication flow", level="file")
-2. search_codebase("authentication guidelines", level="doc")
-3. get_file(repo_id, file_path) for key implementation files
-4. Provides guided tour with code and documentation links
+Claude uses:
+1. explore_structure(repo_id, "api-server/")
+2. search_codebase("API architecture", level="module")
+→ Returns directory tree + module summaries
 ```
 
-### 4. Finding Specific Code
-
+**Finding Specific Code** (intent: `specific_lookup`)
 ```
-User: "Find where we define the UserModel class"
+User: "Find the UserModel class"
 
-Assistant uses:
-1. search_codebase("UserModel class definition", level="symbol")
-2. get_file(repo_id, file_path, start_line, end_line) for exact code
-3. Returns precise location and implementation
+Claude uses: search_codebase("UserModel class", level="symbol")
+→ Returns precise location with line numbers
+→ Can follow up with get_file() for full context
 ```
 
-### 5. Research Documentation
-
+**Impact Analysis** (intent: `impact_analysis`)
 ```
-User: "What are our API design guidelines?"
+User: "What depends on common.models?"
 
-Assistant uses:
-1. search_codebase("API design guidelines", level="doc")
-2. Returns relevant documentation files (RST, MD)
-3. Synthesizes guidelines from documentation
+Claude uses:
+1. get_module_criticality("common.models")
+2. affected_tests(["common/models/__init__.py"])
+→ Returns PageRank score + dependents + affected tests
+```
+
+### Sales Persona
+
+**Capability Check** (intent: `capability_check`)
+```
+User: "Can we build a mobile app with offline sync?"
+
+Claude uses: ask_agsci("mobile app offline sync capabilities")
+→ Searches BDR briefs and repo summaries
+→ Returns business-focused capability assessment
+```
+
+**Proposal Drafting** (intent: `proposal_draft`)
+```
+User: "Draft the technical approach for a GIS platform"
+
+Claude uses: ask_agsci("technical approach GIS platform")
+→ Gathers relevant experience from indexed projects
+→ Synthesizes proposal section with citations
 ```
 
 ## Best Practices
@@ -518,33 +583,32 @@ Assistant uses:
 
 ### For Administrators
 
-1. **API Key Management**:
-   - Create separate keys per user
-   - Set appropriate scopes (read/write/admin)
-   - Rotate keys quarterly
+1. **User Management**:
+   - Users authenticate via `/api/auth/login` with email/password
+   - JWT tokens are used for all API requests
+   - Create accounts via the admin interface or API
 
 2. **Monitor Usage**:
    ```bash
-   # Check MCP server logs
-   docker logs codesmriti_mcp_server --tail=100
+   # Check API server logs
+   docker-compose logs -f api-server
 
-   # Check system status
-   curl -H "Authorization: Bearer $API_KEY" \
-     http://localhost/api/status
+   # Check system health
+   curl https://smriti.agsci.com/health
    ```
 
-3. **Regular Re-indexing**:
-   ```bash
-   # Trigger weekly re-indexing via cron
-   0 2 * * 0 curl -X POST -H "Authorization: Bearer $ADMIN_KEY" \
-     http://localhost/api/ingest/trigger
-   ```
+3. **Ingestion Pipeline**:
+   - Repositories are indexed via the ingestion-worker service
+   - V4 hierarchy: repo_summary → module_summary → file_index → symbol_index
+   - BDR briefs (repo_bdr) are generated for sales/proposal capabilities
 
-4. **Backup Strategy**:
-   ```bash
-   # Backup Couchbase data
-   docker exec codesmriti_couchbase cbbackup \
-     http://localhost:8091 /backup/$(date +%Y%m%d)
+4. **Service Architecture**:
+   ```
+   api-gateway (nginx)     → Routes requests, handles SSL
+   api-server (FastAPI)    → Main API, RAG pipeline
+   ingestion-worker        → Repository indexing
+   couchbase               → Vector store + FTS
+   LM Studio (local)       → Local LLM inference
    ```
 
 ## Troubleshooting
@@ -554,29 +618,31 @@ Assistant uses:
 **Problem**: Client can't connect to CodeSmriti
 
 **Solutions**:
-1. Verify CodeSmriti is running: `curl http://localhost:8080/health`
-2. Check firewall allows port 8080
-3. Ensure correct IP address (not localhost if remote)
-4. Verify API key is valid
+1. Verify CodeSmriti is running: `curl https://smriti.agsci.com/health`
+2. Check your network can reach the server
+3. If running locally, ensure Docker containers are up: `docker-compose ps`
+4. Verify credentials are correct
 
 ### Authentication Failures
 
 **Problem**: "401 Unauthorized" errors
 
 **Solutions**:
-1. Check API key is correctly copied (no extra spaces)
-2. Verify key hasn't expired: `docker logs codesmriti_mcp_server | grep "Token expired"`
-3. Generate new key if needed: `./scripts/generate-api-key.py`
+1. Check credentials are correctly configured (no extra spaces)
+2. Verify token hasn't expired - re-authenticate if needed
+3. Ensure the MCP server has correct environment variables set
+4. Check MCP server logs: `~/.claude/logs/` (for Claude Code)
 
 ### Slow Responses
 
 **Problem**: Tool calls timeout or take too long
 
 **Solutions**:
-1. Check Couchbase performance: `curl http://localhost:8091/pools/default`
-2. Reduce search limit: Use `limit: 5` instead of `limit: 50`
-3. Add more specific filters (repo, language)
-4. Check if re-indexing is running: `docker logs codesmriti_ingestion_worker`
+1. The unified RAG pipeline has extended timeouts (180s) for multi-step processing
+2. `ask_codebase` and `ask_agsci` involve intent classification + retrieval + synthesis
+3. For faster results, use `search_codebase` directly (Claude does its own synthesis)
+4. Reduce search limit: Use `limit: 5` instead of `limit: 20`
+5. Add repo_filter when you know which repository to search
 
 ## Security Considerations
 
@@ -586,31 +652,58 @@ Assistant uses:
 4. **Monitor Access Logs**: Review for suspicious activity
 5. **Network Isolation**: Use VPN for remote access
 
-## Advanced: Custom MCP Server Integration
+## API Endpoints Reference
 
-If you're building your own MCP server that needs to query CodeSmriti:
+### Unified RAG Pipeline
 
-```python
-# Your MCP server
-@app.tool()
-async def research_topic(topic: str) -> str:
-    """Research a topic using CodeSmriti + other sources"""
+| Endpoint | Persona | Description |
+|----------|---------|-------------|
+| `POST /api/rag/ask` | Configurable | Unified pipeline with intent classification |
+| `POST /api/rag/ask/code` | Developer | Code questions (code_explanation, architecture, etc.) |
+| `POST /api/rag/ask/proposal` | Sales | Capability/proposal questions |
 
-    # Query CodeSmriti
-    codesmriti_results = await query_codesmriti(topic)
-
-    # Combine with other sources
-    # ...
-
-    return combined_research
+**Request body**:
+```json
+{
+  "query": "How does authentication work?",
+  "conversation_history": [
+    {"role": "user", "content": "previous question"},
+    {"role": "assistant", "content": "previous answer"}
+  ]
+}
 ```
 
-This allows chaining MCP servers for complex workflows.
+**Response**:
+```json
+{
+  "answer": "Authentication in this codebase...",
+  "intent": "code_explanation",
+  "direction": "narrow",
+  "sources": ["repo/auth/middleware.py", "repo/auth/models.py"],
+  "levels_searched": ["file", "symbol"],
+  "adequate_context": true,
+  "gaps": []
+}
+```
+
+### Search & Retrieval
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/rag/search` | Semantic search at any level |
+| `POST /api/rag/file` | Retrieve file content |
+| `GET /api/rag/repos` | List indexed repositories |
+
+## Architecture Documentation
+
+For detailed architecture documentation, see:
+- [RAG_PIPELINE_ARCHITECTURE.md](RAG_PIPELINE_ARCHITECTURE.md) - Pipeline internals
+- [FTS_VECTOR_SEARCH.md](FTS_VECTOR_SEARCH.md) - Vector search configuration
 
 ## Support
 
 For MCP integration help:
 1. Review [MCP specification](https://spec.modelcontextprotocol.io)
-2. Check CodeSmriti logs: `docker-compose logs -f mcp-server`
-3. Test with curl first before integrating
-4. Contact the team for custom integrations
+2. Check MCP server logs in `~/.claude/logs/`
+3. Test endpoints with curl before integrating
+4. See architecture docs for pipeline behavior
