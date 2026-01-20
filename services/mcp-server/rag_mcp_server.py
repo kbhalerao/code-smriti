@@ -53,7 +53,7 @@ async def get_auth_token() -> str:
     if not API_USERNAME or not API_PASSWORD:
         raise ValueError("CODESMRITI_USERNAME and CODESMRITI_PASSWORD must be set")
 
-    async with httpx.AsyncClient(verify=False) as client:
+    async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{API_BASE_URL}/api/auth/login",
             json={"email": API_USERNAME, "password": API_PASSWORD},
@@ -97,7 +97,7 @@ async def list_repos() -> str:
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{API_BASE_URL}/api/rag/repos",
                 headers={"Authorization": f"Bearer {token}"},
@@ -167,7 +167,7 @@ async def explore_structure(
         if pattern:
             payload["pattern"] = pattern
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/structure",
                 headers={"Authorization": f"Bearer {token}"},
@@ -286,7 +286,7 @@ async def search_codebase(
         if repo_filter:
             payload["repo_filter"] = repo_filter
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/search",
                 headers={"Authorization": f"Bearer {token}"},
@@ -386,7 +386,7 @@ async def ask_codebase(query: str) -> str:
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/ask/code",
                 headers={"Authorization": f"Bearer {token}"},
@@ -450,7 +450,7 @@ async def get_file(
         if end_line is not None:
             payload["end_line"] = end_line
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/file",
                 headers={"Authorization": f"Bearer {token}"},
@@ -517,7 +517,7 @@ async def ask_agsci(query: str) -> str:
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/ask/proposal",
                 headers={"Authorization": f"Bearer {token}"},
@@ -580,7 +580,7 @@ async def affected_tests(
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/graph/affected-tests",
                 headers={"Authorization": f"Bearer {token}"},
@@ -657,7 +657,7 @@ async def get_module_criticality(
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/graph/criticality",
                 headers={"Authorization": f"Bearer {token}"},
@@ -725,7 +725,7 @@ async def get_graph_info(cluster_id: str = "kbhalerao/labcore") -> str:
     try:
         token = await get_auth_token()
 
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE_URL}/api/rag/graph/info",
                 headers={"Authorization": f"Bearer {token}"},
