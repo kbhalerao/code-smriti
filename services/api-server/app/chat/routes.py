@@ -665,13 +665,16 @@ Output only the keywords, one per line. Include:
     fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
 
     for doc_type in ["repo_bdr", "document"]:
+        # NOTE: Pre-filter inside knn requires Couchbase 7.6.4+
+        # We have 7.6.2, so use query + knn_operator: "and" approach
         fts_request = {
+            "query": {"term": doc_type, "field": "type"},
             "knn": [{
                 "field": "embedding",
                 "vector": query_embedding,
                 "k": request.limit,
-                "filter": {"term": doc_type, "field": "type"}  # Pre-filter inside knn
             }],
+            "knn_operator": "and",
             "fields": ["content", "repo_id", "file_path", "type"],
             "size": request.limit
         }

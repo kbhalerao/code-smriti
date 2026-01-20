@@ -2,6 +2,43 @@
 
 This document captures findings from debugging FTS vector search issues, specifically around hybrid search ranking and stored field retrieval.
 
+## Couchbase Version Considerations
+
+### Pre-filtering (knn.filter) Requires 7.6.4+
+
+The `filter` parameter inside the `knn` object requires Couchbase Server 7.6.4 or later. On 7.6.2, this filter is silently ignored.
+
+```json
+// ONLY works on Couchbase 7.6.4+
+{
+  "knn": [{
+    "field": "embedding",
+    "vector": [...],
+    "k": 10,
+    "filter": {"term": "repo_bdr", "field": "type"}  // IGNORED on 7.6.2!
+  }]
+}
+```
+
+### Large k Values Bug on 7.6.2
+
+On Couchbase 7.6.2, using `query + knn_operator: "and"` with large k values (>~100) can return documents that don't match the filter. This is a known bug.
+
+**Workaround**: Keep k ≤ 100 and post-filter results in application code:
+```python
+# Workaround for 7.6.2 bug
+oversample = min(limit * 5, 100)  # Keep k <= 100
+fts_request = {
+    "query": filter_query,
+    "knn": [{"field": "embedding", "vector": embedding, "k": oversample}],
+    "knn_operator": "and",
+    ...
+}
+# Then post-filter results by type
+```
+
+---
+
 ## Problem 1: Flat Ranking Scores
 
 **Symptom**: All search results had identical scores (7.7010) regardless of semantic relevance.
@@ -130,9 +167,10 @@ fts_request = {
 }
 ```
 
-### Strategy 2: Multiple KNN Searches
+### Strategy 2: Multiple KNN Searches (Requires 7.6.4+)
 
-For combining results from multiple document types with equal weight:
+For combining results from multiple document types with equal weight.
+**Note**: This requires Couchbase 7.6.4+ for the pre-filter to work.
 
 ```python
 for doc_type in ["repo_bdr", "document"]:
@@ -141,12 +179,24 @@ for doc_type in ["repo_bdr", "document"]:
             "field": "embedding",
             "vector": query_embedding,
             "k": limit,
-            "filter": {"term": doc_type, "field": "type"}
+            "filter": {"term": doc_type, "field": "type"}  # Requires 7.6.4+
         }],
         "fields": ["content", "repo_id", "file_path", "type"],
         "size": limit
     }
     # Merge results...
+```
+
+**7.6.2 Alternative**: Use query+knn_operator with post-filtering:
+```python
+for doc_type in ["repo_bdr", "document"]:
+    fts_request = {
+        "query": {"term": doc_type, "field": "type"},
+        "knn": [{"field": "embedding", "vector": query_embedding, "k": limit}],
+        "knn_operator": "and",
+        "size": limit
+    }
+    # Post-filter results to ensure type matches
 ```
 
 ### Strategy 3: True Hybrid (BM25 + KNN)

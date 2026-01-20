@@ -114,6 +114,10 @@ class RetrievalOrchestrator:
         Returns:
             RetrievalResult with documents and metadata
         """
+        # Sales persona gets broader retrieval - more results, especially at REPO level
+        if persona == Persona.SALES:
+            limit = max(limit, 10)  # At least 10 results for sales
+
         # Expand query with keywords from classification
         expanded_query = intent.expanded_query(query)
 
@@ -125,7 +129,12 @@ class RetrievalOrchestrator:
 
         # Get starting level and drilldown path
         start_level = INTENT_START_LEVELS.get(intent.intent, SearchLevel.FILE)
-        drilldown_path = list(DRILLDOWN_PATHS.get(intent.direction, [SearchLevel.FILE]))
+
+        # Sales persona stays broader - don't drill down to code levels
+        if persona == Persona.SALES:
+            drilldown_path = [SearchLevel.REPO, SearchLevel.MODULE, SearchLevel.DOC]
+        else:
+            drilldown_path = list(DRILLDOWN_PATHS.get(intent.direction, [SearchLevel.FILE]))
 
         # Ensure start level is first in path
         if start_level in drilldown_path:
@@ -147,6 +156,7 @@ class RetrievalOrchestrator:
                 level=level,
                 repo_filter=intent.repo_scope,
                 limit=limit,
+                persona=persona,
             )
 
             levels_searched.append(level)
@@ -186,31 +196,54 @@ class RetrievalOrchestrator:
         level: SearchLevel,
         repo_filter: Optional[str],
         limit: int,
+        persona: Persona = Persona.DEVELOPER,
     ) -> list[SearchResult]:
-        """Execute FTS search at a specific level."""
+        """Execute FTS search at a specific level.
+
+        Note: With Couchbase 7.6.2, we use query+knn_operator which gives
+        flat BM25 scores. We re-rank results using actual embedding similarity.
+        """
+        import numpy as np
         from app.rag.models import LEVEL_TO_DOCTYPE
 
-        doc_type = LEVEL_TO_DOCTYPE[level]
+        # For sales persona at REPO level, search both BDR and summary
+        if persona == Persona.SALES and level == SearchLevel.REPO:
+            doc_types = ["repo_bdr", "repo_summary"]
+        else:
+            doc_types = [LEVEL_TO_DOCTYPE[level]]
 
-        # Build filter
-        filter_query = {"term": doc_type, "field": "type"}
+        # Build filter - use disjuncts for multiple doc types
+        if len(doc_types) == 1:
+            type_filter = {"term": doc_types[0], "field": "type"}
+        else:
+            type_filter = {
+                "disjuncts": [{"term": dt, "field": "type"} for dt in doc_types]
+            }
+
         if repo_filter:
             filter_query = {
                 "conjuncts": [
-                    {"term": doc_type, "field": "type"},
+                    type_filter,
                     {"term": repo_filter, "field": "repo_id"},
                 ]
             }
+        else:
+            filter_query = type_filter
 
+        # NOTE: Pre-filter inside knn requires Couchbase 7.6.4+
+        # We have 7.6.2, so use query + knn_operator: "and" approach instead
+        # KNOWN BUG: On 7.6.2, large k values (>~100) break the filter
+        # Workaround: use smaller k and post-filter results in application code
+        oversample = min(limit * 5, 100)  # Keep k <= 100 to avoid 7.6.2 bug
         fts_request = {
             "query": filter_query,
             "knn": [{
                 "field": "embedding",
                 "vector": query_embedding,
-                "k": limit * 2,
+                "k": oversample,
             }],
             "knn_operator": "and",
-            "size": limit * 2,
+            "size": oversample,
             "fields": ["*"],
         }
 
@@ -232,7 +265,13 @@ class RetrievalOrchestrator:
                 bucket = self.db.cluster.bucket(self.tenant_id)
                 collection = bucket.default_collection()
 
-                for hit in hits[:limit]:
+                # Convert query embedding to numpy for similarity computation
+                query_vec = np.array(query_embedding)
+
+                # Process returned hits for re-ranking (BM25 scores are flat)
+                # Post-filter to ensure only valid doc types (workaround for 7.6.2 bug)
+                doc_types_set = set(doc_types)
+                for hit in hits:
                     doc_id = hit.get("id")
                     if not doc_id:
                         continue
@@ -240,17 +279,34 @@ class RetrievalOrchestrator:
                     try:
                         doc_result = collection.get(doc_id)
                         doc = doc_result.content_as[dict]
+
+                        # Post-filter: skip documents that don't match expected types
+                        # (workaround for Couchbase 7.6.2 bug with large k values)
+                        actual_type = doc.get("type")
+                        if actual_type not in doc_types_set:
+                            continue
+
                         metadata = doc.get("metadata", {})
+
+                        # Compute true cosine similarity instead of using FTS score
+                        # (BM25 dominates in query+knn mode, giving flat scores)
+                        doc_embedding = doc.get("embedding")
+                        if doc_embedding:
+                            doc_vec = np.array(doc_embedding)
+                            # Embeddings are normalized, so dot product = cosine similarity
+                            similarity = float(np.dot(query_vec, doc_vec))
+                        else:
+                            similarity = hit.get("score", 0.0)
 
                         results.append(SearchResult(
                             document_id=doc_id,
-                            doc_type=doc.get("type", doc_type),
+                            doc_type=doc.get("type", doc_types[0]),
                             repo_id=doc.get("repo_id", ""),
                             file_path=doc.get("file_path") or doc.get("module_path"),
                             symbol_name=doc.get("symbol_name"),
                             symbol_type=doc.get("symbol_type") or doc.get("doc_type"),
                             content=doc.get("content", ""),
-                            score=hit.get("score", 0.0),
+                            score=similarity,
                             parent_id=doc.get("parent_id"),
                             children_ids=doc.get("children_ids", []),
                             start_line=metadata.get("start_line"),
@@ -260,7 +316,11 @@ class RetrievalOrchestrator:
                         logger.warning(f"Failed to fetch document {doc_id}: {e}")
                         continue
 
-                logger.info(f"Search {level.value}: {len(results)} results")
+                # Re-sort by true embedding similarity (descending) and take top `limit`
+                results.sort(key=lambda r: r.score, reverse=True)
+                results = results[:limit]
+
+                logger.info(f"Search {level.value}: {len(results)} results (from {len(hits)} candidates)")
                 return results
 
         except Exception as e:
