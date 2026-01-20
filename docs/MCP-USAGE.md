@@ -88,11 +88,15 @@ Claude will use the `list_repos` tool to query the index.
 
 ## Connecting from Claude Desktop
 
-### HTTP/SSE Transport
+Claude Desktop requires HTTP/SSE transport for MCP servers. CodeSmriti currently only provides a **stdio-based MCP server** (runs locally as a subprocess).
 
-1. **Get API credentials** from your CodeSmriti administrator
+### Current Status
 
-2. **Configure Claude Desktop**:
+**Not directly supported.** The MCP server runs locally via stdio transport and makes HTTP calls to `https://smriti.agsci.com`. There is no HTTP MCP endpoint.
+
+### Workaround: Run Locally
+
+If Claude Desktop supports stdio transport (check Claude Desktop docs), configure it the same way as Claude Code:
 
 Edit the MCP settings file:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -101,59 +105,23 @@ Edit the MCP settings file:
 ```json
 {
   "mcpServers": {
-    "codesmriti": {
-      "url": "https://smriti.agsci.com/mcp",
-      "transport": {
-        "type": "http",
-        "headers": {
-          "Authorization": "Bearer YOUR_API_KEY_HERE"
-        }
+    "code-smriti": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
+      "cwd": "/path/to/code-smriti",
+      "env": {
+        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_USERNAME": "your-email@example.com",
+        "CODESMRITI_PASSWORD": "your-password"
       }
     }
   }
 }
 ```
 
-3. **Restart Claude Desktop**
+### Future: HTTP Transport
 
-4. **Verify Connection**:
-   - Open Claude Desktop
-   - Type: "List available tools from CodeSmriti"
-   - You should see the MCP tools available
-
-### Example Usage in Claude Desktop
-
-Once connected, you can use CodeSmriti tools naturally in conversation:
-
-```
-User: "Search our codebase for how we implement rate limiting"
-
-Claude: I'll search the CodeSmriti knowledge base for rate limiting implementations.
-[Uses search_codebase(query="rate limiting implementation", level="file")]
-
-Found 5 results at file level:
-1. api-server/src/middleware/rate_limit.py - Redis-based rate limiting
-2. gateway/src/throttle.ts - Token bucket algorithm
-...
-```
-
-```
-User: "Find the RateLimiter class"
-
-Claude: I'll search at symbol level for the specific class.
-[Uses search_codebase(query="RateLimiter class", level="symbol")]
-
-Found RateLimiter class in middleware/rate_limit.py lines 45-120
-```
-
-```
-User: "What are our rate limiting guidelines?"
-
-Claude: I'll search documentation for rate limiting guidelines.
-[Uses search_codebase(query="rate limiting guidelines", level="doc")]
-
-Found design doc explaining our rate limiting strategy...
-```
+HTTP/SSE MCP transport could be added in the future. This would require implementing an MCP HTTP endpoint on the API server.
 
 ## Connecting from VSCode
 
@@ -313,7 +281,7 @@ def get_token(base_url: str, username: str, password: str) -> str:
         timeout=30.0
     )
     response.raise_for_status()
-    return response.json()["access_token"]
+    return response.json()["token"]  # Returns "token", not "access_token"
 
 
 # Usage
@@ -437,7 +405,7 @@ async function getToken(baseUrl: string, email: string, password: string): Promi
     { email, password },
     { timeout: 30000 }
   );
-  return response.data.access_token;
+  return response.data.token;  // Returns "token", not "access_token"
 }
 
 // Usage
