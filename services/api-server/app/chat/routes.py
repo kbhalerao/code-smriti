@@ -28,12 +28,16 @@ from app.rag.models import (
 from app.rag import tools as rag_tools
 from app.rag import graph_tools
 
-# For LLM mode (ask_codebase)
+# For LLM mode (ask_codebase) - legacy
 from app.chat.pydantic_rag_agent import (
     CodeSmritiRAGAgent,
     ConversationMessage,
     get_embedding_model,
 )
+
+# New unified pipeline
+from app.rag.pipeline import RAGPipeline, PipelineResult
+from app.rag.intent import Persona, QueryIntent
 
 
 router = APIRouter(prefix="/rag", tags=["CodeSmriti RAG V4"])
@@ -101,6 +105,35 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     """Response model for ask_codebase endpoint"""
     answer: str = Field(description="Generated answer in markdown")
+    metadata: dict = Field(default_factory=dict, description="Additional metadata")
+
+
+# =============================================================================
+# Unified Pipeline Request/Response Models
+# =============================================================================
+
+class UnifiedAskRequest(BaseModel):
+    """Request model for unified /ask endpoint."""
+    query: str = Field(description="Question about the codebase or capabilities", min_length=1, max_length=2000)
+    persona: Literal["developer", "sales"] = Field(
+        default="developer",
+        description="Persona: developer (code questions) or sales (capability/proposal questions)"
+    )
+    conversation_history: Optional[List[dict]] = Field(
+        default=None,
+        description="Previous conversation turns: [{'role': 'user'|'assistant', 'content': '...'}]"
+    )
+
+
+class UnifiedAskResponse(BaseModel):
+    """Response model for unified /ask endpoint."""
+    answer: str = Field(description="Generated answer in markdown")
+    intent: str = Field(description="Classified intent type")
+    direction: str = Field(description="Search direction used (broad/narrow/specific)")
+    sources: List[str] = Field(default_factory=list, description="Source files/repos cited")
+    levels_searched: List[str] = Field(default_factory=list, description="Search levels tried")
+    adequate_context: bool = Field(default=True, description="Whether retrieval found adequate context")
+    gaps: List[str] = Field(default_factory=list, description="Identified gaps in the answer")
     metadata: dict = Field(default_factory=dict, description="Additional metadata")
 
 
@@ -334,6 +367,107 @@ async def health_check():
         "service": "rag-v4",
         "ollama_host": settings.ollama_host
     }
+
+
+# =============================================================================
+# Unified Pipeline Endpoints
+# =============================================================================
+
+@router.post("/ask", response_model=UnifiedAskResponse)
+async def unified_ask_endpoint(
+    request: UnifiedAskRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Unified RAG endpoint with intent classification and progressive retrieval.
+
+    This is the recommended endpoint for both code questions (developer persona)
+    and capability/proposal questions (sales persona).
+
+    Features:
+    - Intent classification via Qwen3 tool calling
+    - Query expansion for better retrieval
+    - Progressive drilldown when initial results are inadequate
+    - Intent-specific synthesis prompts
+    - Conversation history support for follow-up questions
+    """
+    try:
+        tenant_id = current_user.get("tenant_id", "code_kosha")
+        persona = Persona(request.persona)
+
+        logger.info(
+            f"unified_ask: user={current_user.get('username')} "
+            f"persona={persona.value} query='{request.query[:50]}...'"
+        )
+
+        # Initialize pipeline
+        pipeline = RAGPipeline(
+            db=db,
+            tenant_id=tenant_id,
+            lm_studio_url=settings.ollama_host,
+            llm_model=settings.llm_model_name,
+            embedding_model_name=settings.embedding_model_name,
+        )
+
+        # Run pipeline
+        result = await pipeline.run(
+            query=request.query,
+            persona=persona,
+            conversation_history=request.conversation_history,
+        )
+
+        return UnifiedAskResponse(
+            answer=result.answer,
+            intent=result.intent.value,
+            direction=result.direction,
+            sources=result.sources,
+            levels_searched=result.levels_searched,
+            adequate_context=result.adequate_context,
+            gaps=result.gaps,
+            metadata={
+                "tenant_id": tenant_id,
+                "persona": persona.value,
+                "entities": result.entities,
+                **result.metadata,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"unified_ask failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@router.post("/ask/code", response_model=UnifiedAskResponse)
+async def ask_code_endpoint(
+    request: UnifiedAskRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Developer-focused endpoint for code questions.
+
+    Convenience wrapper that forces developer persona.
+    Use this for: code explanation, architecture, impact analysis, specific lookups.
+    """
+    request.persona = "developer"
+    return await unified_ask_endpoint(request, current_user, db)
+
+
+@router.post("/ask/proposal", response_model=UnifiedAskResponse)
+async def ask_proposal_endpoint(
+    request: UnifiedAskRequest,
+    current_user: dict = Depends(get_current_user),
+    db: CouchbaseClient = Depends(get_db)
+):
+    """
+    Sales-focused endpoint for capability and proposal questions.
+
+    Convenience wrapper that forces sales persona.
+    Use this for: capability checks, proposal drafts, experience summaries.
+    """
+    request.persona = "sales"
+    return await unified_ask_endpoint(request, current_user, db)
 
 
 # =============================================================================
