@@ -115,3 +115,55 @@ curl http://localhost:1234/v1/models
 # Test via nginx proxy
 curl http://localhost/llm/v1/models
 ```
+
+## Scheduled Ingestion (LaunchAgents)
+
+Code ingestion runs automatically via macOS LaunchAgents. Both must remain loaded for the system to stay current.
+
+### LaunchAgents
+
+| Agent | Schedule | Purpose |
+|-------|----------|---------|
+| `com.codesmriti.incremental` | Daily 15:05 | Incremental repo sync + KPI dashboard regeneration |
+| `com.codesmriti.bdr` | Weekly Sun 16:00 | BDR (Business Development Records) enrichment |
+
+**Plist files**: `~/Library/LaunchAgents/com.codesmriti.*.plist`
+
+### Checking Status
+
+```bash
+# List loaded agents
+launchctl list | grep codesmriti
+
+# Exit code 0 = last run succeeded, non-zero = failed
+# "-" in PID column = not currently running
+```
+
+### Logs
+
+- **stdout**: `services/ingestion-worker/logs/launchd.out.log`
+- **stderr**: `services/ingestion-worker/logs/launchd.error.log` (incremental)
+- **stderr**: `services/ingestion-worker/logs/bdr.error.log` (BDR)
+
+### Manual Trigger
+
+```bash
+# Run incremental ingestion now
+cd services/ingestion-worker && ./run_incremental.sh
+
+# Regenerate KPI dashboard only
+cd services/ingestion-worker && uv run python scripts/generate_kpi.py
+```
+
+### Troubleshooting
+
+If KPI page stops updating:
+1. Check `launchctl list | grep codesmriti` for non-zero exit codes
+2. Check `logs/launchd.out.log` for errors
+3. Common issue: subprocess calls must use `sys.executable`, not bare `python`
+
+To reload an agent after editing its plist:
+```bash
+launchctl unload ~/Library/LaunchAgents/com.codesmriti.incremental.plist
+launchctl load ~/Library/LaunchAgents/com.codesmriti.incremental.plist
+```

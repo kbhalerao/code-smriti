@@ -224,10 +224,11 @@ class IngestionRunner:
         """Regenerate the KPI dashboard after ingestion."""
         try:
             import subprocess
+            import sys
             script_path = Path(__file__).parent.parent.parent / "scripts" / "generate_kpi.py"
             if script_path.exists():
                 result = subprocess.run(
-                    ["python", str(script_path)],
+                    [sys.executable, str(script_path)],
                     cwd=script_path.parent.parent,
                     capture_output=True,
                     text=True,
