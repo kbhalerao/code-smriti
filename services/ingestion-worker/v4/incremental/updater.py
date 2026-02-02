@@ -177,7 +177,8 @@ class IncrementalUpdater:
         stored_commit = self.repo_lifecycle.get_stored_commit(repo_id)
 
         if not origin_head:
-            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Could not determine origin HEAD')
+            logger.info(f"  Empty repo - no branches found")
+            return UpdateResult(repo_id=repo_id, status=STATUS_EMPTY, reason='no_origin_head')
 
         # 3. Check if update needed
         if stored_commit and local_head == origin_head == stored_commit:

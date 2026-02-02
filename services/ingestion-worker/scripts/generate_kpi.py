@@ -76,15 +76,17 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
     stats['commits_last_month'] = last_data.get('commits', 0)
     stats['loc_this_month'] = (this_data.get('added') or 0) - (this_data.get('deleted') or 0)
 
-    # Repos created in 2025
+    # Repos with first commit this year
+    current_year = datetime.now().strftime('%Y')
     result = cb_client.cluster.query(f"""
         SELECT COUNT(DISTINCT repo_id) as cnt
         FROM `{bucket}`
         WHERE type = 'commit_index'
         GROUP BY repo_id
-        HAVING MIN(commit_date) >= '2025-01'
+        HAVING MIN(commit_date) >= '{current_year}-01'
     """)
     stats['repos_this_year'] = len(list(result))
+    stats['current_year'] = current_year
 
     # Recent ingestion runs
     result = cb_client.cluster.query(f"""
@@ -415,7 +417,7 @@ def generate_html(stats: dict) -> str:
             <div class="metric">
                 <div class="metric-label">Total Repos</div>
                 <div class="metric-value">{stats['total_repos']}</div>
-                <div class="metric-sub">{stats['repos_this_year']} new in 2025</div>
+                <div class="metric-sub">{stats['repos_this_year']} new in {stats['current_year']}</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Total Documents</div>

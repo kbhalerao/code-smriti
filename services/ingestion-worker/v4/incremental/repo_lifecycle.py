@@ -171,8 +171,14 @@ class RepoLifecycle:
                 WHERE repo_id = $repo_id
             """
             result = self.cb_client.cluster.query(query, repo_id=repo_id)
-            metrics = result.metadata().metrics()
-            deleted = metrics.mutation_count() if metrics else 0
+            # Consume results to ensure query completes
+            _ = list(result)
+            # Now metadata is available
+            try:
+                metrics = result.metadata().metrics()
+                deleted = metrics.mutation_count() if metrics else 0
+            except Exception:
+                deleted = 0  # Metrics not available, but delete likely succeeded
             logger.info(f"Deleted {deleted} documents for {repo_id}")
             return deleted
         except Exception as e:

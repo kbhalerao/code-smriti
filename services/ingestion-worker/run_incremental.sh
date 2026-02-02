@@ -41,13 +41,24 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python"
 
 echo "Using: $PYTHON" >> "$LOG_FILE"
 
-# Run incremental ingestion
+# Run incremental ingestion (capture exit code, don't bail on failure)
+set +e
 $PYTHON -u "$SCRIPT_DIR/incremental_v4.py" "$@" >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
+set -e
 
 # Regenerate KPI dashboard after ingestion
 echo "Regenerating KPI dashboard..." >> "$LOG_FILE"
-$PYTHON -u "$SCRIPT_DIR/scripts/generate_kpi.py" >> "$LOG_FILE" 2>&1 || echo "KPI generation failed" >> "$LOG_FILE"
+set +e
+$PYTHON -u "$SCRIPT_DIR/scripts/generate_kpi.py" >> "$LOG_FILE" 2>&1
+KPI_EXIT=$?
+set -e
+
+if [[ $KPI_EXIT -ne 0 ]]; then
+    echo "KPI generation failed (exit $KPI_EXIT)" >> "$LOG_FILE"
+    # Propagate KPI failure if ingestion itself succeeded
+    [[ $EXIT_CODE -eq 0 ]] && EXIT_CODE=$KPI_EXIT
+fi
 
 echo "=== $(date) Finished with exit code $EXIT_CODE ===" >> "$LOG_FILE"
 exit $EXIT_CODE
