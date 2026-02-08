@@ -226,7 +226,7 @@ class RepoLifecycle:
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
                   AND file_path = $file_path
-                  AND type = 'document'
+                  AND type IN ['document', 'spec']
             """
             result = self.cb_client.cluster.query(
                 query,

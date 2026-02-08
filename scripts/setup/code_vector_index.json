@@ -117,6 +117,19 @@
             "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
             "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]}
           }
+        },
+        "spec": {
+          "dynamic": false,
+          "enabled": true,
+          "properties": {
+            "type": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "type", "type": "text"}]},
+            "repo_id": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "repo_id", "type": "text"}]},
+            "file_path": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "file_path", "type": "text"}]},
+            "content": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "standard", "index": true, "name": "content", "store": true, "type": "text"}]},
+            "embedding": {"dynamic": false, "enabled": true, "fields": [{"dims": 768, "index": true, "name": "embedding", "similarity": "dot_product", "type": "vector", "vector_index_optimized_for": "recall"}]},
+            "spec_name": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "spec_name", "type": "text"}]},
+            "intent_patterns": {"dynamic": false, "enabled": true, "fields": [{"analyzer": "keyword_analyzer", "index": true, "name": "intent_patterns", "type": "text"}]}
+          }
         }
       }
     },

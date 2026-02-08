@@ -50,9 +50,9 @@ router = APIRouter(prefix="/rag", tags=["CodeSmriti RAG V4"])
 class SearchRequest(BaseModel):
     """Request model for search_code endpoint"""
     query: str = Field(description="Search query (natural language or code)")
-    level: Literal["symbol", "file", "module", "repo", "doc"] = Field(
+    level: Literal["symbol", "file", "module", "repo", "doc", "spec"] = Field(
         default="file",
-        description="Search granularity: symbol, file, module, repo, or doc"
+        description="Search granularity: symbol, file, module, repo, doc, or spec"
     )
     repo_filter: Optional[str] = Field(
         default=None,
@@ -239,6 +239,7 @@ async def search_code_endpoint(
     - **module**: Find relevant folders/areas
     - **repo**: High-level repository understanding
     - **doc**: Find documentation files (RST, MD)
+    - **spec**: Find feature specs (intent patterns, state contracts)
 
     Use preview=true to get metadata-only results for initial exploration.
     """

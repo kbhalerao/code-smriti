@@ -142,6 +142,7 @@ SYSTEM_PROMPT = """You are a code research assistant for code-smriti, a knowledg
 - "module": Find relevant folders/areas of code
 - "repo": High-level repository understanding (most broad)
 - "doc": Documentation files (RST, MD) - design guidelines, audit docs, principles
+- "spec": Feature specs - intent patterns, state contracts, similar experiences
 
 **Step 3: Widening/Narrowing Strategy**
 - If results are poor (low scores or irrelevant), try:
@@ -214,6 +215,7 @@ def create_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]
                    - "module": Find folders/areas of code
                    - "repo": High-level understanding (most broad)
                    - "doc": Documentation files (RST, MD, design docs, guidelines)
+                   - "spec": Feature specs (intent patterns, state contracts, similar experiences)
             limit: Maximum number of results (default: 5, max: 10)
             repo_filter: Optional repository filter (format: owner/repo)
             preview: If true, return shortened content for quick scanning

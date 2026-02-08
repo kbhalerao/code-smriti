@@ -34,6 +34,7 @@ from config import WorkerConfig
 from storage.couchbase_client import CouchbaseClient
 from embeddings.local_generator import LocalEmbeddingGenerator
 from parsers.code_parser import should_skip_file
+from v4.spec_parser import is_spec_document, extract_spec_metadata
 
 config = WorkerConfig()
 
@@ -192,6 +193,12 @@ class DocumentIngester:
 
             ext = file_path.suffix.lower()
 
+            # Detect spec documents (must happen before chunking for full-doc analysis)
+            spec_metadata = None
+            if ext == ".md" and is_spec_document(content):
+                spec_metadata = extract_spec_metadata(content)
+                logger.info(f"Detected spec: {rel_path} -> {spec_metadata.get('spec_name', '?')}")
+
             # Determine doc type and choose splitter
             if ext == ".md":
                 doc_type = "markdown"
@@ -219,10 +226,11 @@ class DocumentIngester:
             # Generate embeddings and store each chunk
             chunks_created = 0
             for idx, chunk_content in enumerate(chunks):
-                # Generate deterministic chunk ID
+                # Determine record type and ID prefix
+                record_type = "spec" if spec_metadata else "document"
                 chunk_key = f"{repo_id}:{rel_path}:{idx}"
                 chunk_id = hashlib.sha256(chunk_key.encode()).hexdigest()[:16]
-                doc_id = f"document::{chunk_id}"
+                doc_id = f"{record_type}::{chunk_id}"
 
                 # Extract header hierarchy for markdown/rst
                 if doc_type in ("markdown", "restructuredtext"):
@@ -232,7 +240,7 @@ class DocumentIngester:
 
                 # Create document record
                 doc_record = {
-                    "type": "document",
+                    "type": record_type,
                     "repo_id": repo_id,
                     "file_path": rel_path,
                     "doc_type": doc_type,
@@ -245,8 +253,26 @@ class DocumentIngester:
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
 
+                # Add spec metadata fields
+                if spec_metadata:
+                    doc_record["spec_name"] = spec_metadata["spec_name"]
+                    doc_record["intent_patterns"] = spec_metadata["intent_patterns"]
+                    doc_record["l_levels"] = spec_metadata["l_levels"]
+                    doc_record["components"] = spec_metadata["components"]
+
+                # Build embedding text — prepend spec context for intent-biased vectors
+                embedding_text = chunk_content
+                if spec_metadata:
+                    prefix_parts = []
+                    if spec_metadata["spec_name"]:
+                        prefix_parts.append(f"[Spec: {spec_metadata['spec_name']}]")
+                    if spec_metadata["intent_patterns"]:
+                        prefix_parts.append(f"[Intent: {', '.join(spec_metadata['intent_patterns'])}]")
+                    if prefix_parts:
+                        embedding_text = f"{' '.join(prefix_parts)} {chunk_content}"
+
                 # Generate embedding (sync method)
-                doc_record["embedding"] = self.embedder.generate_embedding(chunk_content)
+                doc_record["embedding"] = self.embedder.generate_embedding(embedding_text)
 
                 # Store in Couchbase (use collection directly for raw dicts)
                 self.cb_client.collection.upsert(doc_id, doc_record)

@@ -231,7 +231,7 @@ async def explore_structure(
 @mcp.tool()
 async def search_codebase(
     query: str,
-    level: Literal["symbol", "file", "module", "repo", "doc"] = "file",
+    level: Literal["symbol", "file", "module", "repo", "doc", "spec"] = "file",
     limit: int = 5,
     repo_filter: str = None,
     preview: bool = False
@@ -259,6 +259,8 @@ async def search_codebase(
                - "repo": High-level repository understanding (most broad)
                - "doc": Find documentation files (RST, MD) - use for conceptual questions,
                         design guidelines, audit docs, principles
+               - "spec": Find feature specs - use for intent patterns, state contracts,
+                         similar experiences, component composition
         limit: Number of results to return (default: 5, max: 20).
         repo_filter: Optional repository name to filter by (e.g. "kbhalerao/labcore").
         preview: If true, return shortened content for quick scanning before fetching full details.
@@ -272,6 +274,7 @@ async def search_codebase(
     - For "what principles/guidelines" or conceptual docs -> use "doc" level
     - For "what is in X folder" -> use "module" level
     - For "what repos have X" -> use "repo" level
+    - For "similar workflows" or "intent patterns" or feature specs -> use "spec" level
     - If results are poor, try adjacent levels or add preview=true first
     """
     try:
@@ -326,6 +329,10 @@ async def search_codebase(
                     header = f"### Module: {module_path}/"
                 elif doc_type == "repo_summary":
                     header = f"### Repository: {repo_id}"
+                elif doc_type == "spec":
+                    spec_name = r.get("symbol_name", "")  # spec_name mapped via symbol_name
+                    label = f"Spec: {spec_name}" if spec_name else f"Spec: {file_path}"
+                    header = f"### {label}"
                 elif doc_type == "document":
                     doc_subtype = r.get("symbol_type", "doc")  # symbol_type holds doc_type for documents
                     header = f"### Doc: {file_path} ({doc_subtype})"
