@@ -13,7 +13,7 @@ The incremental ingestion system automatically updates the code index when repos
 ## Quick Commands
 
 ```bash
-cd /Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker
+cd /path/to/code-smriti/services/ingestion-worker
 
 # Run incremental update
 .venv/bin/python incremental_v4.py
@@ -110,14 +110,14 @@ cat > ~/Library/LaunchAgents/com.codesmriti.incremental.plist << 'EOF'
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker/.venv/bin/python</string>
-        <string>/Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker/incremental_v4.py</string>
+        <string>/path/to/code-smriti/services/ingestion-worker/.venv/bin/python</string>
+        <string>/path/to/code-smriti/services/ingestion-worker/incremental_v4.py</string>
         <string>--trigger</string>
         <string>scheduled</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker</string>
+    <string>/path/to/code-smriti/services/ingestion-worker</string>
 
     <key>StartCalendarInterval</key>
     <dict>
@@ -130,7 +130,7 @@ cat > ~/Library/LaunchAgents/com.codesmriti.incremental.plist << 'EOF'
 
     <!-- Logs handled internally by loguru, but capture any startup errors -->
     <key>StandardErrorPath</key>
-    <string>/Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker/logs/launchd.error.log</string>
+    <string>/path/to/code-smriti/services/ingestion-worker/logs/launchd.error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -144,7 +144,7 @@ EOF
 
 ### 2. Create logs directory
 ```bash
-mkdir -p /Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker/logs
+mkdir -p /path/to/code-smriti/services/ingestion-worker/logs
 ```
 
 ### 3. Load the job
@@ -261,7 +261,7 @@ Then compare with `git ls-remote` for each repo.
 ## Quick Reference
 
 ```bash
-cd /Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker
+cd /path/to/code-smriti/services/ingestion-worker
 
 # Check if running
 .venv/bin/python incremental_v4.py --status

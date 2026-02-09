@@ -20,12 +20,13 @@ echo ""
 
 # Query Couchbase for stats
 python3 << 'EOF'
+import os
 from couchbase.cluster import Cluster
 from couchbase.auth import PasswordAuthenticator
 from couchbase.options import ClusterOptions
 from datetime import timedelta
 
-auth = PasswordAuthenticator('Administrator', 'password123')
+auth = PasswordAuthenticator('Administrator', os.environ['COUCHBASE_PASSWORD'])
 cluster = Cluster('couchbase://localhost', ClusterOptions(auth))
 cluster.wait_until_ready(timedelta(seconds=5))
 

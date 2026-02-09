@@ -11,7 +11,7 @@ CodeSmriti provides a codebase intelligence platform with:
 - **Two-tier intelligence**: Local LLM (Qwen3) for routine queries, SOTA models for complex reasoning
 - **MCP protocol support**: Works with Claude Code, Claude Desktop, and custom clients
 
-**External URL**: `https://smriti.agsci.com`
+**External URL**: `https://smriti.example.com`
 
 ## Connecting from Claude Code (Recommended)
 
@@ -35,7 +35,7 @@ Create or edit `~/.claude/mcp.json`:
       "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
       "cwd": "/path/to/code-smriti",
       "env": {
-        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_API_URL": "https://smriti.example.com",
         "CODESMRITI_USERNAME": "your-email@example.com",
         "CODESMRITI_PASSWORD": "your-password"
       }
@@ -47,7 +47,7 @@ Create or edit `~/.claude/mcp.json`:
 Alternatively, create a `.env` file in the code-smriti directory:
 
 ```bash
-CODESMRITI_API_URL=https://smriti.agsci.com
+CODESMRITI_API_URL=https://smriti.example.com
 CODESMRITI_USERNAME=your-email@example.com
 CODESMRITI_PASSWORD=your-password
 ```
@@ -92,7 +92,7 @@ Claude Desktop requires HTTP/SSE transport for MCP servers. CodeSmriti currently
 
 ### Current Status
 
-**Not directly supported.** The MCP server runs locally via stdio transport and makes HTTP calls to `https://smriti.agsci.com`. There is no HTTP MCP endpoint.
+**Not directly supported.** The MCP server runs locally via stdio transport and makes HTTP calls to `https://smriti.example.com`. There is no HTTP MCP endpoint.
 
 ### Workaround: Run Locally
 
@@ -110,7 +110,7 @@ Edit the MCP settings file:
       "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
       "cwd": "/path/to/code-smriti",
       "env": {
-        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_API_URL": "https://smriti.example.com",
         "CODESMRITI_USERNAME": "your-email@example.com",
         "CODESMRITI_PASSWORD": "your-password"
       }
@@ -144,7 +144,7 @@ Edit `~/.continue/config.json`:
       "args": ["run", "python", "-m", "services.mcp-server.rag_mcp_server"],
       "cwd": "/path/to/code-smriti",
       "env": {
-        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_API_URL": "https://smriti.example.com",
         "CODESMRITI_USERNAME": "your-email@example.com",
         "CODESMRITI_PASSWORD": "your-password"
       }
@@ -169,7 +169,7 @@ class CodeSmritiClient:
     def __init__(self, base_url: str, token: str):
         """
         Args:
-            base_url: API URL (e.g., "https://smriti.agsci.com")
+            base_url: API URL (e.g., "https://smriti.example.com")
             token: JWT access token from /api/auth/login
         """
         self.base_url = base_url.rstrip("/")
@@ -285,7 +285,7 @@ def get_token(base_url: str, username: str, password: str) -> str:
 
 
 # Usage
-BASE_URL = "https://smriti.agsci.com"
+BASE_URL = "https://smriti.example.com"
 token = get_token(BASE_URL, "your-email@example.com", "your-password")
 client = CodeSmritiClient(BASE_URL, token)
 
@@ -409,7 +409,7 @@ async function getToken(baseUrl: string, email: string, password: string): Promi
 }
 
 // Usage
-const BASE_URL = 'https://smriti.agsci.com';
+const BASE_URL = 'https://smriti.example.com';
 const token = await getToken(BASE_URL, 'your-email@example.com', 'your-password');
 const client = new CodeSmritiClient(BASE_URL, token);
 
@@ -562,7 +562,7 @@ Claude uses: ask_agsci("technical approach GIS platform")
    docker-compose logs -f api-server
 
    # Check system health
-   curl https://smriti.agsci.com/health
+   curl https://smriti.example.com/health
    ```
 
 3. **Ingestion Pipeline**:
@@ -586,7 +586,7 @@ Claude uses: ask_agsci("technical approach GIS platform")
 **Problem**: Client can't connect to CodeSmriti
 
 **Solutions**:
-1. Verify CodeSmriti is running: `curl https://smriti.agsci.com/health`
+1. Verify CodeSmriti is running: `curl https://smriti.example.com/health`
 2. Check your network can reach the server
 3. If running locally, ensure Docker containers are up: `docker-compose ps`
 4. Verify credentials are correct

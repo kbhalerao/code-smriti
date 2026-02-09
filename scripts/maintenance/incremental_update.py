@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Set, List
 
 # Set REPOS_PATH for native execution
-os.environ["REPOS_PATH"] = "/Users/kaustubh/Documents/codesmriti-repos"
+os.environ.setdefault("REPOS_PATH", os.path.expanduser("~/codesmriti-repos"))
 os.environ["ENABLE_INCREMENTAL_UPDATES"] = "true"
 
 # Add ingestion-worker to path
@@ -136,7 +136,7 @@ async def main():
     logger.info(f"  Total chunks: {initial_chunks:,}")
 
     # Auto-discover repositories from filesystem
-    repos_path = os.getenv("REPOS_PATH", "/Users/kaustubh/Documents/codesmriti-repos")
+    repos_path = os.getenv("REPOS_PATH", os.path.expanduser("~/codesmriti-repos"))
     logger.info(f"\nAuto-discovering repositories from: {repos_path}")
 
     all_repos = load_repos_from_filesystem(repos_path)

@@ -1,0 +1,11 @@
+# GitHub Repositories for Code-Smriti Ingestion
+# Format: owner/repo-name
+# Lines starting with # are comments
+#
+# Copy this file to repos_to_ingest.txt and add your repositories:
+#   cp repos_to_ingest.txt.example repos_to_ingest.txt
+
+your-org/backend-api
+your-org/frontend-app
+your-org/shared-utils
+your-user/side-project

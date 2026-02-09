@@ -57,7 +57,7 @@ services:
       - ./services/api-server/logs:/app/logs
       - model_cache:/root/.cache/huggingface
       - model_cache:/root/.cache/torch
-      - ${REPOS_PATH:-/Users/kaustubh/Documents/codesmriti-repos}:/repos:ro  # For CodeFetcher
+      - ${REPOS_PATH:?Set REPOS_PATH in .env}:/repos:ro  # For CodeFetcher
     depends_on:
       couchbase:
         condition: service_healthy

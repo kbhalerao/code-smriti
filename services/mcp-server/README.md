@@ -56,7 +56,7 @@ Add this to your `~/Library/Application Support/Claude/claude_desktop_config.jso
         "mcp",
         "--with",
         "httpx",
-        "/Users/kaustubh/Documents/code-smriti/4-consume/mcp-server/rag_mcp_server.py"
+        "/path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py"
       ]
     }
   }
@@ -70,7 +70,7 @@ If using **Cline**:
 1. Open Cline settings.
 2. Add a new MCP server.
 3. Command: `uv`
-4. Args: `run --with mcp --with httpx /Users/kaustubh/Documents/code-smriti/4-consume/mcp-server/rag_mcp_server.py`
+4. Args: `run --with mcp --with httpx /path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py`
 
 ### 3. Testing Locally
 

@@ -59,7 +59,7 @@ Required in `.env`:
 # Couchbase
 COUCHBASE_HOST=localhost
 COUCHBASE_USER=Administrator
-COUCHBASE_PASSWORD=password123
+COUCHBASE_PASSWORD=your-couchbase-password
 
 # Buckets
 COUCHBASE_BUCKET_CODE=code_kosha

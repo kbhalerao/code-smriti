@@ -133,7 +133,7 @@ Repos must be cloned with folder naming `owner_repo`:
 $REPOS_PATH/
 ├── kbhalerao_labcore/          # → repo_id: kbhalerao/labcore
 │   └── .git/
-├── jayp-eci_pinionfe/          # → repo_id: jayp-eci/pinionfe
+├── other-org_their-app/        # → repo_id: other-org/their-app
 │   └── .git/
 └── ...
 ```

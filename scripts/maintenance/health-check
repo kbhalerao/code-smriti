@@ -27,7 +27,7 @@ fi
 # Check Couchbase
 echo ""
 echo "2. Couchbase..."
-if curl -s -u Administrator:password123 http://localhost:8091/pools/default > /dev/null 2>&1; then
+if curl -s -u Administrator:${COUCHBASE_PASSWORD:?Set COUCHBASE_PASSWORD} http://localhost:8091/pools/default > /dev/null 2>&1; then
     echo "   ✓ Couchbase is accessible"
 else
     echo "   ✗ Couchbase is not accessible"
@@ -37,7 +37,7 @@ fi
 # Check database
 echo ""
 echo "3. Database..."
-COUNT=$(curl -s -u Administrator:password123 http://localhost:8091/pools/default/buckets/code_kosha/stats | \
+COUNT=$(curl -s -u Administrator:${COUCHBASE_PASSWORD:?Set COUCHBASE_PASSWORD} http://localhost:8091/pools/default/buckets/code_kosha/stats | \
     python3 -c "import sys, json; data=json.load(sys.stdin); print(int(data['op']['samples']['curr_items'][-1]))" 2>/dev/null || echo "0")
 
 if [ "$COUNT" -gt 0 ]; then
@@ -50,7 +50,7 @@ fi
 # Check vector index
 echo ""
 echo "4. Vector Search Index..."
-if curl -s -u Administrator:password123 http://localhost:8094/api/index/code_vector_index > /dev/null 2>&1; then
+if curl -s -u Administrator:${COUCHBASE_PASSWORD:?Set COUCHBASE_PASSWORD} http://localhost:8094/api/index/code_vector_index > /dev/null 2>&1; then
     echo "   ✓ Vector index exists"
 else
     echo "   ⚠ Vector index not found"

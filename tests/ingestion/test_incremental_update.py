@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Set REPOS_PATH for native execution
-os.environ["REPOS_PATH"] = "/Users/kaustubh/Documents/codesmriti-repos"
+os.environ.setdefault("REPOS_PATH", os.path.expanduser("~/codesmriti-repos"))
 os.environ["ENABLE_INCREMENTAL_UPDATES"] = "true"
 
 # Add ingestion-worker to path

@@ -147,7 +147,7 @@ def compute_criticality_info(
     Args:
         G: NetworkX directed graph
         scores: PageRank scores from compute_pagerank
-        scope: Description of computation scope (e.g., "kbhalerao/agkit.io-backend")
+        scope: Description of computation scope (e.g., "your-org/platform-backend")
 
     Returns:
         Dict mapping node_id → CriticalityInfo

@@ -13,8 +13,8 @@ from typing import Dict, List, Optional
 class MotherRepo:
     """Configuration for a mother (library) repo."""
 
-    repo_id: str  # e.g., "kbhalerao/labcore"
-    pip_package: str  # Top-level import name, e.g., "labcore"
+    repo_id: str  # e.g., "your-org/core-library"
+    pip_package: str  # Top-level import name, e.g., "mylib"
     path_markers: List[str] = field(default_factory=list)  # How to identify in pydeps paths
     daughters: List[str] = field(default_factory=list)  # Repos that depend on this
 
@@ -29,22 +29,22 @@ class MotherRepo:
 
 # Registry of known mother-daughter relationships
 REPO_REGISTRY: Dict[str, MotherRepo] = {
-    "kbhalerao/labcore": MotherRepo(
-        repo_id="kbhalerao/labcore",
-        pip_package="labcore",
+    "your-org/core-library": MotherRepo(
+        repo_id="your-org/core-library",
+        pip_package="core_library",
         # Editable install: pip install -e at Docker entrypoint puts code in src/
         # Standard install: pip install puts in site-packages/
-        path_markers=["/soildx-labcore/", "/labcore/", "site-packages/labcore"],
+        path_markers=["/core-library/", "site-packages/core_library"],
         daughters=[
-            "kbhalerao/topsoil",
-            "kbhalerao/pinionbe",
-            "PeoplesCompany/farmworthdb",
-            "ContinuumAgInc/topsoil2.0",
-            "JessiePBhalerao/firstseedtests",
+            "your-org/app-one",
+            "your-org/app-two",
+            "client-org/client-app",
+            "partner-org/app-fork",
+            "teammate/test-project",
         ],
     ),
-    "kbhalerao/agkit.io-backend": MotherRepo(
-        repo_id="kbhalerao/agkit.io-backend",
+    "your-org/platform-backend": MotherRepo(
+        repo_id="your-org/platform-backend",
         pip_package="agkit",
         path_markers=["/tier1apps/", "/tier2apps/", "/tier3apps/"],
         daughters=[],  # Currently no external consumers
@@ -76,7 +76,7 @@ def identify_provider_repo(
     Given a module's file path from pydeps, identify which mother repo it belongs to.
 
     Args:
-        module_path: File path from pydeps output (e.g., "/path/to/site-packages/labcore/...")
+        module_path: File path from pydeps output (e.g., "/path/to/site-packages/mylib/...")
         mother_repos: Registry to search (defaults to REPO_REGISTRY)
 
     Returns:

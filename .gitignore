@@ -67,6 +67,20 @@ api-gateway/certbot/
 *.key
 *.crt
 
+# Archive directories (historical development artifacts)
+.archive/
+
+# Repo ingestion config (contains private org/repo names)
+config/repos_to_ingest.txt
+
+# Eval data (machine-generated, contains private repo names)
+evals/results/
+evals/v4_eval_questions.json
+services/api-server/tests/search_eval_questions.json
+
+# Ingestion config (contains private repo names)
+services/ingestion-worker/ingestion_config.yaml
+
 # Temporary files
 *.tmp
 *.temp

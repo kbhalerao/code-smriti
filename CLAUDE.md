@@ -41,7 +41,7 @@ import httpx
 import os
 from dotenv import load_dotenv
 
-load_dotenv('/Users/kaustubh/Documents/code/code-smriti/.env')
+load_dotenv('../../.env')  # relative to services/ingestion-worker
 password = os.environ['COUCHBASE_PASSWORD']
 
 resp = httpx.post(

@@ -5,13 +5,13 @@ CLI for criticality analysis.
 Usage:
     # Analyze intra-repo dependencies (single repo)
     python -m v4.criticality.cli analyze \
-        --repo kbhalerao/agkit.io-backend \
+        --repo your-org/platform-backend \
         --pydeps t1deps.json,t2deps.json,t3deps.json \
         --prefixes tier1apps,tier2apps,tier3apps
 
     # Export criticality scores to JSON
     python -m v4.criticality.cli analyze \
-        --repo kbhalerao/agkit.io-backend \
+        --repo your-org/platform-backend \
         --pydeps t1deps.json \
         --prefixes tier1apps \
         --output criticality.json
@@ -144,7 +144,7 @@ def main():
     analyze_parser.add_argument(
         "--repo",
         required=True,
-        help="Repository ID (e.g., kbhalerao/agkit.io-backend)",
+        help="Repository ID (e.g., your-org/platform-backend)",
     )
     analyze_parser.add_argument(
         "--pydeps",

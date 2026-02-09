@@ -7,7 +7,7 @@ RAG-enriched LLM chat API with PydanticAI tool-calling architecture for code sea
 ### 1. Start the Server
 
 ```bash
-cd /Users/kaustubh/Documents/code/code-smriti/4-consume/api-server
+cd /path/to/code-smriti/4-consume/api-server
 source venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -99,7 +99,7 @@ OLLAMA_HOST=http://localhost:11434
 # Couchbase
 COUCHBASE_HOST=localhost
 COUCHBASE_USERNAME=Administrator
-COUCHBASE_PASSWORD=password123
+COUCHBASE_PASSWORD=your-couchbase-password
 COUCHBASE_BUCKET_CODE=code_kosha
 
 # JWT Secret (change in production!)

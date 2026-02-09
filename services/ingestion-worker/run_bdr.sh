@@ -12,8 +12,8 @@ LOG_FILE="$SCRIPT_DIR/logs/bdr.out.log"
 echo "=== $(date) Starting BDR generation ===" >> "$LOG_FILE"
 
 # Essential environment for launchd
-export HOME="/Users/kaustubh"
-export USER="kaustubh"
+export HOME="${HOME:-$(eval echo ~$(whoami))}"
+export USER="${USER:-$(whoami)}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 export LANG="en_US.UTF-8"
 

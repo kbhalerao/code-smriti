@@ -4,7 +4,7 @@ Computes PageRank-style criticality scores to identify which modules are most im
 
 ## Problem
 
-In a family of related repos (e.g., `labcore` as a library consumed by `topsoil`, `farmworthdb`, etc.), changes to certain modules have outsized impact. A mixin like `AccessControlQuerySetMixin` might be used by 50+ models across 5 repos - but there's no way to know this without institutional knowledge.
+In a family of related repos (e.g., a shared library consumed by multiple apps), changes to certain modules have outsized impact. A mixin like `AccessControlQuerySetMixin` might be used by 50+ models across 5 repos - but there's no way to know this without institutional knowledge.
 
 We want to:
 1. Identify which modules are most depended-upon (highest "blast radius")
@@ -26,9 +26,9 @@ In this graph, Module B has 3 incoming edges (A, D, E import it). PageRank will 
 
 ### Why pydeps?
 
-Import resolution is hard. Given `from clients.models import Client` in topsoil:
-- Does topsoil have a `clients/` module? (No)
-- Is `clients` from labcore? (Yes, via pip install)
+Import resolution is hard. Given `from clients.models import Client` in an app:
+- Does the app have a `clients/` module? (No)
+- Is `clients` from the shared library? (Yes, via pip install)
 - Which file defines `Client`?
 
 **pydeps** solves this by running inside the project's virtualenv where Python's import system already knows the answers. It outputs JSON with resolved module paths.
@@ -88,13 +88,13 @@ cd services/ingestion-worker
 
 # Single package
 uv run python -m v4.criticality.cli analyze \
-  --repo kbhalerao/agkit.io-backend \
+  --repo your-org/platform-backend \
   --pydeps ../../t1deps.json \
   --prefixes tier1apps
 
 # Multiple packages in same repo
 uv run python -m v4.criticality.cli analyze \
-  --repo kbhalerao/agkit.io-backend \
+  --repo your-org/platform-backend \
   --pydeps ../../t1deps.json,../../t2deps.json,../../t3deps.json \
   --prefixes tier1apps,tier2apps,tier3apps \
   --output criticality.json
@@ -131,9 +131,9 @@ Represents a single import relationship:
 
 ```python
 DependencyEdge(
-    consumer_repo_id="kbhalerao/topsoil",
-    consumer_module="topsoil.greet.views",
-    provider_repo_id="kbhalerao/labcore",
+    consumer_repo_id="your-org/app-one",
+    consumer_module="myapp.greet.views",
+    provider_repo_id="your-org/core-library",
     provider_module="clients.models",
     is_cross_repo=True,
 )
@@ -178,10 +178,10 @@ CATEGORY CRITICALITY (sum of PageRank)
 
 ## Cross-Repo Analysis (Future)
 
-For mother-daughter relationships (labcore → topsoil):
+For mother-daughter relationships (shared library → app):
 
 1. Run pydeps on daughter with mother pip-installed
-2. The `path` field reveals which modules come from mother (contains `site-packages/labcore`)
+2. The `path` field reveals which modules come from mother (contains `site-packages/<library-name>`)
 3. `pydeps_parser.parse_pydeps_cross_repo()` identifies cross-repo edges
 4. PageRank computed across the combined graph
 
@@ -189,11 +189,11 @@ Registry configuration in `registry.py`:
 
 ```python
 REPO_REGISTRY = {
-    "kbhalerao/labcore": MotherRepo(
-        repo_id="kbhalerao/labcore",
-        pip_package="labcore",
-        path_markers=["/labcore/", "site-packages/labcore"],
-        daughters=["kbhalerao/topsoil", "PeoplesCompany/farmworthdb", ...],
+    "your-org/core-library": MotherRepo(
+        repo_id="your-org/core-library",
+        pip_package="core-library",
+        path_markers=["/core-library/", "site-packages/core-library"],
+        daughters=["your-org/app-one", "client-org/client-app", ...],
     ),
 }
 ```

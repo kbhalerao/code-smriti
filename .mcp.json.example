@@ -8,7 +8,7 @@
         "python", "-m", "services.mcp-server.rag_mcp_server"
       ],
       "env": {
-        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_API_URL": "https://smriti.example.com",
         "CODESMRITI_USERNAME": "your-username",
         "CODESMRITI_PASSWORD": "your-password"
       }

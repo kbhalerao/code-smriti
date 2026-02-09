@@ -17,7 +17,7 @@ class WorkerConfig(BaseSettings):
     couchbase_bucket: str = os.getenv("COUCHBASE_BUCKET", "code_memory")
 
     # Repository Storage Path
-    repos_path: str = os.getenv("REPOS_PATH", "/Users/kaustubh/Documents/codesmriti-repos")
+    repos_path: str = os.getenv("REPOS_PATH", os.path.expanduser("~/codesmriti-repos"))
 
     # Embedding Configuration
     embedding_backend: str = os.getenv("EMBEDDING_BACKEND", "local")  # "local" or "ollama"

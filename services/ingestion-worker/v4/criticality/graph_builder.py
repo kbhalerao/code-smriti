@@ -6,17 +6,17 @@ dependency graphs from pydeps JSON output.
 
 Usage (CLI):
     uv run python -m v4.criticality.graph_builder \
-        --cluster kbhalerao/labcore \
+        --cluster your-org/core-library \
         --pydeps /path/to/deps.json \
-        --daughter-repo PeoplesCompany/farmworthdb \
+        --daughter-repo client-org/client-app \
         --daughter-prefixes listings,fwcma,mapbinder
 
 Usage (programmatic):
     from v4.criticality.graph_builder import build_and_store_graph
     result = build_and_store_graph(
         pydeps_json_path="/path/to/deps.json",
-        cluster_id="kbhalerao/labcore",
-        daughter_repo_id="PeoplesCompany/farmworthdb",
+        cluster_id="your-org/core-library",
+        daughter_repo_id="client-org/client-app",
         daughter_prefixes=["listings", "fwcma"],
     )
 """
@@ -57,9 +57,9 @@ def build_graph_document(
     Build the dependency graph document from pydeps output.
 
     Args:
-        cluster_id: Mother repo ID (e.g., "kbhalerao/labcore")
+        cluster_id: Mother repo ID (e.g., "your-org/core-library")
         pydeps_files: List of paths to pydeps JSON files
-        daughter_repo_id: Daughter repo ID (e.g., "PeoplesCompany/farmworthdb")
+        daughter_repo_id: Daughter repo ID (e.g., "client-org/client-app")
         daughter_prefixes: Module prefixes for daughter (e.g., ["listings", "fwcma"])
 
     Returns:
@@ -180,8 +180,8 @@ def build_and_store_graph(
 
     Args:
         pydeps_json_path: Path to pydeps JSON file
-        cluster_id: Mother repo ID (e.g., "kbhalerao/labcore")
-        daughter_repo_id: Daughter repo ID (e.g., "PeoplesCompany/farmworthdb")
+        cluster_id: Mother repo ID (e.g., "your-org/core-library")
+        daughter_repo_id: Daughter repo ID (e.g., "client-org/client-app")
         daughter_prefixes: Module prefixes for daughter
         dry_run: If True, don't store, just return the document
 
@@ -242,7 +242,7 @@ def main():
     parser.add_argument(
         "--cluster",
         required=True,
-        help="Mother repo ID (e.g., kbhalerao/labcore)",
+        help="Mother repo ID (e.g., your-org/core-library)",
     )
     parser.add_argument(
         "--pydeps",
@@ -252,7 +252,7 @@ def main():
     parser.add_argument(
         "--daughter-repo",
         required=True,
-        help="Daughter repo ID (e.g., PeoplesCompany/farmworthdb)",
+        help="Daughter repo ID (e.g., client-org/client-app)",
     )
     parser.add_argument(
         "--daughter-prefixes",

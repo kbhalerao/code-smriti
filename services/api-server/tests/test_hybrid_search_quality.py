@@ -24,7 +24,7 @@ TEST_QUERIES = [
         "query": "Svelte 5 component with runes for state management",
         "text_query": "$state $derived runes reactive ChatInput",
         "expected_files": ["src/lib/components/chat/ChatInput.svelte"],
-        "expected_repos": ["kbhalerao/ask-kev-2026"],
+        "expected_repos": ["your-org/chat-app"],
         "category": "ui_component"
     },
     {

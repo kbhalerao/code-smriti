@@ -189,9 +189,9 @@ The `requeue_task` decorator provides retry logic for async functions...
 [Code example here]
 
 **Sources:**
-- [kbhalerao/labcore/common/consumer_decorators.py]
-- [kbhalerao/channels_decorators/workers/consumer_decorators.py]
-- [kbhalerao/agkit.io-backend/network_helpers/consumer_helpers.py]
+- [your-org/core-library/common/consumer_decorators.py]
+- [your-org/utils/workers/consumer_decorators.py]
+- [your-org/platform-backend/network_helpers/consumer_helpers.py]
 ```
 
 ### Benefits
@@ -220,7 +220,7 @@ curl -X POST http://localhost:8000/api/chat/test \
 **Response:**
 ```json
 {
-  "answer": "Based on the search results, the `requeue_task` decorator is a tool for async functions with retry logic...\n\n```python\n@requeue_task(max_retries=5, delay=10)\nasync def my_async_function():\n    # Your code here\n```\n\n**Sources:**\n- [kbhalerao/labcore/common/consumer_decorators.py]\n- [kbhalerao/channels_decorators/workers/consumer_decorators.py]\n",
+  "answer": "Based on the search results, the `requeue_task` decorator is a tool for async functions with retry logic...\n\n```python\n@requeue_task(max_retries=5, delay=10)\nasync def my_async_function():\n    # Your code here\n```\n\n**Sources:**\n- [your-org/core-library/common/consumer_decorators.py]\n- [your-org/utils/workers/consumer_decorators.py]\n",
   "metadata": {
     "tenant_id": "code_kosha",
     "conversation_length": 2
@@ -384,7 +384,7 @@ OLLAMA_HOST=http://localhost:11434
 COUCHBASE_HOST=localhost
 COUCHBASE_PORT=8091
 COUCHBASE_USER=Administrator
-COUCHBASE_PASSWORD=password123
+COUCHBASE_PASSWORD=your-couchbase-password
 COUCHBASE_BUCKET_CODE=code_kosha
 ```
 

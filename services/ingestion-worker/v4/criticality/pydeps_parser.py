@@ -46,7 +46,7 @@ def parse_pydeps_intra_repo(
 
     Args:
         pydeps_data: Raw pydeps JSON output
-        repo_id: Repository identifier (e.g., "kbhalerao/agkit.io-backend")
+        repo_id: Repository identifier (e.g., "your-org/platform-backend")
         project_prefixes: Module prefixes to include (e.g., ["tier1apps", "tier2apps"])
 
     Returns:
@@ -99,7 +99,7 @@ def parse_pydeps_cross_repo(
 
     Args:
         pydeps_data: Raw pydeps JSON output (from daughter repo)
-        daughter_repo_id: e.g., "kbhalerao/topsoil"
+        daughter_repo_id: e.g., "your-org/app-one"
         daughter_prefixes: Module prefixes for the daughter (e.g., ["topsoil"])
         mother_repos: Registry of mother repos to identify
 

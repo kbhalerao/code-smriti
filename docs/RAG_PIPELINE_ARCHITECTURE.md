@@ -34,7 +34,7 @@ The MCP (Model Context Protocol) server enables Claude Code to access the indexe
 │  • get_criticality   - Module importance analysis                       │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
-                                    │ HTTPS (smriti.agsci.com)
+                                    │ HTTPS (smriti.example.com)
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         API Server (FastAPI)                            │
@@ -188,7 +188,7 @@ The MCP server runs locally (client-side) and calls the API server. Configure in
       "args": ["-m", "services.mcp-server.rag_mcp_server"],
       "cwd": "/path/to/code-smriti",
       "env": {
-        "CODESMRITI_API_URL": "https://smriti.agsci.com",
+        "CODESMRITI_API_URL": "https://smriti.example.com",
         "CODESMRITI_USERNAME": "your-email",
         "CODESMRITI_PASSWORD": "your-password"
       }
