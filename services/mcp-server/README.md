@@ -1,84 +1,100 @@
 # CodeSmriti RAG MCP Server
 
-This directory contains a Model Context Protocol (MCP) server that bridges your local LLM tools (Claude Desktop, VSCode, etc.) with the deployed RAG API.
+MCP server that connects Claude Code (and other MCP clients) to the CodeSmriti RAG API.
 
 ## Architecture
 
-## Architecture
 ```mermaid
 graph LR
-    A[LLM Client] -- MCP Protocol --> B[Local MCP Server]
-    B -- ask_codebase --> C[RAG API /chat]
-    B -- search_codebase --> D[RAG API /search]
-    C -- Vector Search --> E[Couchbase]
-    D -- Vector Search --> E
-    
-    subgraph "Your Laptop"
+    A[Claude Code] -- MCP Protocol --> B[Local MCP Server]
+    B -- search_codebase --> C[RAG API]
+    B -- ask_codebase --> C
+    B -- ask_agsci --> C
+    B -- graph tools --> C
+    C -- Vector Search --> D[Couchbase]
+
+    subgraph "Your Machine"
         A
         B
     end
-    
-    subgraph "MacStudio"
+
+    subgraph "Server"
         C
         D
-        E
     end
 ```
 
-- **LLM Client**: VSCode (with Cline/MCP extension), Claude Desktop, or Gemini CLI.
-- **Local MCP Server**: `rag_mcp_server.py`. Exposes two tools:
-  - `search_codebase`: Returns raw code chunks. Useful when you want the LLM to analyze code directly.
-  - `ask_codebase`: Returns a RAG-generated answer with citations. Useful for high-level questions.
-- **RAG API**: The service running at `https://macstudio.local/api`.
+## Tools
+
+| Tool | Purpose |
+|------|---------|
+| `list_repos` | Discover indexed repositories |
+| `explore_structure` | Navigate directory structure of a repo |
+| `search_codebase` | Semantic search at symbol/file/module/repo/doc/spec level |
+| `get_file` | Retrieve source code from indexed repos |
+| `ask_codebase` | RAG-powered answers about code with citations |
+| `ask_agsci` | Business-facing answers from BDR briefs |
+| `affected_tests` | Find tests impacted by changed files (via dependency graph) |
+| `get_module_criticality` | PageRank-based module importance scoring |
+| `get_graph_info` | Dependency graph summary |
 
 ## Setup
 
-1. Ensure you have Python installed (preferably with `uv` for easy execution).
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Create the virtual environment
 
-## Usage
+```bash
+cd services/mcp-server
+uv venv .venv
+uv pip install -r requirements.txt --python .venv/bin/python
+```
 
-### 1. Claude Desktop App
+### 2. Configure credentials
 
-Add this to your `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Create `services/mcp-server/.env`:
+
+```env
+CODESMRITI_API_URL=https://smriti.agsci.com
+CODESMRITI_USERNAME=your-email
+CODESMRITI_PASSWORD=your-password
+```
+
+### 3. Configure Claude Code
+
+The project `.mcp.json` (already in repo root) registers the server:
 
 ```json
 {
   "mcpServers": {
-    "code-smriti": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "--with",
-        "httpx",
-        "/path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py"
-      ]
+    "codesmriti": {
+      "command": "/path/to/code-smriti/services/mcp-server/.venv/bin/python",
+      "args": ["services/mcp-server/rag_mcp_server.py"]
     }
   }
 }
 ```
-*(Note: Adjust the path if needed. Using `uv run` is recommended to handle dependencies automatically.)*
 
-### 2. VSCode (via Cline or MCP Extension)
+Then enable it in `.claude/settings.local.json`:
 
-If using **Cline**:
-1. Open Cline settings.
-2. Add a new MCP server.
-3. Command: `uv`
-4. Args: `run --with mcp --with httpx /path/to/code-smriti/4-consume/mcp-server/rag_mcp_server.py`
-
-### 3. Testing Locally
-
-You can test the server using the MCP inspector or by running it directly (it uses stdio by default).
-
-To test the API connection directly without MCP:
-```bash
-curl -k -X POST http://macstudio.local/api/chat/test \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the architecture of this project?", "stream": false}'
+```json
+{
+  "enabledMcpjsonServers": ["codesmriti"]
+}
 ```
+
+### 4. Verify
+
+In Claude Code, run `/mcp` to check connection status.
+
+## Troubleshooting
+
+**"Failed to reconnect"** — test the server manually:
+
+```bash
+cd /path/to/code-smriti
+services/mcp-server/.venv/bin/python services/mcp-server/rag_mcp_server.py
+```
+
+Common issues:
+- **`ModuleNotFoundError`**: Reinstall deps with `uv pip install -r requirements.txt --python .venv/bin/python`
+- **Segfault**: Stale venv after OS/Python upgrade. Recreate with `uv venv .venv` then reinstall deps.
+- **Auth failure**: Check credentials in `services/mcp-server/.env`

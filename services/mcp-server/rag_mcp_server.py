@@ -35,7 +35,7 @@ else:
 mcp = FastMCP("code-smriti")
 
 # Configuration
-API_BASE_URL = os.getenv("CODESMRITI_API_URL", "http://macstudio.local")
+API_BASE_URL = os.getenv("CODESMRITI_API_URL", "https://smriti.agsci.com")
 API_USERNAME = os.getenv("CODESMRITI_USERNAME", "")
 API_PASSWORD = os.getenv("CODESMRITI_PASSWORD", "")
 
