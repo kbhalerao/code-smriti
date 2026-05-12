@@ -1,0 +1,22 @@
+{
+  "repo_id": "kbhalerao/labcore-mobile-sdk",
+  "module_path": "Labcore",
+  "input_summaries": 12,
+  "runs": {
+    "qwen80": {
+      "latency_s": 3.1733654998242855,
+      "usage": {
+        "input_tokens": 1185,
+        "output_tokens": 136,
+        "total_tokens": 1321,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 737
+    }
+  }
+}

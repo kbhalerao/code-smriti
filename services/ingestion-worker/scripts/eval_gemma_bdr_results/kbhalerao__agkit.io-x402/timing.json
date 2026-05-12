@@ -1,0 +1,111 @@
+{
+  "repo_id": "kbhalerao/agkit.io-x402",
+  "prompt_chars": 16159,
+  "runs": {
+    "gemma_thinking_v2": {
+      "latency_s": 131.03913075011224,
+      "usage": {
+        "input_tokens": 3269,
+        "output_tokens": 1872,
+        "total_tokens": 5141,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 658
+        }
+      },
+      "output_chars": 5045
+    },
+    "gemma_e2b_thinking_v2": {
+      "latency_s": 65.50419849995524,
+      "usage": {
+        "input_tokens": 3269,
+        "output_tokens": 2326,
+        "total_tokens": 5595,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 743
+        }
+      },
+      "output_chars": 7464
+    },
+    "gemma31b_no_thinking_v2": {
+      "latency_s": 83.12675670813769,
+      "usage": {
+        "input_tokens": 3266,
+        "output_tokens": 1302,
+        "total_tokens": 4568,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5488
+    },
+    "gemma_26b_a4b_thinking_v2": {
+      "latency_s": 39.62987137492746,
+      "usage": {
+        "input_tokens": 3269,
+        "output_tokens": 2424,
+        "total_tokens": 5693,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 1269
+        }
+      },
+      "output_chars": 5040
+    },
+    "gemma_26b_a4b_no_thinking_v2": {
+      "latency_s": 18.071548165753484,
+      "usage": {
+        "input_tokens": 3266,
+        "output_tokens": 1224,
+        "total_tokens": 4490,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5123
+    },
+    "gemma_e4b_thinking_v2": {
+      "latency_s": 21.92913500033319,
+      "usage": {
+        "input_tokens": 3269,
+        "output_tokens": 1445,
+        "total_tokens": 4714,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 245
+        }
+      },
+      "output_chars": 5579
+    },
+    "gemma_e4b_no_thinking_v2": {
+      "latency_s": 29.485188082791865,
+      "usage": {
+        "input_tokens": 3266,
+        "output_tokens": 1963,
+        "total_tokens": 5229,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 8655
+    }
+  }
+}

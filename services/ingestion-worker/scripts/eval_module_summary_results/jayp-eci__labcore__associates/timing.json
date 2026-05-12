@@ -1,0 +1,22 @@
+{
+  "repo_id": "jayp-eci/labcore",
+  "module_path": "associates",
+  "input_summaries": 15,
+  "runs": {
+    "qwen80": {
+      "latency_s": 3.106563708744943,
+      "usage": {
+        "input_tokens": 1166,
+        "output_tokens": 134,
+        "total_tokens": 1300,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 707
+    }
+  }
+}

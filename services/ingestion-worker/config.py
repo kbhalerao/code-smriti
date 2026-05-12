@@ -25,6 +25,12 @@ class WorkerConfig(BaseSettings):
     # Model is cached locally after first download
     embedding_dimensions: int = 768
 
+    # LLM model used for all summary generation (module summaries, repo summaries, BDR).
+    # Default selected from scripts/eval_gemma_bdr.py (May 2026 eval) as general-purpose
+    # winner: named real competitors, full keyword tables, no meta-leakage, 4-5x faster
+    # than gemma-4-31b dense at near-equivalent quality on BDR. Override per deployment.
+    llm_model: str = os.getenv("LLM_MODEL", "google/gemma-4-26b-a4b")
+
     # Incremental Update Configuration
     enable_incremental_updates: bool = os.getenv("ENABLE_INCREMENTAL_UPDATES", "false").lower() == "true"
 

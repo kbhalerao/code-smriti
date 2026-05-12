@@ -1,0 +1,22 @@
+{
+  "repo_id": "kbhalerao/agkit.io-x402",
+  "module_path": "apps/adapter",
+  "input_summaries": 18,
+  "runs": {
+    "qwen80": {
+      "latency_s": 3.025727292522788,
+      "usage": {
+        "input_tokens": 1265,
+        "output_tokens": 128,
+        "total_tokens": 1393,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 649
+    }
+  }
+}

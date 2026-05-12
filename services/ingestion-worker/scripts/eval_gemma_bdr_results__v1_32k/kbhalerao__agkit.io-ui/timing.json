@@ -1,0 +1,36 @@
+{
+  "repo_id": "kbhalerao/agkit.io-ui",
+  "prompt_chars": 14746,
+  "runs": {
+    "gemma_no_thinking": {
+      "latency_s": 80.28872087504715,
+      "usage": {
+        "input_tokens": 3567,
+        "output_tokens": 1173,
+        "total_tokens": 4740,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5253
+    },
+    "gemma_thinking": {
+      "latency_s": 110.1449361667037,
+      "usage": {
+        "input_tokens": 3570,
+        "output_tokens": 1732,
+        "total_tokens": 5302,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 617
+        }
+      },
+      "output_chars": 4950
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "repo_id": "kbhalerao/agkit.io-backend",
+  "prompt_chars": 15640,
+  "runs": {
+    "gemma_no_thinking": {
+      "latency_s": 75.59824795741588,
+      "usage": {
+        "input_tokens": 3285,
+        "output_tokens": 1128,
+        "total_tokens": 4413,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 4955
+    },
+    "gemma_thinking": {
+      "latency_s": 113.8783308332786,
+      "usage": {
+        "input_tokens": 3288,
+        "output_tokens": 1841,
+        "total_tokens": 5129,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 613
+        }
+      },
+      "output_chars": 5629
+    }
+  }
+}

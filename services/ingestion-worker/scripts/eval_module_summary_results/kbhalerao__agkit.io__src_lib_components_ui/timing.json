@@ -1,0 +1,22 @@
+{
+  "repo_id": "kbhalerao/agkit.io",
+  "module_path": "src/lib/components/ui",
+  "input_summaries": 9,
+  "runs": {
+    "qwen80": {
+      "latency_s": 2.687274208292365,
+      "usage": {
+        "input_tokens": 1142,
+        "output_tokens": 109,
+        "total_tokens": 1251,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 580
+    }
+  }
+}

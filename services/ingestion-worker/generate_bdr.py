@@ -19,6 +19,7 @@ Usage:
 import argparse
 import asyncio
 import sys
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -33,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import WorkerConfig
 from storage.couchbase_client import CouchbaseClient
-from llm_enricher import LLMEnricher, LLMConfig
+from llm_enricher import LLMEnricher, LLMConfig, LMSTUDIO_CONFIG
 from embeddings.local_generator import LocalEmbeddingGenerator
 from v4.schemas import (
     RepoBDR, VersionInfo, SCHEMA_VERSION,
@@ -41,17 +42,21 @@ from v4.schemas import (
 )
 
 
-# Nemotron config for BDR generation (thinking model)
-NEMOTRON_CONFIG = LLMConfig(
-    provider="lmstudio",
-    model="nvidia/nemotron-3-nano",
-    base_url="http://macstudio.local:1234",
-    temperature=0.3,
-    max_tokens=8000,
-    timeout_seconds=300.0,
+# Inherits LLM_MODEL from LMSTUDIO_CONFIG; overrides token budget and timeout for
+# the long-form BDR prompt, and disables thinking (reasoning_effort="none") to
+# match the May 2026 eval winner — see scripts/eval_gemma_bdr.py. The 26b-a4b
+# no-thinking variant matched 31b-thinking content quality at ~4x lower latency
+# with no meta-leakage and named real competitors across all 4 eval repos.
+BDR_CONFIG = replace(
+    LMSTUDIO_CONFIG,
+    max_tokens=16000,
+    timeout_seconds=900.0,
+    reasoning_effort="none",
 )
 
-# BDR prompt template
+# BDR prompt template (v2: 4-col keyword table, named competitors with
+# differentiators, explicit BOTTOM LINE closer — closes regressions found
+# vs nemotron baseline in v1 eval).
 BDR_PROMPT = """You are helping a Business Development Representative understand
 what business value this codebase represents. Translate technical capabilities
 into business intelligence that helps match prospects to solutions.
@@ -93,11 +98,12 @@ What should the BDR ask to qualify if this is a fit?
 How would a prospect describe this need? Write 5-10 ways they might phrase it.
 
 ### KEYWORD TRIGGERS
-Terms that should trigger retrieval of this capability:
-- Business terms (what prospects say)
-- Technical terms (what engineers say)
-- Acronyms and expansions
-- Adjacent concepts
+Render as a 4-column markdown table with at least 5 entries per column.
+Columns: **Business Terms** | **Technical Terms** | **Acronyms / Expansions** | **Adjacent Concepts**.
+- Business Terms: what prospects say in their own language
+- Technical Terms: what their engineers would say
+- Acronyms / Expansions: include the expansion in parentheses (e.g., "RBAC (Role-Based Access Control)")
+- Adjacent Concepts: related domains or capabilities a buyer might also be exploring
 
 ### NOT A FIT
 When should the BDR disqualify? What problems does this NOT solve?
@@ -106,8 +112,16 @@ When should the BDR disqualify? What problems does this NOT solve?
 If a prospect needs this, what else might they need?
 
 ### COMPETITIVE CONTEXT
-What alternatives exist? How is this different?
-(If unknown, say "requires market research")
+Name specific real-world alternatives — actual product names, not generic categories.
+For each, give a one-line differentiator explaining how this offering is different.
+Format as a table with columns: **Alternative** | **Differentiator**.
+If you genuinely cannot identify named competitors from public knowledge, say
+"requires market research" — but prefer naming products when possible.
+
+### BOTTOM LINE FOR THE BDR
+A short closing paragraph (3-5 sentences) that wraps the brief into a usable
+summary: when to engage, what to listen for, and the single sharpest one-liner
+positioning statement the BDR can repeat in a discovery call.
 """
 
 
@@ -118,7 +132,7 @@ class BDRGenerator:
         self,
         dry_run: bool = False,
         force: bool = False,
-        llm_config: LLMConfig = NEMOTRON_CONFIG
+        llm_config: LLMConfig = BDR_CONFIG
     ):
         self.dry_run = dry_run
         self.force = force

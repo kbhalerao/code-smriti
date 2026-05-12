@@ -1,0 +1,134 @@
+[
+  {
+    "repo_id": "kbhalerao/agkit.io",
+    "module_path": "src/routes",
+    "input_summaries": 7,
+    "runs": {
+      "qwen80": {
+        "latency_s": 13.605439499951899,
+        "usage": {
+          "input_tokens": 781,
+          "output_tokens": 124,
+          "total_tokens": 905,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 733
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/agkit.io",
+    "module_path": "src/lib/components/ui",
+    "input_summaries": 9,
+    "runs": {
+      "qwen80": {
+        "latency_s": 2.687274208292365,
+        "usage": {
+          "input_tokens": 1142,
+          "output_tokens": 109,
+          "total_tokens": 1251,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 580
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/agkit.io-x402",
+    "module_path": "apps/adapter",
+    "input_summaries": 18,
+    "runs": {
+      "qwen80": {
+        "latency_s": 3.025727292522788,
+        "usage": {
+          "input_tokens": 1265,
+          "output_tokens": 128,
+          "total_tokens": 1393,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 649
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/labcore-mobile-sdk",
+    "module_path": "Labcore",
+    "input_summaries": 12,
+    "runs": {
+      "qwen80": {
+        "latency_s": 3.1733654998242855,
+        "usage": {
+          "input_tokens": 1185,
+          "output_tokens": 136,
+          "total_tokens": 1321,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 737
+      }
+    }
+  },
+  {
+    "repo_id": "jayp-eci/labcore",
+    "module_path": "associates",
+    "input_summaries": 15,
+    "runs": {
+      "qwen80": {
+        "latency_s": 3.106563708744943,
+        "usage": {
+          "input_tokens": 1166,
+          "output_tokens": 134,
+          "total_tokens": 1300,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 707
+      }
+    }
+  },
+  {
+    "repo_id": "jayp-eci/labcore",
+    "module_path": "bugs",
+    "input_summaries": 11,
+    "runs": {
+      "qwen80": {
+        "latency_s": 2.6646461663767695,
+        "usage": {
+          "input_tokens": 1226,
+          "output_tokens": 106,
+          "total_tokens": 1332,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 574
+      }
+    }
+  }
+]

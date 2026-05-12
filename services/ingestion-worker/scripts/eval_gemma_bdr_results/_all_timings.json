@@ -1,0 +1,419 @@
+[
+  {
+    "repo_id": "kbhalerao/agkit.io",
+    "prompt_chars": 15098,
+    "runs": {
+      "gemma31b_thinking_v2": {
+        "error": "Client error '400 Bad Request' for url 'http://localhost:1234/v1/responses'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+      },
+      "gemma_e2b_thinking_v2": {
+        "latency_s": 49.0776636665687,
+        "usage": {
+          "input_tokens": 3184,
+          "output_tokens": 2281,
+          "total_tokens": 5465,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 705
+          }
+        },
+        "output_chars": 7581
+      },
+      "gemma31b_no_thinking_v2": {
+        "latency_s": 84.19661133456975,
+        "usage": {
+          "input_tokens": 3181,
+          "output_tokens": 1221,
+          "total_tokens": 4402,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5303
+      },
+      "gemma_26b_a4b_no_thinking_v2": {
+        "latency_s": 16.78695745766163,
+        "usage": {
+          "input_tokens": 3181,
+          "output_tokens": 1128,
+          "total_tokens": 4309,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 4879
+      },
+      "gemma_e4b_thinking_v2": {
+        "latency_s": 29.833932457491755,
+        "usage": {
+          "input_tokens": 3184,
+          "output_tokens": 1670,
+          "total_tokens": 4854,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 362
+          }
+        },
+        "output_chars": 6242
+      },
+      "gemma_e4b_no_thinking_v2": {
+        "latency_s": 28.594253291375935,
+        "usage": {
+          "input_tokens": 3181,
+          "output_tokens": 1897,
+          "total_tokens": 5078,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 8507
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/agkit.io-x402",
+    "prompt_chars": 16159,
+    "runs": {
+      "gemma_thinking_v2": {
+        "latency_s": 131.03913075011224,
+        "usage": {
+          "input_tokens": 3269,
+          "output_tokens": 1872,
+          "total_tokens": 5141,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 658
+          }
+        },
+        "output_chars": 5045
+      },
+      "gemma_e2b_thinking_v2": {
+        "latency_s": 65.50419849995524,
+        "usage": {
+          "input_tokens": 3269,
+          "output_tokens": 2326,
+          "total_tokens": 5595,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 743
+          }
+        },
+        "output_chars": 7464
+      },
+      "gemma31b_no_thinking_v2": {
+        "latency_s": 83.12675670813769,
+        "usage": {
+          "input_tokens": 3266,
+          "output_tokens": 1302,
+          "total_tokens": 4568,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5488
+      },
+      "gemma_26b_a4b_thinking_v2": {
+        "latency_s": 39.62987137492746,
+        "usage": {
+          "input_tokens": 3269,
+          "output_tokens": 2424,
+          "total_tokens": 5693,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 1269
+          }
+        },
+        "output_chars": 5040
+      },
+      "gemma_26b_a4b_no_thinking_v2": {
+        "latency_s": 18.071548165753484,
+        "usage": {
+          "input_tokens": 3266,
+          "output_tokens": 1224,
+          "total_tokens": 4490,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5123
+      },
+      "gemma_e4b_thinking_v2": {
+        "latency_s": 21.92913500033319,
+        "usage": {
+          "input_tokens": 3269,
+          "output_tokens": 1445,
+          "total_tokens": 4714,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 245
+          }
+        },
+        "output_chars": 5579
+      },
+      "gemma_e4b_no_thinking_v2": {
+        "latency_s": 29.485188082791865,
+        "usage": {
+          "input_tokens": 3266,
+          "output_tokens": 1963,
+          "total_tokens": 5229,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 8655
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/labcore-mobile-sdk",
+    "prompt_chars": 10727,
+    "runs": {
+      "gemma_thinking_v2": {
+        "latency_s": 110.13186162523925,
+        "usage": {
+          "input_tokens": 2204,
+          "output_tokens": 1862,
+          "total_tokens": 4066,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 721
+          }
+        },
+        "output_chars": 5284
+      },
+      "gemma_e2b_thinking_v2": {
+        "latency_s": 61.590133000165224,
+        "usage": {
+          "input_tokens": 2204,
+          "output_tokens": 2046,
+          "total_tokens": 4250,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 634
+          }
+        },
+        "output_chars": 6760
+      },
+      "gemma31b_no_thinking_v2": {
+        "latency_s": 67.58453241735697,
+        "usage": {
+          "input_tokens": 2201,
+          "output_tokens": 1097,
+          "total_tokens": 3298,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 4919
+      },
+      "gemma_26b_a4b_thinking_v2": {
+        "latency_s": 30.987567915581167,
+        "usage": {
+          "input_tokens": 2204,
+          "output_tokens": 2277,
+          "total_tokens": 4481,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 1082
+          }
+        },
+        "output_chars": 5569
+      },
+      "gemma_26b_a4b_no_thinking_v2": {
+        "latency_s": 16.302849125117064,
+        "usage": {
+          "input_tokens": 2201,
+          "output_tokens": 1134,
+          "total_tokens": 3335,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5149
+      },
+      "gemma_e4b_thinking_v2": {
+        "latency_s": 21.499687625095248,
+        "usage": {
+          "input_tokens": 2204,
+          "output_tokens": 1452,
+          "total_tokens": 3656,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 314
+          }
+        },
+        "output_chars": 5523
+      },
+      "gemma_e4b_no_thinking_v2": {
+        "latency_s": 29.18553970847279,
+        "usage": {
+          "input_tokens": 2201,
+          "output_tokens": 1963,
+          "total_tokens": 4164,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 9054
+      }
+    }
+  },
+  {
+    "repo_id": "jayp-eci/labcore",
+    "prompt_chars": 16063,
+    "runs": {
+      "gemma_thinking_v2": {
+        "latency_s": 117.57394741661847,
+        "usage": {
+          "input_tokens": 3039,
+          "output_tokens": 1820,
+          "total_tokens": 4859,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 645
+          }
+        },
+        "output_chars": 5411
+      },
+      "gemma_e2b_thinking_v2": {
+        "latency_s": 57.78210804052651,
+        "usage": {
+          "input_tokens": 3039,
+          "output_tokens": 2005,
+          "total_tokens": 5044,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 730
+          }
+        },
+        "output_chars": 6455
+      },
+      "gemma31b_no_thinking_v2": {
+        "latency_s": 71.09452720824629,
+        "usage": {
+          "input_tokens": 3036,
+          "output_tokens": 1103,
+          "total_tokens": 4139,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5035
+      },
+      "gemma_26b_a4b_thinking_v2": {
+        "latency_s": 30.68992495816201,
+        "usage": {
+          "input_tokens": 3039,
+          "output_tokens": 2211,
+          "total_tokens": 5250,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 1114
+          }
+        },
+        "output_chars": 5080
+      },
+      "gemma_26b_a4b_no_thinking_v2": {
+        "latency_s": 16.91651220805943,
+        "usage": {
+          "input_tokens": 3036,
+          "output_tokens": 1148,
+          "total_tokens": 4184,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 5347
+      },
+      "gemma_e4b_thinking_v2": {
+        "latency_s": 22.94937104266137,
+        "usage": {
+          "input_tokens": 3039,
+          "output_tokens": 1531,
+          "total_tokens": 4570,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 285
+          }
+        },
+        "output_chars": 6117
+      },
+      "gemma_e4b_no_thinking_v2": {
+        "latency_s": 30.044675707817078,
+        "usage": {
+          "input_tokens": 3036,
+          "output_tokens": 1993,
+          "total_tokens": 5029,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 9332
+      }
+    }
+  }
+]

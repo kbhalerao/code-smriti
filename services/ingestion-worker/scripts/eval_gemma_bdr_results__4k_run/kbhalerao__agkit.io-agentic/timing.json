@@ -1,0 +1,36 @@
+{
+  "repo_id": "kbhalerao/agkit.io-agentic",
+  "prompt_chars": 15827,
+  "runs": {
+    "gemma_no_thinking": {
+      "latency_s": 63.91080658417195,
+      "usage": {
+        "input_tokens": 3190,
+        "output_tokens": 905,
+        "total_tokens": 4095,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 3962
+    },
+    "gemma_thinking": {
+      "latency_s": 67.47508283238858,
+      "usage": {
+        "input_tokens": 3193,
+        "output_tokens": 899,
+        "total_tokens": 4092,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 476
+        }
+      },
+      "output_chars": 2081
+    }
+  }
+}

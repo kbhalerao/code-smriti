@@ -52,6 +52,9 @@ class LLMConfig:
     max_tokens: int = 2000
     timeout_seconds: float = 60.0  # Per-request timeout
     max_retries: int = 2  # Retries on failure
+    # LM Studio /v1/responses "reasoning.effort" — set to "none" to disable thinking.
+    # Leave None for the model's default behavior.
+    reasoning_effort: Optional[str] = None
 
 
 # Default configurations
@@ -63,12 +66,15 @@ OLLAMA_CONFIG = LLMConfig(
     temperature=0.3
 )
 
-# MacStudio LM Studio endpoint
+# MacStudio LM Studio endpoint. Model comes from LLM_MODEL env var (see config.py).
+# reasoning_effort="none" matches the May 2026 BDR eval winner; module-summary eval
+# (scripts/eval_module_summary.py) confirms parity for the shorter task.
 LMSTUDIO_CONFIG = LLMConfig(
     provider="lmstudio",
-    model="qwen/qwen3-30b-a3b-2507",  # Model loaded in LM Studio
+    model=config.llm_model,
     base_url="http://macstudio.local:1234",
-    temperature=0.3
+    temperature=0.3,
+    reasoning_effort="none",
 )
 
 # Default to MacStudio
@@ -131,14 +137,17 @@ class LLMEnricher:
 
     async def _call_lmstudio(self, prompt: str) -> str:
         """Call LM Studio using /v1/responses API (better performance with thinking models)"""
+        payload = {
+            "model": self.config.model,
+            "input": prompt,
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        if self.config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": self.config.reasoning_effort}
         response = await self.client.post(
             f"{self.config.base_url}/v1/responses",
-            json={
-                "model": self.config.model,
-                "input": prompt,
-                "temperature": self.config.temperature,
-                "max_output_tokens": self.config.max_tokens
-            }
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()
@@ -163,14 +172,17 @@ class LLMEnricher:
         Returns:
             dict with 'reasoning' (str or None) and 'output' (str) keys
         """
+        payload = {
+            "model": self.config.model,
+            "input": prompt,
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        if self.config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": self.config.reasoning_effort}
         response = await self.client.post(
             f"{self.config.base_url}/v1/responses",
-            json={
-                "model": self.config.model,
-                "input": prompt,
-                "temperature": self.config.temperature,
-                "max_output_tokens": self.config.max_tokens
-            }
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()

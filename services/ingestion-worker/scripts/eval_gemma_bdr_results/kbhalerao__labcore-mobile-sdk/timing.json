@@ -1,0 +1,111 @@
+{
+  "repo_id": "kbhalerao/labcore-mobile-sdk",
+  "prompt_chars": 10727,
+  "runs": {
+    "gemma_thinking_v2": {
+      "latency_s": 110.13186162523925,
+      "usage": {
+        "input_tokens": 2204,
+        "output_tokens": 1862,
+        "total_tokens": 4066,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 721
+        }
+      },
+      "output_chars": 5284
+    },
+    "gemma_e2b_thinking_v2": {
+      "latency_s": 61.590133000165224,
+      "usage": {
+        "input_tokens": 2204,
+        "output_tokens": 2046,
+        "total_tokens": 4250,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 634
+        }
+      },
+      "output_chars": 6760
+    },
+    "gemma31b_no_thinking_v2": {
+      "latency_s": 67.58453241735697,
+      "usage": {
+        "input_tokens": 2201,
+        "output_tokens": 1097,
+        "total_tokens": 3298,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 4919
+    },
+    "gemma_26b_a4b_thinking_v2": {
+      "latency_s": 30.987567915581167,
+      "usage": {
+        "input_tokens": 2204,
+        "output_tokens": 2277,
+        "total_tokens": 4481,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 1082
+        }
+      },
+      "output_chars": 5569
+    },
+    "gemma_26b_a4b_no_thinking_v2": {
+      "latency_s": 16.302849125117064,
+      "usage": {
+        "input_tokens": 2201,
+        "output_tokens": 1134,
+        "total_tokens": 3335,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5149
+    },
+    "gemma_e4b_thinking_v2": {
+      "latency_s": 21.499687625095248,
+      "usage": {
+        "input_tokens": 2204,
+        "output_tokens": 1452,
+        "total_tokens": 3656,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 314
+        }
+      },
+      "output_chars": 5523
+    },
+    "gemma_e4b_no_thinking_v2": {
+      "latency_s": 29.18553970847279,
+      "usage": {
+        "input_tokens": 2201,
+        "output_tokens": 1963,
+        "total_tokens": 4164,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 9054
+    }
+  }
+}

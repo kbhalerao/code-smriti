@@ -1,0 +1,84 @@
+{
+  "repo_id": "kbhalerao/agkit.io",
+  "prompt_chars": 15098,
+  "runs": {
+    "gemma31b_thinking_v2": {
+      "error": "Client error '400 Bad Request' for url 'http://localhost:1234/v1/responses'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400"
+    },
+    "gemma_e2b_thinking_v2": {
+      "latency_s": 49.0776636665687,
+      "usage": {
+        "input_tokens": 3184,
+        "output_tokens": 2281,
+        "total_tokens": 5465,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 705
+        }
+      },
+      "output_chars": 7581
+    },
+    "gemma31b_no_thinking_v2": {
+      "latency_s": 84.19661133456975,
+      "usage": {
+        "input_tokens": 3181,
+        "output_tokens": 1221,
+        "total_tokens": 4402,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5303
+    },
+    "gemma_26b_a4b_no_thinking_v2": {
+      "latency_s": 16.78695745766163,
+      "usage": {
+        "input_tokens": 3181,
+        "output_tokens": 1128,
+        "total_tokens": 4309,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 4879
+    },
+    "gemma_e4b_thinking_v2": {
+      "latency_s": 29.833932457491755,
+      "usage": {
+        "input_tokens": 3184,
+        "output_tokens": 1670,
+        "total_tokens": 4854,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 362
+        }
+      },
+      "output_chars": 6242
+    },
+    "gemma_e4b_no_thinking_v2": {
+      "latency_s": 28.594253291375935,
+      "usage": {
+        "input_tokens": 3181,
+        "output_tokens": 1897,
+        "total_tokens": 5078,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 8507
+    }
+  }
+}

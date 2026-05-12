@@ -1,0 +1,114 @@
+[
+  {
+    "repo_id": "kbhalerao/agkit.io-backend",
+    "prompt_chars": 15640,
+    "runs": {
+      "gemma_no_thinking": {
+        "latency_s": 57.83446920849383,
+        "usage": {
+          "input_tokens": 3285,
+          "output_tokens": 810,
+          "total_tokens": 4095,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 3612
+      },
+      "gemma_thinking": {
+        "latency_s": 57.01947733387351,
+        "usage": {
+          "input_tokens": 3288,
+          "output_tokens": 804,
+          "total_tokens": 4092,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 596
+          }
+        },
+        "output_chars": 1140
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/labcore",
+    "prompt_chars": 15069,
+    "runs": {
+      "gemma_no_thinking": {
+        "latency_s": 49.15044795908034,
+        "usage": {
+          "input_tokens": 3464,
+          "output_tokens": 631,
+          "total_tokens": 4095,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 2950
+      },
+      "gemma_thinking": {
+        "latency_s": 48.174392541870475,
+        "usage": {
+          "input_tokens": 3467,
+          "output_tokens": 625,
+          "total_tokens": 4092,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 556
+          }
+        },
+        "output_chars": 341
+      }
+    }
+  },
+  {
+    "repo_id": "kbhalerao/agkit.io-ui",
+    "error": "No output text in response: {\"id\": \"resp_43ec712e89a4d512a9f76df699dfc723ff2d7f9a0905ef6f\", \"object\": \"response\", \"created_at\": 1778009326, \"completed_at\": 1778009370, \"status\": \"completed\", \"incomplete_details\": null, \"model\": \"google/gemma-4-31b\", \"previous_response_id\": null, \"instructions\": null, \"output\": [{\"id\": \"rs_9v4qsg9ysqkox5k5uc88y\", \"type\": \"reasoning\", \"status\": \"completed\", \"summary\": [], \"content\": [{\"type\": \"reasoning_text\", \"text\": \"\\n\\n*   Repository: `kbhalerao/agkit.io-ui`\\n    *   Technical Summary: S"
+  },
+  {
+    "repo_id": "kbhalerao/agkit.io-agentic",
+    "prompt_chars": 15827,
+    "runs": {
+      "gemma_no_thinking": {
+        "latency_s": 63.91080658417195,
+        "usage": {
+          "input_tokens": 3190,
+          "output_tokens": 905,
+          "total_tokens": 4095,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        },
+        "output_chars": 3962
+      },
+      "gemma_thinking": {
+        "latency_s": 67.47508283238858,
+        "usage": {
+          "input_tokens": 3193,
+          "output_tokens": 899,
+          "total_tokens": 4092,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 476
+          }
+        },
+        "output_chars": 2081
+      }
+    }
+  }
+]

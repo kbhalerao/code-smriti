@@ -1,0 +1,111 @@
+{
+  "repo_id": "jayp-eci/labcore",
+  "prompt_chars": 16063,
+  "runs": {
+    "gemma_thinking_v2": {
+      "latency_s": 117.57394741661847,
+      "usage": {
+        "input_tokens": 3039,
+        "output_tokens": 1820,
+        "total_tokens": 4859,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 645
+        }
+      },
+      "output_chars": 5411
+    },
+    "gemma_e2b_thinking_v2": {
+      "latency_s": 57.78210804052651,
+      "usage": {
+        "input_tokens": 3039,
+        "output_tokens": 2005,
+        "total_tokens": 5044,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 730
+        }
+      },
+      "output_chars": 6455
+    },
+    "gemma31b_no_thinking_v2": {
+      "latency_s": 71.09452720824629,
+      "usage": {
+        "input_tokens": 3036,
+        "output_tokens": 1103,
+        "total_tokens": 4139,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5035
+    },
+    "gemma_26b_a4b_thinking_v2": {
+      "latency_s": 30.68992495816201,
+      "usage": {
+        "input_tokens": 3039,
+        "output_tokens": 2211,
+        "total_tokens": 5250,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 1114
+        }
+      },
+      "output_chars": 5080
+    },
+    "gemma_26b_a4b_no_thinking_v2": {
+      "latency_s": 16.91651220805943,
+      "usage": {
+        "input_tokens": 3036,
+        "output_tokens": 1148,
+        "total_tokens": 4184,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 5347
+    },
+    "gemma_e4b_thinking_v2": {
+      "latency_s": 22.94937104266137,
+      "usage": {
+        "input_tokens": 3039,
+        "output_tokens": 1531,
+        "total_tokens": 4570,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 285
+        }
+      },
+      "output_chars": 6117
+    },
+    "gemma_e4b_no_thinking_v2": {
+      "latency_s": 30.044675707817078,
+      "usage": {
+        "input_tokens": 3036,
+        "output_tokens": 1993,
+        "total_tokens": 5029,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 9332
+    }
+  }
+}

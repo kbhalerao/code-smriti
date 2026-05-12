@@ -1,0 +1,36 @@
+{
+  "repo_id": "kbhalerao/labcore",
+  "prompt_chars": 15069,
+  "runs": {
+    "gemma_no_thinking": {
+      "latency_s": 69.28541229106486,
+      "usage": {
+        "input_tokens": 3464,
+        "output_tokens": 990,
+        "total_tokens": 4454,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "output_chars": 4603
+    },
+    "gemma_thinking": {
+      "latency_s": 97.48521766625345,
+      "usage": {
+        "input_tokens": 3467,
+        "output_tokens": 1523,
+        "total_tokens": 4990,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 471
+        }
+      },
+      "output_chars": 4947
+    }
+  }
+}
