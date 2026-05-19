@@ -261,10 +261,6 @@ class RetrievalOrchestrator:
                 hits = response.json().get("hits", [])
                 results = []
 
-                # Fetch full documents
-                bucket = self.db.cluster.bucket(self.tenant_id)
-                collection = bucket.default_collection()
-
                 # Convert query embedding to numpy for similarity computation
                 query_vec = np.array(query_embedding)
 
@@ -277,8 +273,9 @@ class RetrievalOrchestrator:
                         continue
 
                     try:
-                        doc_result = collection.get(doc_id)
-                        doc = doc_result.content_as[dict]
+                        doc = await self.db.get_doc(self.tenant_id, doc_id)
+                        if doc is None:
+                            continue
 
                         # Post-filter: skip documents that don't match expected types
                         # (workaround for Couchbase 7.6.2 bug with large k values)
@@ -358,14 +355,12 @@ class RetrievalOrchestrator:
             return None
 
         # Fetch parent documents
-        bucket = self.db.cluster.bucket(self.tenant_id)
-        collection = bucket.default_collection()
-
         parent_summaries = []
         for parent_id in list(parent_ids)[:3]:  # Limit to 3 parents
             try:
-                doc_result = collection.get(parent_id)
-                doc = doc_result.content_as[dict]
+                doc = await self.db.get_doc(self.tenant_id, parent_id)
+                if doc is None:
+                    continue
                 content = doc.get("content", "")
                 doc_type = doc.get("type", "")
                 path = doc.get("module_path") or doc.get("file_path") or doc.get("repo_id")

@@ -7,7 +7,9 @@ from typing import Optional
 
 from couchbase.auth import PasswordAuthenticator
 from couchbase.cluster import Cluster
+from couchbase.exceptions import DocumentNotFoundException
 from couchbase.options import ClusterOptions
+from fastapi.concurrency import run_in_threadpool
 from loguru import logger
 
 from ..config import settings
@@ -101,3 +103,36 @@ class CouchbaseClient:
         """Get collection for a specific tenant bucket"""
         bucket = self.cluster.bucket(tenant_id)
         return bucket.default_collection()
+
+    async def query(self, statement: str, options=None) -> list:
+        """Execute a N1QL query off the event loop, returning all rows.
+
+        The Couchbase SDK is synchronous: both issuing the query and
+        iterating its streamed result do blocking network I/O. Calling
+        it directly from an `async def` stalls the whole event loop for
+        the query's duration, so the work runs in a worker thread and
+        the result is fully materialized there.
+        """
+        def _run() -> list:
+            result = (
+                self.cluster.query(statement, options)
+                if options is not None
+                else self.cluster.query(statement)
+            )
+            return list(result)
+
+        return await run_in_threadpool(_run)
+
+    async def get_doc(self, bucket: str, doc_id: str) -> Optional[dict]:
+        """Fetch one document's content off the event loop.
+
+        Returns None if the document does not exist.
+        """
+        def _run() -> Optional[dict]:
+            collection = self.cluster.bucket(bucket).default_collection()
+            try:
+                return collection.get(doc_id).content_as[dict]
+            except DocumentNotFoundException:
+                return None
+
+        return await run_in_threadpool(_run)
