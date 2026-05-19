@@ -136,8 +136,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
                "path/to/code-smriti/services/mcp-server/rag_mcp_server.py"],
       "env": {
         "CODESMRITI_API_URL": "http://localhost",
-        "CODESMRITI_USERNAME": "your-username",
-        "CODESMRITI_PASSWORD": "your-password"
+        "CODESMRITI_TOKEN": "cos_pat_your-personal-access-token"
       }
     }
   }

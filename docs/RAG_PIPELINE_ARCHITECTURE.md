@@ -189,8 +189,7 @@ The MCP server runs locally (client-side) and calls the API server. Configure in
       "cwd": "/path/to/code-smriti",
       "env": {
         "CODESMRITI_API_URL": "https://smriti.example.com",
-        "CODESMRITI_USERNAME": "your-email",
-        "CODESMRITI_PASSWORD": "your-password"
+        "CODESMRITI_TOKEN": "cos_pat_your-personal-access-token"
       }
     }
   }

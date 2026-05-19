@@ -20,12 +20,15 @@ Claude Code runs the MCP server locally, which calls the CodeSmriti API.
 ### 1. Prerequisites
 
 - Python 3.11+
-- CodeSmriti credentials (email/password)
+- A **Personal Access Token (PAT)** — mint one in the Chief of Staff web UI
+  (API Tokens panel). CoS and CodeSmriti share a token store, so a single PAT
+  authenticates both.
 - Clone the code-smriti repository
 
 ### 2. Configure Claude Code
 
-Create or edit `~/.claude/mcp.json`:
+Create or edit `~/.claude/mcp.json`. The MCP server sends `CODESMRITI_TOKEN`
+directly as a Bearer credential — there is no email/password login.
 
 ```json
 {
@@ -36,8 +39,7 @@ Create or edit `~/.claude/mcp.json`:
       "cwd": "/path/to/code-smriti",
       "env": {
         "CODESMRITI_API_URL": "https://smriti.example.com",
-        "CODESMRITI_USERNAME": "your-email@example.com",
-        "CODESMRITI_PASSWORD": "your-password"
+        "CODESMRITI_TOKEN": "cos_pat_your-personal-access-token"
       }
     }
   }
@@ -48,8 +50,7 @@ Alternatively, create a `.env` file in the code-smriti directory:
 
 ```bash
 CODESMRITI_API_URL=https://smriti.example.com
-CODESMRITI_USERNAME=your-email@example.com
-CODESMRITI_PASSWORD=your-password
+CODESMRITI_TOKEN=cos_pat_your-personal-access-token
 ```
 
 ### 3. Available MCP Tools
@@ -111,8 +112,7 @@ Edit the MCP settings file:
       "cwd": "/path/to/code-smriti",
       "env": {
         "CODESMRITI_API_URL": "https://smriti.example.com",
-        "CODESMRITI_USERNAME": "your-email@example.com",
-        "CODESMRITI_PASSWORD": "your-password"
+        "CODESMRITI_TOKEN": "cos_pat_your-personal-access-token"
       }
     }
   }
@@ -145,8 +145,7 @@ Edit `~/.continue/config.json`:
       "cwd": "/path/to/code-smriti",
       "env": {
         "CODESMRITI_API_URL": "https://smriti.example.com",
-        "CODESMRITI_USERNAME": "your-email@example.com",
-        "CODESMRITI_PASSWORD": "your-password"
+        "CODESMRITI_TOKEN": "cos_pat_your-personal-access-token"
       }
     }
   ]
@@ -552,8 +551,10 @@ Claude uses: ask_agsci("technical approach GIS platform")
 ### For Administrators
 
 1. **User Management**:
-   - Users authenticate via `/api/auth/login` with email/password
-   - JWT tokens are used for all API requests
+   - The web UI authenticates via `/api/auth/login` with email/password
+   - Machine clients (MCP server, scripts) authenticate with a Personal
+     Access Token minted in the Chief of Staff web UI; the API accepts both
+     JWTs and `cos_pat_`-prefixed PATs as Bearer credentials
    - Create accounts via the admin interface or API
 
 2. **Monitor Usage**:
