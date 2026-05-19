@@ -1,0 +1,8 @@
+# Base model (downloaded, ~2GB)
+mlx_model/
+
+# LoRA adapter weights (training output)
+models/adapters/*.safetensors
+
+# Training data (machine-generated, may contain private repo content)
+data/

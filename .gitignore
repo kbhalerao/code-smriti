@@ -81,6 +81,20 @@ services/api-server/tests/search_eval_questions.json
 # Ingestion config (contains private repo names)
 services/ingestion-worker/ingestion_config.yaml
 
+# Ad-hoc dependency analysis dumps (machine-generated, contain private repo names)
+/t1deps.json
+/t2deps.json
+/t3deps.json
+/t1deps_criticality.json
+/farmworthdb_all_deps.json
+/farmworthdb_criticality.json
+
+# Generated BDR briefs (LLM output from test/eval runs)
+services/ingestion-worker/scripts/bdr_brief_*.md
+
+# Generated KPI dashboard (regenerated daily by LaunchAgent)
+landing/kpi.html
+
 # Temporary files
 *.tmp
 *.temp
