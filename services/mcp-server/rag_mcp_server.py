@@ -36,39 +36,31 @@ mcp = FastMCP("code-smriti")
 
 # Configuration
 API_BASE_URL = os.getenv("CODESMRITI_API_URL", "https://smriti.agsci.com")
-API_USERNAME = os.getenv("CODESMRITI_USERNAME", "")
-API_PASSWORD = os.getenv("CODESMRITI_PASSWORD", "")
+# Personal Access Token, minted in the Chief of Staff web UI (API Tokens
+# panel). CoS and code-smriti share one token store, so a single PAT
+# authenticates both — COS_TOKEN is honored as a fallback name.
+API_TOKEN = os.getenv("CODESMRITI_TOKEN") or os.getenv("COS_TOKEN", "")
 
-# Token cache
-_cached_token: str | None = None
+AUTH_ERROR_MSG = (
+    "Authentication failed. Set CODESMRITI_TOKEN to a Personal Access Token "
+    "minted in the Chief of Staff web UI (API Tokens panel); if it is "
+    "already set, the token may have been revoked."
+)
 
 
 async def get_auth_token() -> str:
-    """Get JWT token, using cached value if available."""
-    global _cached_token
+    """Return the Personal Access Token used as a Bearer credential.
 
-    if _cached_token:
-        return _cached_token
-
-    if not API_USERNAME or not API_PASSWORD:
-        raise ValueError("CODESMRITI_USERNAME and CODESMRITI_PASSWORD must be set")
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{API_BASE_URL}/api/auth/login",
-            json={"email": API_USERNAME, "password": API_PASSWORD},
-            timeout=30.0
+    The PAT is minted in the Chief of Staff web UI and sent directly as a
+    Bearer credential — there is no login round-trip.
+    """
+    if not API_TOKEN:
+        raise ValueError(
+            "CODESMRITI_TOKEN is not set. Mint a Personal Access Token in the "
+            "Chief of Staff web UI (API Tokens panel) and set it in the MCP "
+            "server environment."
         )
-        response.raise_for_status()
-        data = response.json()
-        _cached_token = data["token"]
-        return _cached_token
-
-
-def clear_token_on_auth_error():
-    """Clear cached token on authentication failure."""
-    global _cached_token
-    _cached_token = None
+    return API_TOKEN
 
 
 # =============================================================================
@@ -123,8 +115,7 @@ async def list_repos() -> str:
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error listing repositories: {str(e)}"
     except Exception as e:
         return f"Error listing repositories: {str(e)}"
@@ -221,8 +212,7 @@ async def explore_structure(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error exploring structure: {str(e)}"
     except Exception as e:
         return f"Error exploring structure: {str(e)}"
@@ -351,8 +341,7 @@ async def search_codebase(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error searching codebase: {str(e)}"
     except Exception as e:
         return f"Error searching codebase: {str(e)}"
@@ -418,8 +407,7 @@ async def ask_codebase(query: str) -> str:
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error querying codebase: {str(e)}"
     except Exception as e:
         return f"Error querying codebase: {str(e)}"
@@ -484,8 +472,7 @@ async def get_file(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         elif e.response.status_code == 404:
             return f"File not found: {repo_id}/{file_path}"
         return f"Error fetching file: {str(e)}"
@@ -555,8 +542,7 @@ async def ask_agsci(query: str) -> str:
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error querying AgSci: {str(e)}"
     except Exception as e:
         return f"Error querying AgSci: {str(e)}"
@@ -636,8 +622,7 @@ async def affected_tests(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error finding affected tests: {str(e)}"
     except Exception as e:
         return f"Error finding affected tests: {str(e)}"
@@ -711,8 +696,7 @@ async def get_module_criticality(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error getting criticality: {str(e)}"
     except Exception as e:
         return f"Error getting criticality: {str(e)}"
@@ -765,8 +749,7 @@ async def get_graph_info(cluster_id: str = "kbhalerao/labcore") -> str:
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 401:
-            clear_token_on_auth_error()
-            return "Authentication failed. Please check credentials."
+            return AUTH_ERROR_MSG
         return f"Error getting graph info: {str(e)}"
     except Exception as e:
         return f"Error getting graph info: {str(e)}"

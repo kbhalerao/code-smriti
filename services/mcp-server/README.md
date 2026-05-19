@@ -50,12 +50,15 @@ uv pip install -r requirements.txt --python .venv/bin/python
 
 ### 2. Configure credentials
 
+The server authenticates with a **Personal Access Token (PAT)**. Mint one
+in the Chief of Staff web UI (API Tokens panel) — the same PAT authenticates
+both CoS and code-smriti, which share a token store.
+
 Create `services/mcp-server/.env`:
 
 ```env
 CODESMRITI_API_URL=https://smriti.agsci.com
-CODESMRITI_USERNAME=your-email
-CODESMRITI_PASSWORD=your-password
+CODESMRITI_TOKEN=cos_pat_your-personal-access-token
 ```
 
 ### 3. Configure Claude Code
@@ -97,4 +100,4 @@ services/mcp-server/.venv/bin/python services/mcp-server/rag_mcp_server.py
 Common issues:
 - **`ModuleNotFoundError`**: Reinstall deps with `uv pip install -r requirements.txt --python .venv/bin/python`
 - **Segfault**: Stale venv after OS/Python upgrade. Recreate with `uv venv .venv` then reinstall deps.
-- **Auth failure**: Check credentials in `services/mcp-server/.env`
+- **Auth failure**: Check `CODESMRITI_TOKEN` in `services/mcp-server/.env`. If the token is set, it may have been revoked — mint a fresh PAT in the Chief of Staff web UI.

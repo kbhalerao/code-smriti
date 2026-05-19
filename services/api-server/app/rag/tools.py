@@ -94,10 +94,10 @@ async def list_repos(
             ORDER BY doc_count DESC
         """
 
-        result = db.cluster.query(n1ql)
+        rows = await db.query(n1ql)
 
         repos = []
-        for row in result:
+        for row in rows:
             # Filter out nulls from languages
             languages = [l for l in (row.get('languages') or []) if l]
             repos.append(RepoInfo(
@@ -208,11 +208,11 @@ async def explore_structure(
                   AND file_path IN $file_paths
             """
             try:
-                result = db.cluster.query(
+                rows = await db.query(
                     n1ql,
                     QueryOptions(named_parameters={"repo_id": repo_id, "file_paths": file_paths})
                 )
-                indexed_paths = {row['file_path'] for row in result}
+                indexed_paths = {row['file_path'] for row in rows}
                 for f in files:
                     f.has_summary = f.path in indexed_paths
             except Exception as e:
@@ -230,11 +230,11 @@ async def explore_structure(
                 LIMIT 1
             """
             try:
-                result = db.cluster.query(
+                rows = await db.query(
                     n1ql,
                     QueryOptions(named_parameters={"repo_id": repo_id, "path": path.rstrip('/')})
                 )
-                for row in result:
+                for row in rows:
                     summary = row.get('content')
                     break
             except Exception as e:
@@ -349,8 +349,6 @@ async def search_code(
 
         # Fetch documents (full or preview mode)
         results = []
-        bucket = db.cluster.bucket(tenant_id)
-        collection = bucket.default_collection()
 
         for hit in hits[:limit]:
             doc_id = hit.get('id')
@@ -358,8 +356,9 @@ async def search_code(
                 continue
 
             try:
-                doc_result = collection.get(doc_id)
-                doc = doc_result.content_as[dict]
+                doc = await db.get_doc(tenant_id, doc_id)
+                if doc is None:
+                    continue
                 metadata = doc.get('metadata', {})
 
                 # In preview mode, only return first ~200 chars of content

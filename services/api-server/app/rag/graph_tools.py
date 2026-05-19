@@ -68,14 +68,10 @@ async def load_graph(
         Graph document or None if not found
     """
     doc_id = f"depgraph:{cluster_id}"
-    try:
-        bucket = db.cluster.bucket(tenant_id)
-        collection = bucket.default_collection()
-        result = collection.get(doc_id)
-        return result.content_as[dict]
-    except Exception as e:
-        logger.warning(f"Graph not found: {doc_id} - {e}")
-        return None
+    graph = await db.get_doc(tenant_id, doc_id)
+    if graph is None:
+        logger.warning(f"Graph not found: {doc_id}")
+    return graph
 
 
 # =============================================================================
@@ -319,8 +315,8 @@ async def list_clusters(
             WHERE type = 'dependency_graph'
             ORDER BY metadata.computed_at DESC
         """
-        result = db.cluster.query(n1ql)
-        return [row["cluster_id"] for row in result]
+        rows = await db.query(n1ql)
+        return [row["cluster_id"] for row in rows]
     except Exception as e:
         logger.error(f"Failed to list clusters: {e}")
         return []

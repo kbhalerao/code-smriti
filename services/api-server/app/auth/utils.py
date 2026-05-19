@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import bcrypt
 from jose import JWTError, jwt
+from loguru import logger
 
 from ..config import settings
 
@@ -98,14 +99,28 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
 
 def verify_token(token: str) -> Optional[dict]:
     """
-    Verify and decode a JWT token.
+    Verify a Bearer credential — either a JWT or a Personal Access Token.
+
+    PATs carry the ``cos_pat_`` prefix and are minted in the Chief of
+    Staff web UI; they are resolved against the shared ``api_token``
+    store and hydrated into a JWT-shaped claim set, so downstream code
+    (``get_current_user``, the RAG agent) never has to care which
+    credential type was used. JWTs are decoded and verified against the
+    shared secret.
 
     Args:
-        token: JWT token string
+        token: JWT or PAT string
 
     Returns:
-        dict: Decoded payload if valid, None if invalid
+        dict: Claim payload if valid, None if invalid
     """
+    # Lazy import to keep the auth-token DB lookup off the import path
+    # of code that only ever decodes JWTs.
+    from .api_tokens import PAT_PREFIX
+
+    if token.startswith(PAT_PREFIX):
+        return _verify_pat(token)
+
     try:
         payload = jwt.decode(
             token,
@@ -115,6 +130,68 @@ def verify_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def _verify_pat(token: str) -> Optional[dict]:
+    """Resolve a Personal Access Token to a JWT-shaped claim set.
+
+    Returns None if the token is unknown/revoked, or if its owner has
+    no code-smriti account.
+    """
+    from .api_tokens import find_api_token_by_hash, hash_token, touch_api_token
+
+    record = find_api_token_by_hash(hash_token(token))
+    if not record:
+        return None
+
+    claims = _resolve_user_claims(record["user_id"])
+    if claims is None:
+        logger.warning(
+            f"PAT {record['id']} is valid but owner '{record['user_id']}' "
+            f"has no code-smriti account"
+        )
+        return None
+
+    # Best-effort last_used_at update; never block auth on it.
+    try:
+        touch_api_token(record["id"])
+    except Exception:
+        pass
+
+    claims["_auth"] = "pat"
+    claims["_token_id"] = record["id"]
+    return claims
+
+
+def _resolve_user_claims(email: str) -> Optional[dict]:
+    """Build a JWT-shaped claim set for a user, looked up by email.
+
+    Mirrors the payload minted by the ``/login`` route so PAT and
+    password auth are indistinguishable to downstream dependencies.
+    Returns None if no such user exists.
+    """
+    from ..database import get_cluster
+
+    query = (
+        "SELECT users.* FROM users "
+        "WHERE email = $1 AND type = 'user' LIMIT 1"
+    )
+    try:
+        rows = list(get_cluster().query(query, email))
+    except Exception as e:
+        logger.error(f"PAT user lookup failed for {email}: {e}")
+        return None
+    if not rows:
+        return None
+
+    user = rows[0]
+    return {
+        "sub": user["user_id"],
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "tenant_id": "code_kosha",
+        "type": "access",
+    }
 
 
 def _derive_key(salt: bytes) -> bytes:
