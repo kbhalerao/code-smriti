@@ -345,8 +345,9 @@ class Synthesizer:
             else:
                 header = f"### {i}. {r.repo_id}"
 
-            # Add metadata line
-            meta = f"_Repo: {r.repo_id} | Type: {r.doc_type} | Score: {r.score:.2f}_"
+            # Add metadata line — prefer cross-encoder rerank score when present
+            display_score = r.rerank_score if r.rerank_score is not None else r.score
+            meta = f"_Repo: {r.repo_id} | Type: {r.doc_type} | Score: {display_score:.2f}_"
 
             # Truncate very long content
             content = r.content

@@ -20,6 +20,8 @@ from app.rag.intent import (
     Persona,
 )
 from app.rag.orchestrator import RetrievalOrchestrator, RetrievalResult
+from app.rag.reranker import CrossEncoderReranker
+from app.rag.rewriter import QueryRewriter
 from app.rag.synthesis import Synthesizer, SynthesisResult
 
 
@@ -98,10 +100,19 @@ class RAGPipeline:
 
         self.embedding_model = get_embedding_model(embedding_model_name)
 
+        self.rewriter = QueryRewriter(
+            lm_studio_url=lm_studio_url,
+            model=llm_model,
+        )
+
+        self.reranker = CrossEncoderReranker()
+
         self.orchestrator = RetrievalOrchestrator(
             db=db,
             embedding_model=self.embedding_model,
             tenant_id=tenant_id,
+            rewriter=self.rewriter,
+            reranker=self.reranker,
         )
 
         self.synthesizer = Synthesizer(
@@ -154,8 +165,34 @@ class RAGPipeline:
         logger.info(
             f"Retrieved: {len(retrieval.results)} docs "
             f"levels={[l.value for l in retrieval.levels_searched]} "
-            f"adequate={retrieval.adequate}"
+            f"adequate={retrieval.adequate} "
+            f"top_repo_score={retrieval.top_repo_score:.3f}"
         )
+
+        # OOD short-circuit: skip synthesis if no repo cleared the threshold.
+        if retrieval.out_of_scope:
+            nearest = ", ".join(retrieval.top_repos[:3]) or "none"
+            answer = (
+                "This question doesn't appear to be within the scope of the "
+                f"indexed codebases. Closest repositories: {nearest} "
+                f"(top score {retrieval.top_repo_score:.2f}, threshold not met)."
+            )
+            return PipelineResult(
+                answer=answer,
+                intent=intent.intent,
+                direction=intent.direction.value,
+                entities=intent.entities,
+                sources=[],
+                levels_searched=[l.value for l in retrieval.levels_searched],
+                adequate_context=False,
+                gaps=["Query appears to be out of scope"],
+                metadata={
+                    "out_of_scope": True,
+                    "top_repo_score": retrieval.top_repo_score,
+                    "top_repos": retrieval.top_repos,
+                    "persona": persona.value,
+                },
+            )
 
         # Step 3: Synthesis (Qwen3, ~5-15s depending on response length)
         synthesis = await self.synthesizer.synthesize(

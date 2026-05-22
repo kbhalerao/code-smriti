@@ -71,7 +71,11 @@ class SearchResult(BaseModel):
     symbol_name: Optional[str] = Field(default=None, description="Symbol name (for symbol)")
     symbol_type: Optional[str] = Field(default=None, description="Symbol type (function, class)")
     content: str = Field(description="LLM-generated summary")
-    score: float = Field(description="Relevance score")
+    score: float = Field(description="Bi-encoder relevance score (cosine sim or BM25)")
+    rerank_score: Optional[float] = Field(
+        default=None,
+        description="Cross-encoder relevance against the original query, 0-1 (sigmoid-normalized)",
+    )
 
     # Hierarchy navigation
     parent_id: Optional[str] = Field(default=None, description="Parent document ID")
