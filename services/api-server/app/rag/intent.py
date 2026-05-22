@@ -14,6 +14,8 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.rag.llm_extras import llm_request_extras
+
 
 class QueryIntent(str, Enum):
     """Query intent types for routing to appropriate handlers."""
@@ -240,7 +242,8 @@ class IntentClassifier:
                         "tools": [tool],
                         "tool_choice": "required",  # LM Studio only supports string values
                         "temperature": 0.1,
-                        "max_tokens": 300
+                        "max_tokens": 300,
+                        **llm_request_extras(),
                     }
                 )
                 response.raise_for_status()

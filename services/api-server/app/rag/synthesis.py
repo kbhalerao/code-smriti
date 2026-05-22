@@ -13,6 +13,8 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.rag.llm_extras import llm_request_extras
+
 from app.rag.intent import ClassifiedIntent, QueryIntent, Persona
 from app.rag.orchestrator import RetrievalResult
 from app.rag.models import SearchResult
@@ -259,8 +261,22 @@ class Synthesizer:
             query=query,
         )
 
-        # Build messages
-        messages = []
+        # Build messages. The system instruction suppresses meta-narration
+        # for verbose models (e.g. Gemma 4) that otherwise narrate their
+        # thinking process in the content channel even with reasoning_effort
+        # turned off. Models that already respond directly (e.g. Qwen3
+        # Instruct) treat it as a no-op.
+        messages: list[dict] = [
+            {
+                "role": "system",
+                "content": (
+                    "Respond with only the requested output. "
+                    "Do not narrate your reasoning, planning, or thought process. "
+                    "Do not include phrases like 'Here is my response' or "
+                    "'Let me think about this'. Start with the answer."
+                ),
+            }
+        ]
 
         # Add conversation history for context
         if conversation_history:
@@ -279,6 +295,7 @@ class Synthesizer:
                         "messages": messages,
                         "temperature": 0.3,
                         "max_tokens": 2000,
+                        **llm_request_extras(),
                     }
                 )
                 response.raise_for_status()

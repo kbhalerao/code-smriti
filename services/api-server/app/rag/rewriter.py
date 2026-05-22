@@ -15,6 +15,8 @@ from typing import Optional
 import httpx
 from loguru import logger
 
+from app.rag.llm_extras import llm_request_extras
+
 
 REWRITE_PROMPT = """You translate questions into the technical vocabulary used by a codebase.
 
@@ -81,9 +83,19 @@ class QueryRewriter:
                     f"{self.lm_studio_url}/v1/chat/completions",
                     json={
                         "model": self.model,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": (
+                                    "Return only the rewritten question. "
+                                    "No preamble, no reasoning, no explanation."
+                                ),
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
                         "temperature": 0.1,
                         "max_tokens": 100,
+                        **llm_request_extras(),
                     },
                 )
                 response.raise_for_status()
