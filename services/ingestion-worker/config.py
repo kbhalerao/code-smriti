@@ -46,6 +46,15 @@ class WorkerConfig(BaseSettings):
     # Logging
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
+    # Chief of Staff (cos) API — daily digest sink.
+    # cos_token is a PAT (prefix "cos_pat_"). The chief-of-staff repo's
+    # COS_SERVICE_TOKEN can be reused here. cos_api_url is the cos service URL
+    # (different from CODESMRITI_API_URL which points to code-smriti's own API).
+    cos_api_url: str = os.getenv("COS_API_URL", "http://localhost:8001").rstrip("/")
+    cos_token: str = os.getenv("COS_TOKEN", "")
+    # Default to the "Chief of Staff" project UUID; override per deployment.
+    cos_digest_project_id: str = os.getenv("COS_DIGEST_PROJECT_ID", "7e3aaaab-5b4c-43d9-ac52-2bcb88c8bd49")
+
     # Parsing Configuration
     supported_code_extensions: list = [
         ".py", ".js", ".ts", ".tsx", ".jsx",  # Python, JavaScript, TypeScript
@@ -53,6 +62,9 @@ class WorkerConfig(BaseSettings):
         ".html", ".htm",                       # HTML
         ".css", ".scss", ".sass",              # Stylesheets
         ".sql",                                # SQL
+        ".java", ".kt",                        # JVM
+        ".swift",                              # iOS / macOS
+        ".erl", ".hrl", ".ex", ".exs",         # BEAM
     ]
     supported_doc_extensions: list = [
         ".md", ".rst",                    # Markdown, reStructuredText (Sphinx)

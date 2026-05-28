@@ -60,5 +60,15 @@ if [[ $KPI_EXIT -ne 0 ]]; then
     [[ $EXIT_CODE -eq 0 ]] && EXIT_CODE=$KPI_EXIT
 fi
 
+# Post the daily digest to Chief of Staff. Fail-soft: log but never propagate.
+echo "Posting daily digest..." >> "$LOG_FILE"
+set +e
+$PYTHON -u "$SCRIPT_DIR/scripts/generate_daily_digest.py" >> "$LOG_FILE" 2>&1
+DIGEST_EXIT=$?
+set -e
+if [[ $DIGEST_EXIT -ne 0 ]]; then
+    echo "Daily digest step exited non-zero ($DIGEST_EXIT); continuing." >> "$LOG_FILE"
+fi
+
 echo "=== $(date) Finished with exit code $EXIT_CODE ===" >> "$LOG_FILE"
 exit $EXIT_CODE
