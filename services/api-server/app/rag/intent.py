@@ -32,6 +32,9 @@ class QueryIntent(str, Enum):
     PROPOSAL_DRAFT = "proposal_draft"          # "Draft approach for X"
     EXPERIENCE_SUMMARY = "experience_summary"  # "What's our experience with X?"
 
+    # Cross-persona intents
+    CHANGE_HISTORY = "change_history"          # "What changed recently / who fixed X?"
+
 
 class SearchDirection(str, Enum):
     """Controls progressive drilldown strategy."""
@@ -56,11 +59,13 @@ PERSONA_INTENTS = {
         QueryIntent.IMPACT_ANALYSIS,
         QueryIntent.SPECIFIC_LOOKUP,
         QueryIntent.DOCUMENTATION,
+        QueryIntent.CHANGE_HISTORY,
     },
     Persona.SALES: {
         QueryIntent.CAPABILITY_CHECK,
         QueryIntent.PROPOSAL_DRAFT,
         QueryIntent.EXPERIENCE_SUMMARY,
+        QueryIntent.CHANGE_HISTORY,
     },
 }
 
@@ -96,6 +101,7 @@ def get_classify_tool(persona: Persona) -> dict:
         QueryIntent.CAPABILITY_CHECK: "can we do X, do we have capability",
         QueryIntent.PROPOSAL_DRAFT: "draft approach, write technical section",
         QueryIntent.EXPERIENCE_SUMMARY: "relevant experience, similar projects",
+        QueryIntent.CHANGE_HISTORY: "recent changes, what changed/was added/fixed recently, who worked on X, commit/git history, development activity and momentum over time",
     }
 
     intent_enum = [i.value for i in valid_intents]

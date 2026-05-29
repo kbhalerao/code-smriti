@@ -181,6 +181,10 @@ class CodeParser:
                 "html": ("tree_sitter_html", "language"),
                 "css": ("tree_sitter_css", "language"),
                 "svelte": ("tree_sitter_svelte", "language"),
+                "java": ("tree_sitter_java", "language"),
+                "swift": ("tree_sitter_swift", "language"),
+                "elixir": ("tree_sitter_elixir", "language"),
+                # Note: tree-sitter-erlang is not on PyPI; erlang remains file-level only.
             }
 
             for lang_name, (module_name, func_name) in language_configs.items():
@@ -234,7 +238,7 @@ class CodeParser:
             }
         )
 
-    def add_context_header(self, code_text: str, relative_path: str, container_name: str = None) -> str:
+    def add_context_header(self, code_text: str, relative_path: str, container_name: Optional[str] = None) -> str:
         """
         Prepend context header to code chunk.
         """
@@ -295,10 +299,18 @@ class CodeParser:
             ".svelte": "svelte",
             ".vue": "vue",
             ".html": "html",
+            ".htm": "html",
             ".css": "css",
             ".scss": "css",
             ".sass": "css",
             ".sql": "sql",
+            ".java": "java",
+            ".kt": "kotlin",
+            ".swift": "swift",
+            ".erl": "erlang",
+            ".hrl": "erlang",
+            ".ex": "elixir",
+            ".exs": "elixir",
         }
 
         return extension_map.get(file_path.suffix)
@@ -790,6 +802,455 @@ class CodeParser:
 
         return chunks
 
+    async def parse_java_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict,
+    ) -> List[CodeChunk]:
+        """
+        Parse a Java file into semantic chunks.
+
+        Emits a chunk per class/interface/enum/record (with full body) and
+        per method/constructor. Mirrors the JS walker's flat-emission style
+        so symbol_index gets one entry per significant symbol.
+        """
+        chunks: List[CodeChunk] = []
+
+        if "java" not in self.parsers:
+            return chunks
+
+        try:
+            parser = self.parsers["java"]
+            tree = parser.parse(bytes(content, "utf8"))
+            root = tree.root_node
+
+            type_decls = {
+                "class_declaration": "class",
+                "interface_declaration": "interface",
+                "enum_declaration": "enum",
+                "record_declaration": "record",
+                "annotation_type_declaration": "annotation",
+            }
+            method_decls = {
+                "method_declaration": "function",
+                "constructor_declaration": "function",
+            }
+
+            def walk(node, enclosing: Optional[str]):
+                chunk_kind = type_decls.get(node.type)
+                if chunk_kind is not None:
+                    name_node = node.child_by_field_name("name")
+                    type_name = name_node.text.decode("utf8") if name_node else "anonymous"
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::{chunk_kind} {type_name}"
+                    )
+                    code_text = self.add_context_header(code_text, relative_path)
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type=chunk_kind,
+                        code_text=code_text,
+                        language="java",
+                        metadata={
+                            "language": "java",
+                            "class_name": type_name,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    enclosing = type_name
+
+                elif node.type in method_decls:
+                    name_node = node.child_by_field_name("name")
+                    method_name = name_node.text.decode("utf8") if name_node else "anonymous"
+                    qualified = f"{enclosing}.{method_name}" if enclosing else method_name
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::{qualified}()"
+                    )
+                    code_text = self.add_context_header(code_text, relative_path, container_name=enclosing)
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type=method_decls[node.type],
+                        code_text=code_text,
+                        language="java",
+                        metadata={
+                            "language": "java",
+                            "function_name": method_name,
+                            "class_name": enclosing,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Don't recurse into method bodies — local classes are rare
+                    # and would produce noisy chunks.
+                    return
+
+                for child in node.children:
+                    walk(child, enclosing)
+
+            walk(root, None)
+
+        except Exception as e:
+            logger.error(f"Error parsing Java file {file_path}: {e}")
+
+        return chunks
+
+    async def parse_swift_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict,
+    ) -> List[CodeChunk]:
+        """
+        Parse a Swift file into semantic chunks.
+
+        Emits a chunk per type declaration (class/struct/enum/protocol/extension/actor)
+        and per function/initializer. Uses the empirically verified tree-sitter-swift
+        grammar (alex-pinkus, v0.7.2) node types:
+
+        - `class_declaration`: covers class, struct, enum, extension, actor.
+          The `declaration_kind` field child carries the keyword text.
+          Name is extracted from the `name` field (type_identifier or user_type).
+        - `protocol_declaration`: separate node type; name via `name` field.
+        - `function_declaration`: name via `name` field (simple_identifier).
+        - `init_declaration`: no distinct name; emitted as "<Container>.init".
+        - `deinit_declaration`: no name; emitted as "<Container>.deinit".
+        """
+        chunks: List[CodeChunk] = []
+
+        if "swift" not in self.parsers:
+            return chunks
+
+        try:
+            parser = self.parsers["swift"]
+            tree = parser.parse(bytes(content, "utf8"))
+            root = tree.root_node
+
+            # Node types that declare a named type scope.
+            TYPE_DECL_NODES = frozenset({
+                "class_declaration",
+                "protocol_declaration",
+            })
+            # Node types that declare a callable.
+            FUNC_DECL_NODES = frozenset({
+                "function_declaration",
+                "init_declaration",
+                "deinit_declaration",
+            })
+
+            def _type_name(node) -> str:
+                """Extract the declared type name from a class_declaration or
+                protocol_declaration node."""
+                name_node = node.child_by_field_name("name")
+                if name_node is not None:
+                    return name_node.text.decode("utf8")
+                return "anonymous"
+
+            def _type_kind(node) -> str:
+                """Return the Swift keyword describing the type
+                (class/struct/enum/extension/actor/protocol)."""
+                # For class_declaration the declaration_kind field child
+                # holds the keyword token.
+                decl_kind = node.child_by_field_name("declaration_kind")
+                if decl_kind is not None:
+                    return decl_kind.text.decode("utf8")
+                # Fallback: scan children for keyword tokens.
+                for child in node.children:
+                    if child.type in (
+                        "class", "struct", "enum", "extension", "actor", "protocol"
+                    ):
+                        return child.type
+                return node.type
+
+            def _func_name(node) -> str:
+                """Extract the function/init/deinit name."""
+                if node.type == "deinit_declaration":
+                    return "deinit"
+                if node.type == "init_declaration":
+                    return "init"
+                name_node = node.child_by_field_name("name")
+                if name_node is not None:
+                    return name_node.text.decode("utf8")
+                return "anonymous"
+
+            def walk(node, enclosing: Optional[str]) -> None:
+                if node.type in TYPE_DECL_NODES:
+                    type_name = _type_name(node)
+                    type_kind = _type_kind(node)
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::{type_kind} {type_name}"
+                    )
+                    code_text = self.add_context_header(code_text, relative_path)
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type=type_kind,
+                        code_text=code_text,
+                        language="swift",
+                        metadata={
+                            "language": "swift",
+                            "class_name": type_name,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Recurse into the body with the new enclosing type name.
+                    for child in node.children:
+                        walk(child, type_name)
+                    return
+
+                if node.type in FUNC_DECL_NODES:
+                    func_name = _func_name(node)
+                    qualified = f"{enclosing}.{func_name}" if enclosing else func_name
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::{qualified}()"
+                    )
+                    code_text = self.add_context_header(
+                        code_text, relative_path, container_name=enclosing
+                    )
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="function",
+                        code_text=code_text,
+                        language="swift",
+                        metadata={
+                            "language": "swift",
+                            "function_name": func_name,
+                            "class_name": enclosing,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Don't recurse into function bodies to avoid nested closures.
+                    return
+
+                for child in node.children:
+                    walk(child, enclosing)
+
+            walk(root, None)
+
+        except Exception as e:
+            logger.error(f"Error parsing Swift file {file_path}: {e}")
+
+        return chunks
+
+    async def parse_elixir_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict,
+    ) -> List[CodeChunk]:
+        """
+        Parse an Elixir file into semantic chunks.
+
+        The tree-sitter-elixir grammar (v0.3.5) represents the entire language
+        as generic `call` nodes. Constructs are identified by the text of the
+        `target` identifier child:
+
+        - `defmodule`: module declaration; name is in the first child of the
+          `arguments` sibling (an `alias` or `dot` node).
+        - `def` / `defp` / `defmacro` / `defmacrop`: function/macro declarations;
+          name is extracted from the first named child of `arguments`.
+          When the function has explicit parentheses, that child is itself a `call`
+          whose first child is the name identifier. When using the keyword form
+          (e.g. `def foo, do: expr`), the first named child is an `identifier`.
+
+        The `do_block` sibling contains nested declarations.
+        """
+        chunks: List[CodeChunk] = []
+
+        if "elixir" not in self.parsers:
+            return chunks
+
+        MODULE_CALLS = frozenset({"defmodule"})
+        FUNC_CALLS = frozenset({"def", "defp", "defmacro", "defmacrop"})
+
+        try:
+            parser = self.parsers["elixir"]
+            tree = parser.parse(bytes(content, "utf8"))
+            root = tree.root_node
+
+            def _call_verb(node) -> Optional[str]:
+                """Return the identifier text of a call node's target, or None."""
+                if node.type != "call":
+                    return None
+                # target is always the first child; it has field name 'target'.
+                for child in node.children:
+                    if child.type == "identifier":
+                        return child.text.decode("utf8")
+                return None
+
+            def _module_name(call_node) -> str:
+                """Extract module name from a defmodule call node.
+
+                Structure: call[identifier='defmodule', arguments[alias|dot], do_block]
+                """
+                # arguments is the second child (index 1, after the identifier)
+                children = call_node.children
+                if len(children) >= 2:
+                    args_node = children[1]
+                    # args_node is the `arguments` node; its first named child is
+                    # the alias (e.g. `MyApp.Router`)
+                    named = [c for c in args_node.children if c.is_named]
+                    if named:
+                        return named[0].text.decode("utf8")
+                return "anonymous"
+
+            def _func_name(call_node) -> str:
+                """Extract function name from a def/defp/defmacro call node.
+
+                Two forms:
+                  def foo(args) do … end
+                    → arguments[call[identifier='foo', arguments[…]], do_block]
+                  def foo, do: expr
+                    → arguments[identifier='foo', keywords[…]]
+                """
+                children = call_node.children
+                if len(children) < 2:
+                    return "anonymous"
+                args_node = children[1]
+                named = [c for c in args_node.children if c.is_named]
+                if not named:
+                    return "anonymous"
+                first = named[0]
+                if first.type == "identifier":
+                    # Keyword form: def foo, do: …
+                    return first.text.decode("utf8")
+                if first.type == "call":
+                    # Parenthesised form: def foo(args) do … end
+                    # First child of this inner call is the function name identifier.
+                    for child in first.children:
+                        if child.type == "identifier":
+                            return child.text.decode("utf8")
+                if first.type == "binary_operator":
+                    # Guard clause form: def foo(args) when guard do … end
+                    # The left child of the binary_operator is the call `foo(args)`.
+                    left = first.child_by_field_name("left")
+                    if left is not None and left.type == "call":
+                        for child in left.children:
+                            if child.type == "identifier":
+                                return child.text.decode("utf8")
+                # Fallback: use raw text of first named arg, truncated.
+                return first.text.decode("utf8", errors="replace")[:64]
+
+            def _do_block(call_node):
+                """Return the do_block child of a call node, if present."""
+                children = call_node.children
+                # do_block is the last child when present.
+                if children and children[-1].type == "do_block":
+                    return children[-1]
+                return None
+
+            def walk(node, enclosing_module: Optional[str]) -> None:
+                verb = _call_verb(node)
+
+                if verb in MODULE_CALLS:
+                    mod_name = _module_name(node)
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::defmodule {mod_name}"
+                    )
+                    code_text = self.add_context_header(code_text, relative_path)
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="module",
+                        code_text=code_text,
+                        language="elixir",
+                        metadata={
+                            "language": "elixir",
+                            "class_name": mod_name,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Recurse into the do_block with this module as enclosing context.
+                    do_block = _do_block(node)
+                    if do_block:
+                        for child in do_block.children:
+                            walk(child, mod_name)
+                    return
+
+                if verb in FUNC_CALLS:
+                    func_name = _func_name(node)
+                    qualified = (
+                        f"{enclosing_module}.{func_name}"
+                        if enclosing_module
+                        else func_name
+                    )
+
+                    code_text = content[node.start_byte:node.end_byte]
+                    code_text = self.truncate_chunk_text(
+                        code_text,
+                        context=f"in {relative_path}::{qualified}/?"
+                    )
+                    code_text = self.add_context_header(
+                        code_text, relative_path, container_name=enclosing_module
+                    )
+
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="function",
+                        code_text=code_text,
+                        language="elixir",
+                        metadata={
+                            "language": "elixir",
+                            "function_name": func_name,
+                            "class_name": enclosing_module,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Don't recurse into function bodies — nested defs are rare
+                    # (only in macros) and would produce ambiguous chunks.
+                    return
+
+                # For non-matching nodes, recurse into all children.
+                for child in node.children:
+                    walk(child, enclosing_module)
+
+            walk(root, None)
+
+        except Exception as e:
+            logger.error(f"Error parsing Elixir file {file_path}: {e}")
+
+        return chunks
+
     async def parse_svelte_file(
         self,
         file_path: Path,
@@ -1081,6 +1542,14 @@ class CodeParser:
             elif language == "sql":
                 # Parse SQL file into statement chunks
                 chunks.extend(await self.parse_sql_file(
+                    file_path, content, repo_id, relative_path, git_metadata
+                ))
+            elif language == "swift":
+                chunks.extend(await self.parse_swift_file(
+                    file_path, content, repo_id, relative_path, git_metadata
+                ))
+            elif language == "elixir":
+                chunks.extend(await self.parse_elixir_file(
                     file_path, content, repo_id, relative_path, git_metadata
                 ))
 

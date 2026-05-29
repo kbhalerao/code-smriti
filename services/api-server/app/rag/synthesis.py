@@ -181,6 +181,26 @@ DEFAULT_PROMPTS = {
 - Suitable for including in proposals or presentations
 
 ## Summary""",
+
+    QueryIntent.CHANGE_HISTORY: """You are summarizing recent development activity from git commit history.
+
+## Retrieved Commits
+{context}
+
+{parent_context}
+
+## Question
+{query}
+
+## Instructions
+- Summarize the commits chronologically (most recent first) or grouped by theme/author, whichever is more useful for the question
+- Cite commit hashes in backtick shorthand (first 7 chars) when referencing specific commits, e.g. `a1b2c3d`
+- Group related changes together (e.g. feature additions, bug fixes, refactors) where that aids readability
+- Note which authors contributed what if the question is about ownership or activity
+- If the retrieved commits span multiple repositories, organize by repo
+- If context is insufficient to fully answer (e.g. date range not covered), say so explicitly
+
+## Summary""",
 }
 
 
@@ -345,7 +365,14 @@ class Synthesizer:
         sections = []
         for i, r in enumerate(results, 1):
             # Build header
-            if r.symbol_name:
+            if r.doc_type == "commit_index":
+                short_hash = (r.commit_hash or "")[:7] or "unknown"
+                header = f"### {i}. Commit `{short_hash}` — {r.repo_id}"
+                if r.author:
+                    header += f" by {r.author}"
+                if r.commit_date:
+                    header += f" on {r.commit_date[:10]}"
+            elif r.symbol_name:
                 header = f"### {i}. {r.symbol_name} ({r.symbol_type or 'symbol'})"
                 if r.file_path:
                     header += f" in {r.file_path}"
