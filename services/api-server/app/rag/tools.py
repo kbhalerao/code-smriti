@@ -366,20 +366,33 @@ async def search_code(
                 if preview and len(content) > 200:
                     content = content[:200] + "..."
 
-                results.append(SearchResult(
-                    document_id=doc_id,
-                    doc_type=doc.get('type', doc_type),
-                    repo_id=doc.get('repo_id', ''),
-                    file_path=doc.get('file_path') or doc.get('module_path'),
-                    symbol_name=doc.get('symbol_name'),
-                    symbol_type=doc.get('symbol_type') or doc.get('doc_type'),
-                    content=content,
-                    score=hit.get('score', 0.0),
-                    parent_id=doc.get('parent_id'),
-                    children_ids=doc.get('children_ids', []),
-                    start_line=metadata.get('start_line'),
-                    end_line=metadata.get('end_line')
-                ))
+                actual_type = doc.get('type', doc_type)
+                if actual_type == 'commit_index':
+                    results.append(SearchResult(
+                        document_id=doc_id,
+                        doc_type=actual_type,
+                        repo_id=doc.get('repo_id', ''),
+                        content=content,
+                        score=hit.get('score', 0.0),
+                        commit_hash=doc.get('commit_hash'),
+                        author=doc.get('author'),
+                        commit_date=doc.get('commit_date'),
+                    ))
+                else:
+                    results.append(SearchResult(
+                        document_id=doc_id,
+                        doc_type=actual_type,
+                        repo_id=doc.get('repo_id', ''),
+                        file_path=doc.get('file_path') or doc.get('module_path'),
+                        symbol_name=doc.get('symbol_name'),
+                        symbol_type=doc.get('symbol_type') or doc.get('doc_type'),
+                        content=content,
+                        score=hit.get('score', 0.0),
+                        parent_id=doc.get('parent_id'),
+                        children_ids=doc.get('children_ids', []),
+                        start_line=metadata.get('start_line'),
+                        end_line=metadata.get('end_line'),
+                    ))
             except Exception as e:
                 logger.warning(f"Failed to fetch document {doc_id}: {e}")
                 continue

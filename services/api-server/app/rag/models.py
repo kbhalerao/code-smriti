@@ -17,6 +17,7 @@ class SearchLevel(str, Enum):
     REPO = "repo"          # repo_summary - repository overview
     DOC = "doc"            # document - documentation files (RST, MD, etc.)
     SPEC = "spec"          # spec - feature specs with L0-L5 constraints
+    COMMIT = "commit"      # commit_index - git commit messages
 
 
 # Maps SearchLevel to V4 document types
@@ -27,6 +28,7 @@ LEVEL_TO_DOCTYPE = {
     SearchLevel.REPO: "repo_summary",
     SearchLevel.DOC: "document",
     SearchLevel.SPEC: "spec",
+    SearchLevel.COMMIT: "commit_index",
 }
 
 
@@ -84,6 +86,11 @@ class SearchResult(BaseModel):
     # For code retrieval
     start_line: Optional[int] = Field(default=None, description="Start line number")
     end_line: Optional[int] = Field(default=None, description="End line number")
+
+    # For commit retrieval
+    commit_hash: Optional[str] = Field(default=None, description="Git commit hash")
+    author: Optional[str] = Field(default=None, description="Commit author")
+    commit_date: Optional[str] = Field(default=None, description="Commit date (ISO 8601)")
 
 
 class FileContent(BaseModel):

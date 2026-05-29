@@ -33,6 +33,8 @@ INTENT_START_LEVELS = {
     QueryIntent.CAPABILITY_CHECK: SearchLevel.REPO,
     QueryIntent.PROPOSAL_DRAFT: SearchLevel.MODULE,
     QueryIntent.EXPERIENCE_SUMMARY: SearchLevel.REPO,
+    # Cross-persona intents
+    QueryIntent.CHANGE_HISTORY: SearchLevel.COMMIT,
 }
 
 
@@ -57,7 +59,7 @@ DRILLDOWN_PATHS = {
 
 # Doc types to search by persona (for multi-type searches)
 PERSONA_DOC_TYPES = {
-    Persona.DEVELOPER: ["file_index", "symbol_index", "module_summary", "document"],
+    Persona.DEVELOPER: ["file_index", "symbol_index", "module_summary", "document", "commit_index"],
     Persona.SALES: ["repo_bdr", "repo_summary", "document", "module_summary"],
 }
 
@@ -450,20 +452,33 @@ class RetrievalOrchestrator:
                         else:
                             similarity = hit.get("score", 0.0)
 
-                        results.append(SearchResult(
-                            document_id=doc_id,
-                            doc_type=doc.get("type", doc_types[0]),
-                            repo_id=doc.get("repo_id", ""),
-                            file_path=doc.get("file_path") or doc.get("module_path"),
-                            symbol_name=doc.get("symbol_name"),
-                            symbol_type=doc.get("symbol_type") or doc.get("doc_type"),
-                            content=doc.get("content", ""),
-                            score=similarity,
-                            parent_id=doc.get("parent_id"),
-                            children_ids=doc.get("children_ids", []),
-                            start_line=metadata.get("start_line"),
-                            end_line=metadata.get("end_line"),
-                        ))
+                        actual_type = doc.get("type", doc_types[0])
+                        if actual_type == "commit_index":
+                            results.append(SearchResult(
+                                document_id=doc_id,
+                                doc_type=actual_type,
+                                repo_id=doc.get("repo_id", ""),
+                                content=doc.get("content", ""),
+                                score=similarity,
+                                commit_hash=doc.get("commit_hash"),
+                                author=doc.get("author"),
+                                commit_date=doc.get("commit_date"),
+                            ))
+                        else:
+                            results.append(SearchResult(
+                                document_id=doc_id,
+                                doc_type=actual_type,
+                                repo_id=doc.get("repo_id", ""),
+                                file_path=doc.get("file_path") or doc.get("module_path"),
+                                symbol_name=doc.get("symbol_name"),
+                                symbol_type=doc.get("symbol_type") or doc.get("doc_type"),
+                                content=doc.get("content", ""),
+                                score=similarity,
+                                parent_id=doc.get("parent_id"),
+                                children_ids=doc.get("children_ids", []),
+                                start_line=metadata.get("start_line"),
+                                end_line=metadata.get("end_line"),
+                            ))
                     except Exception as e:
                         logger.warning(f"Failed to fetch document {doc_id}: {e}")
                         continue
