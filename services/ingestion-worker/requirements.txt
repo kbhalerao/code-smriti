@@ -14,6 +14,10 @@ tree-sitter-typescript>=0.23
 tree-sitter-html>=0.23
 tree-sitter-css>=0.23
 tree-sitter-svelte>=1.0.2
+tree-sitter-java>=0.23
+tree-sitter-swift>=0.7.2
+tree-sitter-elixir>=0.3.5
+# Note: tree-sitter-erlang is not available on PyPI; erlang files remain file-level only.
 
 # GitHub API
 PyGithub>=2.1.0

@@ -164,7 +164,7 @@ class FileProcessor:
         """
         symbols = []
 
-        if language not in ("python", "javascript", "typescript", "svelte"):
+        if language not in ("python", "javascript", "typescript", "svelte", "java", "swift", "elixir"):
             return symbols
 
         # Create dummy Path for parser (it uses for metadata only)
@@ -182,6 +182,18 @@ class FileProcessor:
                 )
             elif language == "svelte":
                 chunks = await self.code_parser.parse_svelte_file(
+                    dummy_path, content, "", file_path, {}
+                )
+            elif language == "java":
+                chunks = await self.code_parser.parse_java_file(
+                    dummy_path, content, "", file_path, {}
+                )
+            elif language == "swift":
+                chunks = await self.code_parser.parse_swift_file(
+                    dummy_path, content, "", file_path, {}
+                )
+            elif language == "elixir":
+                chunks = await self.code_parser.parse_elixir_file(
                     dummy_path, content, "", file_path, {}
                 )
             else:
@@ -221,6 +233,29 @@ class FileProcessor:
             for match in re.finditer(
                 r"(?:import|require)\s*\(?['\"]([^'\"]+)['\"]",
                 content
+            ):
+                imports.append(match.group(1))
+
+        elif language == "java":
+            for match in re.finditer(
+                r'^\s*import\s+(?:static\s+)?([\w.]+(?:\.\*)?)\s*;',
+                content, re.MULTILINE
+            ):
+                imports.append(match.group(1))
+
+        elif language == "swift":
+            # Swift imports: `import Foundation`, `import UIKit`, `import MyModule.Sub`
+            for match in re.finditer(
+                r'^\s*import\s+([\w.]+)',
+                content, re.MULTILINE
+            ):
+                imports.append(match.group(1))
+
+        elif language == "elixir":
+            # Elixir module references: alias/import/use/require
+            for match in re.finditer(
+                r'^\s*(?:alias|import|use|require)\s+([\w.]+(?:\.\{[^}]+\})?)',
+                content, re.MULTILINE
             ):
                 imports.append(match.group(1))
 
