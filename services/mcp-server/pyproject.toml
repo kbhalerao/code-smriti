@@ -1,0 +1,18 @@
+[project]
+name = "codesmriti-mcp-server"
+version = "0.1.0"
+description = "MCP server exposing the CodeSmriti RAG API to MCP clients"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp",
+    "smriti-client",
+]
+
+# The shared HTTP/auth client, also used by clients/cli. Editable so the shim
+# and CLI stay in lockstep on one API contract and one set of formatters.
+[tool.uv.sources]
+smriti-client = { path = "../../lib/smriti-client", editable = true }
+
+# Script-only service: nothing here is an importable/installable package.
+[tool.uv]
+package = false

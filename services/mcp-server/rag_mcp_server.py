@@ -4,63 +4,56 @@ CodeSmriti RAG MCP Server (V4)
 Provides MCP tools for Claude Code to search and explore codebases.
 This is the "direct tool access" mode - Claude does the reasoning.
 
+A thin presenter over ``smriti_client.SmritiClient``: HTTP and authentication
+live in the shared ``lib/smriti-client`` package (used by the ``smriti`` CLI
+too), and the markdown rendering lives in ``smriti_client.format``. Each tool
+here makes one client call and returns the shared formatter's output, so there
+is exactly one implementation of both the API contract and its rendering.
+
 Tools:
 - list_repos: Discover available repositories
 - explore_structure: Navigate directory structure
-- search_code: Semantic search at any level
+- search_codebase: Semantic search at any level
 - get_file: Retrieve actual source code
+- ask_codebase / ask_agsci: RAG-synthesized answers
+- affected_tests / get_module_criticality / get_graph_info: dependency graph
 """
 
-import os
 from pathlib import Path
 from typing import Literal
 
-import httpx
-from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
+from mcp.server.fastmcp import FastMCP
 
-# Load environment variables - try multiple locations
+# Load environment before constructing the client (it reads CODESMRITI_TOKEN /
+# CODESMRITI_API_URL at init). Try the service .env, then the repo-root .env,
+# so the token resolves regardless of the launch working directory.
 script_dir = Path(__file__).parent
 repo_root = script_dir.parent.parent
-
-# Try script directory first, then repo root
 for env_path in [script_dir / ".env", repo_root / ".env"]:
     if env_path.exists():
         load_dotenv(env_path)
         break
 else:
-    load_dotenv()  # Fallback to default behavior
+    load_dotenv()
 
-# Initialize FastMCP server
+from smriti_client import (  # noqa: E402  (import after dotenv is intentional)
+    SmritiAuthError,
+    SmritiClient,
+    SmritiConfigError,
+    SmritiError,
+    SmritiNotFoundError,
+)
+from smriti_client import format as fmt  # noqa: E402
+
 mcp = FastMCP("code-smriti")
-
-# Configuration
-API_BASE_URL = os.getenv("CODESMRITI_API_URL", "https://smriti.agsci.com")
-# Personal Access Token, minted in the Chief of Staff web UI (API Tokens
-# panel). CoS and code-smriti share one token store, so a single PAT
-# authenticates both — COS_TOKEN is honored as a fallback name.
-API_TOKEN = os.getenv("CODESMRITI_TOKEN") or os.getenv("COS_TOKEN", "")
+client = SmritiClient()  # reads CODESMRITI_TOKEN / CODESMRITI_API_URL
 
 AUTH_ERROR_MSG = (
     "Authentication failed. Set CODESMRITI_TOKEN to a Personal Access Token "
     "minted in the Chief of Staff web UI (API Tokens panel); if it is "
     "already set, the token may have been revoked."
 )
-
-
-async def get_auth_token() -> str:
-    """Return the Personal Access Token used as a Bearer credential.
-
-    The PAT is minted in the Chief of Staff web UI and sent directly as a
-    Bearer credential — there is no login round-trip.
-    """
-    if not API_TOKEN:
-        raise ValueError(
-            "CODESMRITI_TOKEN is not set. Mint a Personal Access Token in the "
-            "Chief of Staff web UI (API Tokens panel) and set it in the MCP "
-            "server environment."
-        )
-    return API_TOKEN
 
 
 # =============================================================================
@@ -87,38 +80,11 @@ async def list_repos() -> str:
     - You need to understand the codebase coverage
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{API_BASE_URL}/api/rag/repos",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            repos = data.get("repos", [])
-            if not repos:
-                return "No repositories indexed."
-
-            output = ["## Indexed Repositories\n"]
-            for repo in repos:
-                name = repo.get("repo_id", "Unknown")
-                doc_count = repo.get("doc_count", 0)
-                languages = repo.get("languages", [])
-                lang_str = f" ({', '.join(languages[:3])})" if languages else ""
-                output.append(f"- **{name}**: {doc_count} documents{lang_str}")
-
-            output.append(f"\n_Total: {data.get('total_repos', 0)} repos, {data.get('total_docs', 0)} documents_")
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error listing repositories: {str(e)}"
-    except Exception as e:
-        return f"Error listing repositories: {str(e)}"
+        return fmt.format_repos(await client.repos())
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error listing repositories: {e}"
 
 
 @mcp.tool()
@@ -148,74 +114,12 @@ async def explore_structure(
         - Module summary if requested
     """
     try:
-        token = await get_auth_token()
-
-        payload = {
-            "repo_id": repo_id,
-            "path": path,
-            "include_summaries": include_summaries
-        }
-        if pattern:
-            payload["pattern"] = pattern
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/structure",
-                headers={"Authorization": f"Bearer {token}"},
-                json=payload,
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            output = [f"## {repo_id}/{path or '(root)'}\n"]
-
-            # Key files
-            key_files = data.get("key_files", {})
-            if key_files:
-                output.append("**Key files:**")
-                for key_type, key_path in key_files.items():
-                    output.append(f"  - {key_type}: `{key_path}`")
-                output.append("")
-
-            # Directories
-            directories = data.get("directories", [])
-            if directories:
-                output.append("**Directories:**")
-                for d in directories:
-                    output.append(f"  - {d}")
-                output.append("")
-
-            # Files
-            files = data.get("files", [])
-            if files:
-                output.append("**Files:**")
-                for f in files:
-                    name = f.get("name", "")
-                    lang = f.get("language", "")
-                    lines = f.get("line_count", 0)
-                    has_summary = "indexed" if f.get("has_summary") else ""
-                    lang_str = f" ({lang})" if lang else ""
-                    output.append(f"  - `{name}`{lang_str} - {lines} lines {has_summary}")
-                output.append("")
-
-            # Summary
-            summary = data.get("summary")
-            if summary:
-                output.append("**Module Summary:**")
-                output.append(summary)
-
-            if not directories and not files:
-                output.append("_Empty or not found_")
-
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error exploring structure: {str(e)}"
-    except Exception as e:
-        return f"Error exploring structure: {str(e)}"
+        data = await client.structure(repo_id, path, pattern, include_summaries)
+        return fmt.format_structure(repo_id, path, data)
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error exploring structure: {e}"
 
 
 @mcp.tool()
@@ -268,83 +172,12 @@ async def search_codebase(
     - If results are poor, try adjacent levels or add preview=true first
     """
     try:
-        token = await get_auth_token()
-
-        payload = {
-            "query": query,
-            "level": level,
-            "limit": min(limit, 20),
-            "preview": preview
-        }
-        if repo_filter:
-            payload["repo_filter"] = repo_filter
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/search",
-                headers={"Authorization": f"Bearer {token}"},
-                json=payload,
-                timeout=60.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            results = data.get("results", [])
-            if not results:
-                return f"No results found for '{query}' at {level} level."
-
-            mode_note = " (preview)" if preview else ""
-            output = [f"## Search Results ({level} level{mode_note})\n"]
-
-            for r in results:
-                doc_type = r.get("doc_type", "")
-                repo_id = r.get("repo_id", "")
-                file_path = r.get("file_path", "")
-                symbol_name = r.get("symbol_name", "")
-                content = r.get("content", "")
-                score = r.get("score", 0)
-                start_line = r.get("start_line")
-                end_line = r.get("end_line")
-
-                # Build header based on doc type
-                if doc_type == "symbol_index":
-                    symbol_type = r.get("symbol_type", "symbol")
-                    header = f"### {symbol_name} ({symbol_type}) in {file_path}"
-                    if start_line and end_line:
-                        header += f" [lines {start_line}-{end_line}]"
-                elif doc_type == "file_index":
-                    header = f"### {file_path}"
-                elif doc_type == "module_summary":
-                    module_path = r.get("module_path", file_path or "")
-                    header = f"### Module: {module_path}/"
-                elif doc_type == "repo_summary":
-                    header = f"### Repository: {repo_id}"
-                elif doc_type == "spec":
-                    spec_name = r.get("symbol_name", "")  # spec_name mapped via symbol_name
-                    label = f"Spec: {spec_name}" if spec_name else f"Spec: {file_path}"
-                    header = f"### {label}"
-                elif doc_type == "document":
-                    doc_subtype = r.get("symbol_type", "doc")  # symbol_type holds doc_type for documents
-                    header = f"### Doc: {file_path} ({doc_subtype})"
-                else:
-                    header = f"### {file_path or repo_id}"
-
-                output.append(header)
-                output.append(f"_Repo: {repo_id} | Score: {score:.2f}_\n")
-
-                # In preview mode, content is already truncated; otherwise show first 500 chars
-                max_len = 200 if preview else 500
-                output.append(content[:max_len] + ("..." if len(content) > max_len else ""))
-                output.append("")
-
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error searching codebase: {str(e)}"
-    except Exception as e:
-        return f"Error searching codebase: {str(e)}"
+        data = await client.search(query, level, limit, repo_filter, preview)
+        return fmt.format_search(level, preview, data)
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error searching codebase: {e}"
 
 
 @mcp.tool()
@@ -380,37 +213,11 @@ async def ask_codebase(query: str) -> str:
                "Why was the database schema changed in the last month?"
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/ask/code",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"query": query, "persona": "developer"},
-                timeout=120.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # Format response with metadata
-            answer = data.get("answer", "No answer received.")
-            sources = data.get("sources", [])
-            gaps = data.get("gaps", [])
-
-            result = answer
-            if sources:
-                result += "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources[:5])
-            if gaps:
-                result += "\n\n**Gaps identified:**\n" + "\n".join(f"- {g}" for g in gaps)
-
-            return result
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error querying codebase: {str(e)}"
-    except Exception as e:
-        return f"Error querying codebase: {str(e)}"
+        return fmt.format_ask(await client.ask_code(query))
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error querying codebase: {e}"
 
 
 @mcp.tool()
@@ -437,47 +244,14 @@ async def get_file(
         The file content with metadata about line numbers.
     """
     try:
-        token = await get_auth_token()
-
-        payload = {"repo_id": repo_id, "file_path": file_path}
-        if start_line is not None:
-            payload["start_line"] = start_line
-        if end_line is not None:
-            payload["end_line"] = end_line
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/file",
-                headers={"Authorization": f"Bearer {token}"},
-                json=payload,
-                timeout=60.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            code = data.get("code", "")
-            start = data.get("start_line", 1)
-            end = data.get("end_line", 0)
-            total = data.get("total_lines", 0)
-            language = data.get("language", "")
-            truncated = data.get("truncated", False)
-
-            header = f"## {repo_id}/{file_path}\n"
-            header += f"Lines {start}-{end} of {total}"
-            if truncated:
-                header += " (truncated)"
-            header += "\n\n"
-
-            return header + f"```{language}\n{code}\n```"
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        elif e.response.status_code == 404:
-            return f"File not found: {repo_id}/{file_path}"
-        return f"Error fetching file: {str(e)}"
-    except Exception as e:
-        return f"Error fetching file: {str(e)}"
+        data = await client.get_file(repo_id, file_path, start_line, end_line)
+        return fmt.format_file(repo_id, file_path, data)
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiNotFoundError:
+        return f"File not found: {repo_id}/{file_path}"
+    except SmritiError as e:
+        return f"Error fetching file: {e}"
 
 
 # =============================================================================
@@ -509,43 +283,11 @@ async def ask_agsci(query: str) -> str:
                "Draft the technical approach for a field data collection app"
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/ask/proposal",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"query": query, "persona": "sales"},
-                timeout=120.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # Format response with metadata
-            answer = data.get("answer", "No answer received.")
-            sources = data.get("sources", [])
-            gaps = data.get("gaps", [])
-            intent = data.get("intent", "")
-
-            result = answer
-
-            if gaps:
-                result += "\n\n**Gaps (need more input):**\n" + "\n".join(f"- {g}" for g in gaps)
-
-            if sources:
-                result += "\n\n**Sources:**\n" + "\n".join(f"- {s}" for s in sources[:5])
-
-            if intent:
-                result += f"\n\n_Intent: {intent}_"
-
-            return result
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error querying AgSci: {str(e)}"
-    except Exception as e:
-        return f"Error querying AgSci: {str(e)}"
+        return fmt.format_proposal(await client.ask_proposal(query))
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error querying AgSci: {e}"
 
 
 # =============================================================================
@@ -571,61 +313,12 @@ async def affected_tests(
         List of affected modules and tests to run
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/graph/affected-tests",
-                headers={"Authorization": f"Bearer {token}"},
-                json={
-                    "changed_files": changed_files,
-                    "cluster_id": cluster_id
-                },
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            if not data.get("graph_found"):
-                return f"No dependency graph found for cluster '{cluster_id}'. Run all tests."
-
-            changed = data.get("changed_modules", [])
-            affected = data.get("affected_modules", [])
-            tests = data.get("tests_to_run", [])
-
-            output = [f"## Affected Tests for {cluster_id}\n"]
-
-            if changed:
-                output.append(f"**Changed modules:** {len(changed)}")
-                for m in changed[:10]:
-                    output.append(f"  - {m}")
-                if len(changed) > 10:
-                    output.append(f"  - ... and {len(changed) - 10} more")
-                output.append("")
-
-            if affected:
-                output.append(f"**Affected modules:** {len(affected)}")
-                for m in affected[:10]:
-                    output.append(f"  - {m}")
-                if len(affected) > 10:
-                    output.append(f"  - ... and {len(affected) - 10} more")
-                output.append("")
-
-            if tests:
-                output.append(f"**Tests to run:** {len(tests)}")
-                for t in tests:
-                    output.append(f"  - {t}")
-            else:
-                output.append("**No test modules affected**")
-
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error finding affected tests: {str(e)}"
-    except Exception as e:
-        return f"Error finding affected tests: {str(e)}"
+        data = await client.affected_tests(changed_files, cluster_id)
+        return fmt.format_affected_tests(cluster_id, data)
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiError as e:
+        return f"Error finding affected tests: {e}"
 
 
 @mcp.tool()
@@ -647,59 +340,14 @@ async def get_module_criticality(
         Criticality info with score, percentile, and dependents
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/graph/criticality",
-                headers={"Authorization": f"Bearer {token}"},
-                json={
-                    "module": module,
-                    "cluster_id": cluster_id
-                },
-                timeout=30.0
-            )
-
-            if response.status_code == 404:
-                return f"Module '{module}' not found in graph '{cluster_id}'"
-
-            response.raise_for_status()
-            data = response.json()
-
-            score = data.get("score", 0)
-            percentile = data.get("percentile", 0)
-            in_deg = data.get("in_degree", 0)
-            out_deg = data.get("out_degree", 0)
-            repo_id = data.get("repo_id", "")
-            is_test = data.get("is_test", False)
-            dependents = data.get("direct_dependents", [])
-
-            output = [f"## Criticality: {module}\n"]
-            output.append(f"**Repo:** {repo_id}")
-            output.append(f"**Score:** {score:.6f} (percentile: {percentile})")
-            output.append(f"**In-degree:** {in_deg} (modules depend on this)")
-            output.append(f"**Out-degree:** {out_deg} (modules this depends on)")
-            if is_test:
-                output.append("**Type:** Test module")
-            output.append("")
-
-            if dependents:
-                output.append(f"**Direct dependents ({len(dependents)}):**")
-                for d in dependents[:15]:
-                    output.append(f"  - {d}")
-                if len(dependents) > 15:
-                    output.append(f"  - ... and {len(dependents) - 15} more")
-            else:
-                output.append("_No direct dependents (leaf module)_")
-
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error getting criticality: {str(e)}"
-    except Exception as e:
-        return f"Error getting criticality: {str(e)}"
+        data = await client.criticality(module, cluster_id)
+        return fmt.format_criticality(module, data)
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiNotFoundError:
+        return f"Module '{module}' not found in graph '{cluster_id}'"
+    except SmritiError as e:
+        return f"Error getting criticality: {e}"
 
 
 @mcp.tool()
@@ -714,45 +362,13 @@ async def get_graph_info(cluster_id: str = "kbhalerao/labcore") -> str:
         Graph summary with node/edge counts and repo breakdown
     """
     try:
-        token = await get_auth_token()
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{API_BASE_URL}/api/rag/graph/info",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"cluster_id": cluster_id},
-                timeout=30.0
-            )
-
-            if response.status_code == 404:
-                return f"No dependency graph found for cluster '{cluster_id}'"
-
-            response.raise_for_status()
-            data = response.json()
-
-            output = [f"## Dependency Graph: {cluster_id}\n"]
-            output.append(f"**Nodes:** {data.get('total_nodes', 0)}")
-            output.append(f"**Edges:** {data.get('total_edges', 0)}")
-            output.append(f"**Cross-repo edges:** {data.get('cross_repo_edges', 0)}")
-            output.append(f"**Computed at:** {data.get('computed_at', 'unknown')}")
-            output.append("")
-
-            repos = data.get("repos", {})
-            if repos:
-                output.append("**Repos in cluster:**")
-                for repo_id, info in repos.items():
-                    role = info.get("role", "unknown")
-                    count = info.get("module_count", 0)
-                    output.append(f"  - {repo_id}: {count} modules ({role})")
-
-            return "\n".join(output)
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            return AUTH_ERROR_MSG
-        return f"Error getting graph info: {str(e)}"
-    except Exception as e:
-        return f"Error getting graph info: {str(e)}"
+        return fmt.format_graph_info(cluster_id, await client.graph_info(cluster_id))
+    except (SmritiAuthError, SmritiConfigError):
+        return AUTH_ERROR_MSG
+    except SmritiNotFoundError:
+        return f"No dependency graph found for cluster '{cluster_id}'"
+    except SmritiError as e:
+        return f"Error getting graph info: {e}"
 
 
 if __name__ == "__main__":
