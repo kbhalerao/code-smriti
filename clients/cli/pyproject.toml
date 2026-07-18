@@ -1,0 +1,21 @@
+[project]
+name = "smriti-cli"
+version = "0.1.0"
+description = "Portable CLI over the CodeSmriti RAG API"
+requires-python = ">=3.11"
+dependencies = [
+    "smriti-client",
+]
+
+[project.scripts]
+smriti = "smriti_cli.main:main"
+
+[tool.uv.sources]
+smriti-client = { path = "../../lib/smriti-client", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["smriti_cli"]

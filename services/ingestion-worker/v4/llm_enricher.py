@@ -18,7 +18,7 @@ from loguru import logger
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from llm_enricher import LLMEnricher as BaseLLMEnricher, LLMConfig, LMSTUDIO_CONFIG
+from llm_enricher import LLMEnricher as BaseLLMEnricher, LLMConfig, LLM_CONFIG
 
 
 class V4LLMEnricher:
@@ -29,7 +29,7 @@ class V4LLMEnricher:
     compatible with V4 pipeline expectations.
     """
 
-    def __init__(self, config: LLMConfig = LMSTUDIO_CONFIG):
+    def __init__(self, config: LLMConfig = LLM_CONFIG):
         self.base_enricher = BaseLLMEnricher(config)
         self._token_estimate_ratio = 0.25  # ~4 chars per token
 
@@ -241,6 +241,6 @@ This summary will help developers quickly understand the repository."""
 
 
 # Convenience function for creating enricher
-def create_v4_enricher(config: LLMConfig = LMSTUDIO_CONFIG) -> V4LLMEnricher:
+def create_v4_enricher(config: LLMConfig = LLM_CONFIG) -> V4LLMEnricher:
     """Create a V4 LLM enricher with the specified config."""
     return V4LLMEnricher(config)

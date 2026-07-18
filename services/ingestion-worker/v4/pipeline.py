@@ -37,7 +37,7 @@ from .llm_enricher import V4LLMEnricher
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from parsers.code_parser import CodeParser, should_skip_file
-from llm_enricher import LLMConfig, LMSTUDIO_CONFIG
+from llm_enricher import LLMConfig, LLM_CONFIG
 from embeddings.local_generator import LocalEmbeddingGenerator
 from storage.couchbase_client import CouchbaseClient
 from config import WorkerConfig
@@ -57,7 +57,7 @@ class V4Pipeline:
         enable_llm: bool = True,
         enable_embeddings: bool = True,
         dry_run: bool = False,
-        llm_config: LLMConfig = LMSTUDIO_CONFIG,
+        llm_config: LLMConfig = LLM_CONFIG,
     ):
         """
         Initialize the V4 pipeline.
@@ -399,7 +399,10 @@ class V4Pipeline:
                 DELETE FROM `{config.couchbase_bucket}`
                 WHERE repo_id = $repo_id
             """
-            self.storage.cluster.query(delete_query, repo_id=repo_id)
+            # N1QL executes lazily — the result MUST be consumed or the DELETE
+            # never reaches the server (same pitfall fixed in the incremental
+            # summary path). Otherwise delete_existing=True silently no-ops.
+            _ = list(self.storage.cluster.query(delete_query, repo_id=repo_id))
 
             logger.info(f"Deleted {count} V3 documents for {repo_id}")
             return count

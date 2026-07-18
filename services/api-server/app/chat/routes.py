@@ -406,7 +406,7 @@ async def unified_ask_endpoint(
         pipeline = RAGPipeline(
             db=db,
             tenant_id=tenant_id,
-            lm_studio_url=settings.ollama_host,
+            ollama_host=settings.ollama_host,
             llm_model=settings.llm_model_name,
             embedding_model_name=settings.embedding_model_name,
         )
@@ -615,9 +615,9 @@ async def ask_agsci_endpoint(
     tenant_id = current_user.get("tenant_id", "code_kosha")
     embedding_model = get_embedding_model(settings.embedding_model_name)
 
-    # LM Studio endpoint
-    lm_studio_url = os.getenv("LMSTUDIO_URL", "http://macstudio.local:1234")
-    lm_studio_model = os.getenv("LMSTUDIO_MODEL", "qwen/qwen3-30b-a3b-2507")
+    # LLM endpoint (ollama)
+    ollama_host = settings.ollama_host
+    llm_model = settings.llm_model_name
 
     # Step 1: Query expansion with Qwen
     expansion_prompt = f"""Given this customer question, generate 5-10 search keywords/phrases that would help find relevant capabilities and documentation.
@@ -632,9 +632,9 @@ Output only the keywords, one per line. Include:
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             expansion_resp = await client.post(
-                f"{lm_studio_url}/v1/chat/completions",
+                f"{ollama_host}/v1/chat/completions",
                 json={
-                    "model": lm_studio_model,
+                    "model": llm_model,
                     "messages": [{"role": "user", "content": expansion_prompt}],
                     "temperature": 0.3,
                     "max_tokens": 200
@@ -732,9 +732,9 @@ Do not make up capabilities - only reference what's in the context.
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
             synth_resp = await client.post(
-                f"{lm_studio_url}/v1/chat/completions",
+                f"{ollama_host}/v1/chat/completions",
                 json={
-                    "model": lm_studio_model,
+                    "model": llm_model,
                     "messages": [{"role": "user", "content": synthesis_prompt}],
                     "temperature": 0.3,
                     "max_tokens": 1500

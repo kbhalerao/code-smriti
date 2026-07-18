@@ -41,13 +41,13 @@ class QueryRewriter:
 
     def __init__(
         self,
-        lm_studio_url: Optional[str] = None,
+        ollama_host: Optional[str] = None,
         model: str = "qwen/qwen3-30b-a3b-2507",
         timeout: float = 15.0,
         max_vocabulary_chars: int = 2000,
     ):
-        self.lm_studio_url = lm_studio_url or os.getenv(
-            "LMSTUDIO_URL", "http://localhost:1234"
+        self.ollama_host = ollama_host or os.getenv(
+            "OLLAMA_HOST", "http://localhost:11434"
         )
         self.model = model
         self.timeout = timeout
@@ -80,7 +80,7 @@ class QueryRewriter:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    f"{self.lm_studio_url}/v1/chat/completions",
+                    f"{self.ollama_host}/v1/chat/completions",
                     json={
                         "model": self.model,
                         "messages": [

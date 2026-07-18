@@ -85,7 +85,8 @@ class BottomUpAggregator:
         repo_id: str,
         commit_hash: str,
         parent_module_id: str,
-        use_llm: bool = True
+        use_llm: bool = True,
+        existing_summary: Optional[tuple] = None,
     ) -> ModuleSummary:
         """
         Create a module_summary by aggregating file and nested module summaries.
@@ -98,6 +99,10 @@ class BottomUpAggregator:
             commit_hash: Git commit hash
             parent_module_id: document_id of parent (repo or parent module)
             use_llm: Whether to use LLM for this module (False = fallback only)
+            existing_summary: Optional (content, EnrichmentLevel) from the prior
+                commit. Carried forward when this run won't LLM-regenerate the
+                module, so an unaffected module keeps its LLM summary instead of
+                being downgraded to the fallback.
 
         Returns:
             ModuleSummary document
@@ -110,12 +115,24 @@ class BottomUpAggregator:
 
         all_summaries = file_summaries + nested_summaries
 
-        # Generate module summary (only use LLM if enabled AND use_llm flag is True)
+        # Generate module summary. Preference order:
+        #   1. Fresh LLM summary (module affected this run + LLM available)
+        #   2. Prior LLM summary carried forward (unaffected module) — avoids the
+        #      quality downgrade of overwriting a good summary with the fallback
+        #   3. Mechanical structural fallback (no LLM summary ever / unavailable)
+        summary, enrichment = "", EnrichmentLevel.BASIC
+
         if use_llm and self.enable_llm and self.quality_tracker.llm_available and all_summaries:
             summary, enrichment = await self._llm_module_summary(
                 module_path, all_summaries, repo_id
             )
-        else:
+
+        if enrichment != EnrichmentLevel.LLM_SUMMARY and existing_summary:
+            prev_content, prev_level = existing_summary
+            if prev_content and prev_level == EnrichmentLevel.LLM_SUMMARY:
+                summary, enrichment = prev_content, EnrichmentLevel.LLM_SUMMARY
+
+        if not summary:
             summary = self._fallback_module_summary(
                 module_path, file_indices, child_module_summaries
             )
@@ -192,16 +209,30 @@ class BottomUpAggregator:
         file_indices: List[FileIndex],
         child_modules: List[ModuleSummary]
     ) -> str:
-        """Generate fallback module summary from structure."""
+        """Generate fallback module summary from structure.
+
+        Deduplicates identical file previews (common for generated/boilerplate
+        files, e.g. many near-identical +server.js route handlers) and trims
+        each preview at a sentence/word boundary rather than mid-word.
+        """
         parts = [f"Module: {module_path or '(root)'}/"]
 
         if file_indices:
             parts.append(f"\n\nFiles ({len(file_indices)}):")
-            for f in file_indices[:10]:
+            seen_previews: set = set()
+            shown = 0
+            for f in file_indices:
+                if shown >= 10:
+                    break
                 name = Path(f.file_path).name
-                # Extract first line of summary if available
-                preview = f.content.split('\n')[0][:60] if f.content else ""
-                parts.append(f"\n- {name}: {preview}")
+                preview = self._preview(f.content) if f.content else ""
+                key = preview.lower()
+                if preview and key in seen_previews:
+                    continue  # collapse duplicate summaries
+                if preview:
+                    seen_previews.add(key)
+                parts.append(f"\n- {name}: {preview}" if preview else f"\n- {name}")
+                shown += 1
 
         if child_modules:
             parts.append(f"\n\nSubmodules ({len(child_modules)}):")
@@ -209,6 +240,17 @@ class BottomUpAggregator:
                 parts.append(f"\n- {m.module_path}/")
 
         return ''.join(parts)
+
+    @staticmethod
+    def _preview(content: str, limit: int = 160) -> str:
+        """First sentence of a summary, trimmed at a word boundary (<= limit)."""
+        text = content.split('\n', 1)[0].strip()
+        idx = text.find('. ')
+        if 0 < idx < limit:
+            return text[:idx + 1]
+        if len(text) <= limit:
+            return text
+        return text[:limit].rsplit(' ', 1)[0] + '…'
 
     def _identify_key_files(self, file_indices: List[FileIndex]) -> List[str]:
         """Identify important files in a module."""
@@ -397,7 +439,8 @@ class BottomUpAggregator:
         file_indices: List[FileIndex],
         repo_id: str,
         commit_hash: str,
-        affected_modules: set = None
+        affected_modules: set = None,
+        existing_summaries: Dict[str, tuple] = None,
     ) -> tuple[List[ModuleSummary], RepoSummary]:
         """
         Build complete hierarchy from file indices.
@@ -407,10 +450,15 @@ class BottomUpAggregator:
             repo_id: Repository identifier
             commit_hash: Git commit hash
             affected_modules: If provided, only use LLM for these modules (optimization)
+            existing_summaries: Optional {module_path: (content, EnrichmentLevel)}
+                from the prior commit. When a module is not being LLM-regenerated
+                this run (unaffected), its prior LLM summary is carried forward
+                instead of being downgraded to the mechanical fallback.
 
         Returns:
             (module_summaries, repo_summary)
         """
+        existing_summaries = existing_summaries or {}
         # Group files by folder
         folder_tree = self.build_folder_tree(file_indices)
         all_folders = set(folder_tree.keys())
@@ -479,7 +527,8 @@ class BottomUpAggregator:
                     repo_id=repo_id,
                     commit_hash=commit_hash,
                     parent_module_id=parent_id,
-                    use_llm=use_llm
+                    use_llm=use_llm,
+                    existing_summary=existing_summaries.get(folder_path),
                 )
                 module_summaries[folder_path] = module_summary
 

@@ -201,11 +201,11 @@ class IntentClassifier:
 
     def __init__(
         self,
-        lm_studio_url: str = None,
+        ollama_host: str = None,
         model: str = "qwen/qwen3-30b-a3b-2507"
     ):
-        self.lm_studio_url = lm_studio_url or os.getenv(
-            "LMSTUDIO_URL", "http://localhost:1234"
+        self.ollama_host = ollama_host or os.getenv(
+            "OLLAMA_HOST", "http://localhost:11434"
         )
         self.model = model
 
@@ -241,7 +241,7 @@ class IntentClassifier:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    f"{self.lm_studio_url}/v1/chat/completions",
+                    f"{self.ollama_host}/v1/chat/completions",
                     json={
                         "model": self.model,
                         "messages": messages,

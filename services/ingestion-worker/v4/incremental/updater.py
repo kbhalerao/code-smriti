@@ -51,13 +51,13 @@ class IncrementalUpdater:
         from config import WorkerConfig
         from v4.pipeline import V4Pipeline
         from storage.couchbase_client import CouchbaseClient
-        from llm_enricher import LMSTUDIO_CONFIG
+        from llm_enricher import LLM_CONFIG
 
         config = WorkerConfig()
         self.threshold = threshold
         self.dry_run = dry_run
         self.enable_llm = enable_llm
-        self.llm_config = llm_config or LMSTUDIO_CONFIG
+        self.llm_config = llm_config or LLM_CONFIG
 
         # Initialize storage
         self.cb_client = CouchbaseClient()
@@ -400,6 +400,37 @@ class IncrementalUpdater:
             duration_seconds=duration
         )
 
+    def _existing_module_summaries(self, repo_id: str) -> dict:
+        """Prior LLM module summaries keyed by module_path, for carry-forward.
+
+        Returns {module_path: (content, EnrichmentLevel.LLM_SUMMARY)}. Only
+        LLM-enriched summaries are returned — fallback ones aren't worth
+        preserving. Keys are normalized to the aggregator's loop convention
+        (root folder is "" there but stored as "(root)"). Must be called before
+        the old summaries are deleted.
+        """
+        from v4.schemas import EnrichmentLevel
+        query = """
+            SELECT module_path, content, quality.enrichment_level AS lvl
+            FROM `code_kosha`
+            WHERE repo_id = $repo_id AND type = 'module_summary'
+        """
+        existing: dict = {}
+        try:
+            for row in self.cb_client.cluster.query(query, repo_id=repo_id):
+                path = row.get('module_path')
+                content = row.get('content')
+                if path is None or not content:
+                    continue
+                if row.get('lvl') != EnrichmentLevel.LLM_SUMMARY.value:
+                    continue
+                if path == "(root)":
+                    path = ""
+                existing[path] = (content, EnrichmentLevel.LLM_SUMMARY)
+        except Exception as e:
+            logger.warning(f"Could not load existing module summaries for {repo_id}: {e}")
+        return existing
+
     def _regenerate_summaries(self, repo_id: str, commit_hash: str, affected_modules: Set[str], loop=None):
         """Regenerate module_summary and repo_summary."""
         try:
@@ -442,6 +473,11 @@ class IncrementalUpdater:
                 )
                 file_index_objects.append(fi)
 
+            # Load prior LLM module summaries so unaffected modules keep their
+            # good summary instead of being overwritten with the fallback when
+            # they aren't LLM-regenerated this run (see aggregate_module_summary).
+            existing_summaries = self._existing_module_summaries(repo_id)
+
             # Regenerate summaries (async method) - use passed loop or create new one
             # OPTIMIZATION: Only regenerate affected modules, reuse existing for others
             owns_loop = loop is None
@@ -452,7 +488,8 @@ class IncrementalUpdater:
                 module_summaries, repo_summary = loop.run_until_complete(
                     self.pipeline.aggregator.aggregate_all(
                         file_index_objects, repo_id, commit_hash,
-                        affected_modules=affected_modules  # Only LLM for these
+                        affected_modules=affected_modules,  # Only LLM for these
+                        existing_summaries=existing_summaries,
                     )
                 )
             finally:
@@ -480,13 +517,16 @@ class IncrementalUpdater:
                     logger.info(f"  ... and {len(affected_modules) - 10} more")
                 return
 
-            # Delete old summaries
+            # Delete old summaries. N1QL executes lazily, so the result MUST be
+            # consumed or the DELETE never reaches the server — without this the
+            # prior commit's module/repo summaries accumulate as orphans in the
+            # bucket and FTS index (see _delete_old_file_docs for the same pattern).
             delete_query = """
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
                   AND type IN ['module_summary', 'repo_summary']
             """
-            self.cb_client.cluster.query(delete_query, repo_id=repo_id)
+            _ = list(self.cb_client.cluster.query(delete_query, repo_id=repo_id))
 
             # Generate embeddings and store
             all_summaries = module_summaries + [repo_summary]

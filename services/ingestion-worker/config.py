@@ -25,11 +25,17 @@ class WorkerConfig(BaseSettings):
     # Model is cached locally after first download
     embedding_dimensions: int = 768
 
-    # LLM model used for all summary generation (module summaries, repo summaries, BDR).
-    # Default selected from scripts/eval_gemma_bdr.py (May 2026 eval) as general-purpose
-    # winner: named real competitors, full keyword tables, no meta-leakage, 4-5x faster
-    # than gemma-4-31b dense at near-equivalent quality on BDR. Override per deployment.
-    llm_model: str = os.getenv("LLM_MODEL", "google/gemma-4-26b-a4b")
+    # LLM model for all summary generation (module/repo summaries, BDR, enrichment).
+    # Unified on qwen3.5:35b-mlx — the same model pinned/always-loaded for RAG
+    # serving — so ingestion and RAG share one resident model: no reload stalls,
+    # no cross-model GPU contention. Override per deployment via LLM_MODEL.
+    llm_model: str = os.getenv("LLM_MODEL", "qwen3.5:35b-mlx")
+
+    # LLM serving endpoint. Provider-agnostic: any OpenAI-compatible server
+    # exposing /v1/responses (ollama, LM Studio, vLLM, ...). Configure via env.
+    llm_base_url: str = os.getenv("LLM_BASE_URL", "http://localhost:11434").rstrip("/")
+    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")  # informational label
+    llm_reasoning_effort: str = os.getenv("LLM_REASONING_EFFORT", "none")
 
     # Incremental Update Configuration
     enable_incremental_updates: bool = os.getenv("ENABLE_INCREMENTAL_UPDATES", "false").lower() == "true"

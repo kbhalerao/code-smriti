@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import WorkerConfig
 from storage.couchbase_client import CouchbaseClient
-from llm_enricher import LLMEnricher, LLMConfig, LMSTUDIO_CONFIG
+from llm_enricher import LLMEnricher, LLMConfig, LLM_CONFIG
 from embeddings.local_generator import LocalEmbeddingGenerator
 from v4.schemas import (
     RepoBDR, VersionInfo, SCHEMA_VERSION,
@@ -42,13 +42,13 @@ from v4.schemas import (
 )
 
 
-# Inherits LLM_MODEL from LMSTUDIO_CONFIG; overrides token budget and timeout for
+# Inherits model/endpoint from LLM_CONFIG; overrides token budget and timeout for
 # the long-form BDR prompt, and disables thinking (reasoning_effort="none") to
 # match the May 2026 eval winner — see scripts/eval_gemma_bdr.py. The 26b-a4b
 # no-thinking variant matched 31b-thinking content quality at ~4x lower latency
 # with no meta-leakage and named real competitors across all 4 eval repos.
 BDR_CONFIG = replace(
-    LMSTUDIO_CONFIG,
+    LLM_CONFIG,
     max_tokens=16000,
     timeout_seconds=900.0,
     reasoning_effort="none",

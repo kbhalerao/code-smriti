@@ -2,12 +2,12 @@
 """
 LLM-Assisted Chunk Enrichment
 
-Uses local LLMs (Qwen3-3B, minimax-m2) to generate semantic summaries
-and improve chunk quality.
+Generates semantic summaries and improves chunk quality using a local LLM.
 
-Supports:
-- Ollama API (http://localhost:11434)
-- LM Studio API (http://localhost:1234)
+Provider-agnostic: talks to any OpenAI-compatible server exposing the
+/v1/responses endpoint (ollama, LM Studio, vLLM, ...). The endpoint, model,
+and reasoning effort are all configured via env (LLM_BASE_URL / LLM_MODEL /
+LLM_PROVIDER / LLM_REASONING_EFFORT); see LLM_CONFIG below.
 """
 
 import asyncio
@@ -45,7 +45,7 @@ class EnrichmentResult:
 @dataclass
 class LLMConfig:
     """Configuration for LLM provider"""
-    provider: str  # "ollama" or "lmstudio"
+    provider: str  # informational label for the serving backend (e.g. "ollama")
     model: str
     base_url: str
     temperature: float = 0.3
@@ -57,34 +57,28 @@ class LLMConfig:
     reasoning_effort: Optional[str] = None
 
 
-# Default configurations
-# Local LLM configurations
-OLLAMA_CONFIG = LLMConfig(
-    provider="ollama",
-    model="qwen3:3b",
-    base_url="http://localhost:11434",
-    temperature=0.3
-)
-
-# MacStudio LM Studio endpoint. Model comes from LLM_MODEL env var (see config.py).
-# reasoning_effort="none" matches the May 2026 BDR eval winner; module-summary eval
-# (scripts/eval_module_summary.py) confirms parity for the shorter task.
-LMSTUDIO_CONFIG = LLMConfig(
-    provider="lmstudio",
+# Single env-driven config — no specific server implied. All fields come from
+# env (see config.WorkerConfig): LLM_BASE_URL / LLM_MODEL / LLM_PROVIDER /
+# LLM_REASONING_EFFORT. Uses the OpenAI-compatible /v1/responses endpoint, which
+# ollama, LM Studio, vLLM and others all expose. reasoning_effort="none" (the
+# default) suppresses thinking-token output on thinking-capable models; it was
+# the May 2026 BDR eval winner and confirmed at parity for module summaries
+# (scripts/eval_module_summary.py).
+LLM_CONFIG = LLMConfig(
+    provider=config.llm_provider,
     model=config.llm_model,
-    base_url="http://macstudio.local:1234",
+    base_url=config.llm_base_url,
     temperature=0.3,
-    reasoning_effort="none",
+    reasoning_effort=config.llm_reasoning_effort or None,
 )
 
-# Default to MacStudio
-DEFAULT_CONFIG = LMSTUDIO_CONFIG
+DEFAULT_CONFIG = LLM_CONFIG
 
 
 class LLMEnricher:
     """Enriches code chunks using local LLMs"""
 
-    def __init__(self, config: LLMConfig = OLLAMA_CONFIG):
+    def __init__(self, config: LLMConfig = LLM_CONFIG):
         self.config = config
         self._client = None  # Lazy init to avoid event loop issues
         self._client_loop = None  # Track which loop the client was created on
@@ -118,25 +112,8 @@ class LLMEnricher:
 
         return self._client
 
-    async def _call_ollama(self, prompt: str) -> str:
-        """Call Ollama API"""
-        response = await self.client.post(
-            f"{self.config.base_url}/api/generate",
-            json={
-                "model": self.config.model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": self.config.temperature,
-                    "num_predict": self.config.max_tokens
-                }
-            }
-        )
-        response.raise_for_status()
-        return response.json()["response"]
-
-    async def _call_lmstudio(self, prompt: str) -> str:
-        """Call LM Studio using /v1/responses API (better performance with thinking models)"""
+    async def _call_responses(self, prompt: str) -> str:
+        """Call the OpenAI-compatible /v1/responses endpoint."""
         payload = {
             "model": self.config.model,
             "input": prompt,
@@ -165,7 +142,7 @@ class LLMEnricher:
             return data["text"]
         raise ValueError(f"Could not extract text from responses API: {data}")
 
-    async def _call_lmstudio_with_reasoning(self, prompt: str) -> dict:
+    async def _call_responses_with_reasoning(self, prompt: str) -> dict:
         """
         Call LM Studio and return both reasoning trace and output.
 
@@ -230,12 +207,7 @@ class LLMEnricher:
 
         for attempt in range(self.config.max_retries + 1):
             try:
-                if self.config.provider == "ollama":
-                    result = await self._call_ollama(prompt)
-                elif self.config.provider == "lmstudio":
-                    result = await self._call_lmstudio(prompt)
-                else:
-                    raise ValueError(f"Unknown provider: {self.config.provider}")
+                result = await self._call_responses(prompt)
 
                 # Success - reset failure counter
                 self._consecutive_failures = 0
@@ -268,18 +240,14 @@ class LLMEnricher:
 
     async def generate_with_reasoning(self, prompt: str) -> dict:
         """
-        Generate text with reasoning trace (for thinking models like Nemotron).
+        Generate text with reasoning trace (for thinking models).
 
-        Only works with lmstudio provider using /v1/responses API.
+        Uses the OpenAI-compatible /v1/responses API to capture the reasoning
+        channel separately from the output.
 
         Returns:
             dict with 'reasoning' (str or None), 'output' (str), 'usage' (dict)
         """
-        if self.config.provider != "lmstudio":
-            # Fallback for non-lmstudio providers
-            output = await self.generate(prompt)
-            return {"reasoning": None, "output": output, "usage": {}}
-
         # Circuit breaker check
         if self._consecutive_failures >= self._max_consecutive_failures:
             raise LLMUnavailableError("LLM unavailable - circuit breaker open")
@@ -287,7 +255,7 @@ class LLMEnricher:
         last_error = None
         for attempt in range(self.config.max_retries + 1):
             try:
-                result = await self._call_lmstudio_with_reasoning(prompt)
+                result = await self._call_responses_with_reasoning(prompt)
                 self._consecutive_failures = 0
                 return result
 
@@ -562,7 +530,7 @@ Write clear documentation (150-300 words)."""
 
 async def test_enricher():
     """Test the LLM enricher"""
-    enricher = LLMEnricher(LMSTUDIO_CONFIG)
+    enricher = LLMEnricher(LLM_CONFIG)
 
     test_code = '''
 class FilteredQuerySetMixin(UserPrivilegeResolution):

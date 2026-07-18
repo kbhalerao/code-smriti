@@ -4,8 +4,8 @@ Daily Ingestion Digest -> Chief of Staff
 
 Runs as the final step of the daily incremental ingestion (see run_incremental.sh).
 Reads the most recent `ingestion_run` doc from Couchbase, pulls the `commit_index`
-docs it produced, synthesizes a per-repo / per-author markdown summary via
-gemma-4-26b-a4b on LM Studio, and POSTs the result as a `note` into the
+docs it produced, synthesizes a per-repo / per-author markdown summary via the configured LLM,
+the configured LLM, and POSTs the result as a `note` into the
 Chief of Staff inbox (tags=['updates'], status=inbox, priority=low).
 
 Originating idea: cos doc fe595161.
@@ -29,7 +29,7 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import WorkerConfig
-from llm_enricher import LLMEnricher, LMSTUDIO_CONFIG, LLMConfig, LLMUnavailableError
+from llm_enricher import LLMEnricher, LLM_CONFIG, LLMConfig, LLMUnavailableError
 from storage.couchbase_client import CouchbaseClient
 
 config = WorkerConfig()
@@ -231,15 +231,15 @@ def fallback_markdown(
 
 async def synthesize(grouped: dict[str, dict[str, list[dict]]], run_doc: dict, digest_date: str) -> tuple[str, str]:
     """Call gemma-4-26b-a4b. Returns (markdown, mode) where mode is 'llm' or 'fallback'."""
-    # gemma-4-26b-a4b is a thinking model. LM Studio's /v1/responses API isolates
-    # reasoning tokens from output content (see llm_enricher._call_lmstudio, which
+    # gemma-4-26b-a4b is a thinking model. the /v1/responses API isolates
+    # reasoning tokens from output content (see llm_enricher._call_responses, which
     # extracts only type="message" blocks). Use reasoning_effort="medium" for this
     # cross-repo synthesis task — the digest benefits from reasoning about themes
     # across repos, unlike single-file summaries where "none" tested better.
     cfg = LLMConfig(
-        provider="lmstudio",
-        model=LMSTUDIO_CONFIG.model,
-        base_url=LMSTUDIO_CONFIG.base_url,
+        provider=LLM_CONFIG.provider,
+        model=LLM_CONFIG.model,
+        base_url=LLM_CONFIG.base_url,
         temperature=0.3,
         max_tokens=8000,
         timeout_seconds=600.0,

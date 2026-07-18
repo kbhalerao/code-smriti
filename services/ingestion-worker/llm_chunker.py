@@ -279,16 +279,26 @@ class LLMChunker:
 
     def __init__(
         self,
-        base_url: str = "http://macstudio.local:1234",
-        model: str = "qwen/qwen3-30b-a3b-2507",
-        temperature: float = 0.2
+        base_url: str = None,
+        model: str = None,
+        temperature: float = 0.2,
+        reasoning_effort: str = None,
     ):
-        self.base_url = base_url
-        self.model = model
+        # Env-driven (LLM_BASE_URL / LLM_MODEL / LLM_REASONING_EFFORT) — no
+        # specific server implied.
+        self.base_url = (base_url or config.llm_base_url).rstrip("/")
+        self.model = model or config.llm_model
         self.temperature = temperature
+        # reasoning="none" keeps thinking-capable models (e.g. gemma) from
+        # spending the output budget on a reasoning trace and returning an empty
+        # message — which surfaced as "Failed to parse LLM response as JSON".
+        self.reasoning_effort = (
+            reasoning_effort if reasoning_effort is not None
+            else (config.llm_reasoning_effort or None)
+        )
         self._client = None  # Lazy init to avoid event loop issues
         self._client_loop = None  # Track which loop the client was created on
-        logger.info(f"LLM Chunker initialized: {model}")
+        logger.info(f"LLM Chunker initialized: {self.model} @ {self.base_url}")
 
     @property
     def client(self):
@@ -317,18 +327,21 @@ class LLMChunker:
         return self._client
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call LM Studio using /v1/responses API (better performance with thinking models)"""
+        """Call the OpenAI-compatible /v1/responses endpoint."""
         try:
             # Combine system and user content for responses API
             full_prompt = "You are a code analysis expert. Respond only with valid JSON.\n\n" + prompt
+            payload = {
+                "model": self.model,
+                "input": full_prompt,
+                "temperature": self.temperature,
+                "max_output_tokens": 4000,
+            }
+            if self.reasoning_effort:
+                payload["reasoning"] = {"effort": self.reasoning_effort}
             response = await self.client.post(
                 f"{self.base_url}/v1/responses",
-                json={
-                    "model": self.model,
-                    "input": full_prompt,
-                    "temperature": self.temperature,
-                    "max_output_tokens": 4000
-                }
+                json=payload,
             )
             response.raise_for_status()
             data = response.json()

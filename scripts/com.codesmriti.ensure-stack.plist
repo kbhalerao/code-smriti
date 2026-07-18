@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.codesmriti.ensure-stack</string>
+
+    <!-- System LaunchDaemon: loads at BOOT, before/without any GUI login.
+         Runs as the user so it can touch ~/.colima and ~/.lmstudio. -->
+    <key>UserName</key>
+    <string>kaustubh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/kaustubh/Documents/code/code-smriti/scripts/ensure_stack.sh</string>
+    </array>
+
+    <!-- Bring the stack up at boot... -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- ...and re-check every 5 min as a watchdog. ensure_stack.sh is a fast
+         no-op when everything is already up, and only acts when the stack is
+         actually down (e.g. colima OOM-killed without a reboot). -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kaustubh/Documents/code/code-smriti/logs/ensure_stack.daemon.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/kaustubh/Documents/code/code-smriti/logs/ensure_stack.daemon.err</string>
+</dict>
+</plist>

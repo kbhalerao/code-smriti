@@ -44,7 +44,7 @@ from pathlib import Path
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from llm_enricher import LMSTUDIO_CONFIG, OLLAMA_CONFIG
+from llm_enricher import LLM_CONFIG
 from v4.incremental.runner import IngestionRunner, LockError, check_running
 
 
@@ -77,12 +77,6 @@ def main():
         help="Disable LLM (basic summaries only)"
     )
     parser.add_argument(
-        "--llm-provider",
-        choices=["lmstudio", "ollama"],
-        default="lmstudio",
-        help="LLM provider (default: lmstudio)"
-    )
-    parser.add_argument(
         "--status",
         action="store_true",
         help="Check if an ingestion is currently running"
@@ -108,8 +102,8 @@ def main():
             print("No ingestion running")
             sys.exit(0)
 
-    # Select LLM config
-    llm_config = LMSTUDIO_CONFIG if args.llm_provider == "lmstudio" else OLLAMA_CONFIG
+    # LLM config is env-driven (LLM_BASE_URL / LLM_MODEL / LLM_PROVIDER)
+    llm_config = LLM_CONFIG
 
     # Initialize runner (handles locking and logging)
     runner = IngestionRunner(

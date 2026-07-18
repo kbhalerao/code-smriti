@@ -81,27 +81,27 @@ class RAGPipeline:
         self,
         db: CouchbaseClient,
         tenant_id: str = "code_kosha",
-        lm_studio_url: str = None,
+        ollama_host: str = None,
         llm_model: str = "qwen/qwen3-30b-a3b-2507",
         embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5",
     ):
         self.db = db
         self.tenant_id = tenant_id
 
-        lm_studio_url = lm_studio_url or os.getenv(
-            "LMSTUDIO_URL", "http://localhost:1234"
+        ollama_host = ollama_host or os.getenv(
+            "OLLAMA_HOST", "http://localhost:11434"
         )
 
         # Initialize components
         self.classifier = IntentClassifier(
-            lm_studio_url=lm_studio_url,
+            ollama_host=ollama_host,
             model=llm_model,
         )
 
         self.embedding_model = get_embedding_model(embedding_model_name)
 
         self.rewriter = QueryRewriter(
-            lm_studio_url=lm_studio_url,
+            ollama_host=ollama_host,
             model=llm_model,
         )
 
@@ -116,7 +116,7 @@ class RAGPipeline:
         )
 
         self.synthesizer = Synthesizer(
-            lm_studio_url=lm_studio_url,
+            ollama_host=ollama_host,
             model=llm_model,
         )
 
@@ -257,7 +257,7 @@ def create_pipeline(
     return RAGPipeline(
         db=db,
         tenant_id=tenant_id,
-        lm_studio_url=os.getenv("LMSTUDIO_URL", "http://localhost:1234"),
+        ollama_host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         llm_model=os.getenv("LMSTUDIO_MODEL", "qwen/qwen3-30b-a3b-2507"),
         embedding_model_name=os.getenv(
             "EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"
