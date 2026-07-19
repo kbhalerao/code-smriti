@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # LLM and Embedding Models
     # Note: LLM must support tool/function calling for RAG agent to work
-    llm_model_name: str = "qwen3.5:35b-mlx"  # pinned/always-loaded in ollama; thinking+tools, reasoning_effort=none for clean output
+    llm_model_name: str = "general"  # alias -> qwen3.5:35b-mlx (pinned/always-loaded); thinking+tools, reasoning_effort=none for clean output
     embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
 
     # Application

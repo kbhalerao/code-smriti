@@ -26,10 +26,10 @@ class WorkerConfig(BaseSettings):
     embedding_dimensions: int = 768
 
     # LLM model for all summary generation (module/repo summaries, BDR, enrichment).
-    # Unified on qwen3.5:35b-mlx — the same model pinned/always-loaded for RAG
-    # serving — so ingestion and RAG share one resident model: no reload stalls,
-    # no cross-model GPU contention. Override per deployment via LLM_MODEL.
-    llm_model: str = os.getenv("LLM_MODEL", "qwen3.5:35b-mlx")
+    # Unified on the `general` alias (-> qwen3.5:35b-mlx, the pinned/always-loaded
+    # resident model) so ingestion and RAG share one resident model: no reload
+    # stalls, no cross-model GPU contention. Override per deployment via LLM_MODEL.
+    llm_model: str = os.getenv("LLM_MODEL", "general")
 
     # LLM serving endpoint. Provider-agnostic: any OpenAI-compatible server
     # exposing /v1/responses (ollama, LM Studio, vLLM, ...). Configure via env.

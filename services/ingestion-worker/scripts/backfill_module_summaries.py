@@ -7,8 +7,8 @@ and worth upgrading. For each we gather its children's summaries (the same
 context the aggregator's LLM path uses), regenerate the summary with the LLM,
 re-embed, and upsert in place.
 
-Model: qwen3.5:35b-mlx (pinned/always-loaded) via ollama's /v1/responses with
-reasoning disabled — matches the RAG serving model and avoids cold-load latency.
+Model: general (alias -> qwen3.5:35b-mlx, pinned/always-loaded) via ollama's
+/v1/responses with reasoning disabled — matches RAG serving, avoids cold-load.
 
 Usage:
     ./.venv/bin/python scripts/backfill_module_summaries.py --limit 5   # sample
@@ -36,7 +36,7 @@ from v4.llm_enricher import V4LLMEnricher
 from v4.schemas import EnrichmentLevel
 
 BUCKET = "code_kosha"
-BACKFILL_MODEL = "qwen3.5:35b-mlx"
+BACKFILL_MODEL = "general"
 MAX_CONTEXT_SUMMARIES = 15  # matches aggregator._llm_module_summary
 
 
