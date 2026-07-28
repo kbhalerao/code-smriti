@@ -50,31 +50,31 @@ export TOKENIZERS_PARALLELISM=false
 INGEST_TIMEOUT_SECS="${INGEST_TIMEOUT_SECS:-36000}"   # 10h
 KPI_TIMEOUT_SECS="${KPI_TIMEOUT_SECS:-900}"           # 15m
 DIGEST_TIMEOUT_SECS="${DIGEST_TIMEOUT_SECS:-1800}"    # 30m
+ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m
 
 # Exit code used to signal "killed by the watchdog", matching GNU timeout(1).
 TIMEOUT_RC=124
 
-# Escape arbitrary text into a JSON string literal. Pure parameter expansion so
-# the alert path stays free of python/jq — the thing we're alerting about may be
-# a python that cannot start.
-json_escape() {
-    local s=$1
-    s=${s//\\/\\\\}
-    s=${s//\"/\\\"}
-    s=${s//$'\t'/\\t}
-    s=${s//$'\r'/\\r}
-    s=${s//$'\n'/\\n}
-    printf '"%s"' "$s"
-}
+# The cos CLI lives in ~/.local/bin, which is not on the minimal PATH launchd
+# hands us, so it has to be added explicitly. Resolved once, up front, so a
+# missing CLI is reported rather than discovered mid-failure.
+export PATH="$PATH:$HOME/.local/bin"
+COS_BIN="$(command -v cos || true)"
+COS_DIGEST_PROJECT_ID="${COS_DIGEST_PROJECT_ID:-7e3aaaab-5b4c-43d9-ac52-2bcb88c8bd49}"
 
-# Post a high-priority failure note straight to the Chief of Staff API via curl.
-# Deliberately does not go through generate_daily_digest.py: when the failure is
-# "the interpreter wedged", a python-based alert wedges too.
+# Post a high-priority failure note to the Chief of Staff inbox via the cos CLI,
+# which owns the endpoint, schema and its own credentials (~/.config/cos/env) —
+# so this script never hand-rolls a payload or carries a second copy of the
+# token. cos runs on its own uv tool interpreter, independent of this repo's
+# venv, so a broken ingestion venv does not take the alert path down with it.
+#
+# Bounded by the watchdog like every other step: an alert that hangs would
+# recreate exactly the failure it exists to report.
 post_cos_alert() {
     local reason=$1 detail=$2
 
-    if [[ -z "${COS_API_URL:-}" || -z "${COS_TOKEN:-}" ]]; then
-        echo "COS_API_URL/COS_TOKEN unset; cannot post failure alert." >> "$LOG_FILE"
+    if [[ -z "$COS_BIN" ]]; then
+        echo "cos CLI not found on PATH; cannot post failure alert." >> "$LOG_FILE"
         return 0
     fi
 
@@ -90,16 +90,21 @@ Log: \`services/ingestion-worker/logs/launchd.out.log\`
 
 _The schedule has been released — the next run will start on time._"
 
-    local payload
-    payload="{\"doc_type\":\"note\",\"title\":$(json_escape "Ingestion FAILED — ${reason}"),\"content\":$(json_escape "$content"),\"tags\":[\"updates\",\"alert\"],\"status\":\"inbox\",\"priority\":\"high\",\"source\":{\"client\":\"code-smriti-ingestion\",\"project\":\"code-smriti\"}}"
-
     echo "Posting failure alert to cos..." >> "$LOG_FILE"
-    curl -sS -m 30 -X POST "${COS_API_URL}/api/cos/docs" \
-        -H "Authorization: Bearer ${COS_TOKEN}" \
-        -H "Content-Type: application/json" \
-        --data-binary "$payload" >> "$LOG_FILE" 2>&1 \
-        || echo "Failure alert POST did not succeed." >> "$LOG_FILE"
-    echo "" >> "$LOG_FILE"
+    set +e
+    run_with_timeout "$ALERT_TIMEOUT_SECS" alert \
+        "$COS_BIN" doc create "$content" \
+            --type note \
+            --status inbox \
+            --priority high \
+            --tag updates \
+            --tag alert \
+            --project "$COS_DIGEST_PROJECT_ID"
+    local alert_rc=$?
+    set -e
+    if [[ $alert_rc -ne 0 ]]; then
+        echo "Failure alert did not post (cos exit $alert_rc)." >> "$LOG_FILE"
+    fi
 }
 
 # Run a command with a hard wall-clock timeout, appending its output to LOG_FILE.

@@ -188,9 +188,13 @@ pipeline, same causes):
 `run_incremental.sh` bounds every step with a wall-clock watchdog
 (`INGEST_TIMEOUT_SECS`, default 10h; also `KPI_TIMEOUT_SECS`,
 `DIGEST_TIMEOUT_SECS`), so a wedged run is killed rather than left to suppress
-the schedule. On failure or timeout it POSTs a high-priority alert note to the
-CoS inbox via `curl` — deliberately not via Python, since the failure being
-reported may be a Python that cannot start. KPI regeneration and the digest are
+the schedule. On failure or timeout it posts a high-priority alert note to the
+CoS inbox using the **`cos` CLI** (`cos doc create --type note --priority high
+--tag alert`), which owns the endpoint, schema and its own credentials in
+`~/.config/cos/env` — the wrapper hand-rolls no payload and carries no second
+copy of the token. Note that `cos` lives in `~/.local/bin`, which is *not* on
+the minimal PATH launchd provides, so `run_incremental.sh` adds it explicitly;
+drop that and the alert silently no-ops. KPI regeneration and the digest are
 both skipped when ingestion fails, so a stale dashboard or a digest of
 yesterday's run is never passed off as fresh.
 
