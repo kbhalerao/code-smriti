@@ -112,8 +112,13 @@ lms load qwen/qwen3-30b-a3b-2507 --context-length 131072 --yes
 # Test from host
 curl http://localhost:1234/v1/models
 
-# Test via nginx proxy
-curl http://localhost/llm/v1/models
+# Test via nginx proxy.
+# /llm/* is restricted to LAN/VLAN sources (the `geo $llm_allowed` block in
+# services/api-gateway/nginx.conf). Requests from the host arrive NAT'd through
+# the Docker bridge as 172.28.0.1, which is deliberately NOT allowlisted, so a
+# bare localhost call returns 403. Present a LAN address the way the edge proxy
+# does to exercise the real path:
+curl -H 'X-Forwarded-For: 192.168.11.29' http://localhost/llm/v1/models
 ```
 
 ## Scheduled Ingestion (LaunchAgents)
