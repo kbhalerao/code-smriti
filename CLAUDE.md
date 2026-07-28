@@ -144,6 +144,21 @@ launchctl list | grep codesmriti
 # "-" in PID column = not currently running
 ```
 
+**The exit code alone does not mean the job is healthy.** It reports the last
+*completed* run, so a currently-wedged run leaves a stale `0` sitting there
+indefinitely. Read the PID column first: a number means an instance is running
+right now, and launchd will **not** start a second instance of a
+`StartCalendarInterval` job while one is alive — so a single hung run silently
+suppresses every subsequent day. Check how long it has been running:
+
+```bash
+# A daily job whose elapsed time is measured in days is wedged, not working
+ps -o pid,lstart,etime,command -p "$(launchctl list | awk '/codesmriti.incremental/ {print $1}')"
+```
+
+The real freshness check is the data, not launchd: compare the newest
+`run_*.log` in `services/ingestion-worker/logs/` against today's date.
+
 ### Logs
 
 - **stdout**: `services/ingestion-worker/logs/launchd.out.log`
@@ -162,10 +177,27 @@ cd services/ingestion-worker && uv run python scripts/generate_kpi.py
 
 ### Troubleshooting
 
-If KPI page stops updating:
-1. Check `launchctl list | grep codesmriti` for non-zero exit codes
-2. Check `logs/launchd.out.log` for errors
-3. Common issue: subprocess calls must use `sys.executable`, not bare `python`
+If KPI page stops updating (or the daily CoS digest stops arriving — same
+pipeline, same causes):
+1. Check for a **wedged run** first, per "Checking Status" above. A hung
+   instance blocks all later runs while still reporting exit 0.
+2. Check `launchctl list | grep codesmriti` for non-zero exit codes
+3. Check `logs/launchd.out.log` for errors
+4. Common issue: subprocess calls must use `sys.executable`, not bare `python`
+
+`run_incremental.sh` bounds every step with a wall-clock watchdog
+(`INGEST_TIMEOUT_SECS`, default 10h; also `KPI_TIMEOUT_SECS`,
+`DIGEST_TIMEOUT_SECS`), so a wedged run is killed rather than left to suppress
+the schedule. On failure or timeout it POSTs a high-priority alert note to the
+CoS inbox via `curl` — deliberately not via Python, since the failure being
+reported may be a Python that cannot start. KPI regeneration and the digest are
+both skipped when ingestion fails, so a stale dashboard or a digest of
+yesterday's run is never passed off as fresh.
+
+Known precedent: on 2026-07-24 the ingestion Python wedged during interpreter
+startup (blocked in `open()` inside `_PyConfig_InitPathConfig`), which cost four
+days of runs before it was noticed. The venv and TCC permissions were fine — the
+weekly BDR agent kept running normally throughout on the same interpreter.
 
 To reload an agent after editing its plist:
 ```bash
