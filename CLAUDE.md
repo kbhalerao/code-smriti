@@ -123,27 +123,49 @@ curl -H 'X-Forwarded-For: 192.168.11.29' http://localhost/llm/v1/models
 
 ### Off-LAN callers on `/llm`
 
-Ollama has no authentication, so this allowlist is the only access control on
-the inference endpoints. Individual off-LAN callers are **not** in the tracked
-config — this repo is public and those addresses name third-party production
-infrastructure. They live in
-`services/api-gateway/llm-allowlist.d/allowlist.conf`, which is gitignored and
-bind-mounted at `/etc/nginx/llm-allowlist.d/`. Copy `allowlist.conf.example` to
-create it.
+Ollama has no authentication of its own, so the gateway is the only access
+control on the inference endpoints. A caller passes if it is **on a trusted
+network OR presents the shared secret** — `$llm_pass`, the combination of the
+`geo $llm_allowed` and `map $llm_key_ok` blocks. The LAN needs no key, so local
+tooling and the curl recipes above are unaffected.
 
-Two traps:
+Off-LAN callers should use the **shared secret**, not an IP entry:
 
-- The filename in the `include` is **fixed, not a glob**. `include` inside a
-  `geo` block is handled by the geo parser, which opens the path literally and
-  does not expand wildcards — `*.conf` fails startup with
+```bash
+curl -H 'X-Smriti-Key: <secret>' https://smriti.agsci.com/llm/v1/models
+```
+
+The secret lives in `services/api-gateway/llm-allowlist.d/llm-key.conf`
+(gitignored, mode 600; copy `llm-key.conf.example`). Rotation is zero-downtime:
+add the new line, deploy, move callers over, delete the old line — every listed
+value is accepted while present.
+
+The IP allowlist in `allowlist.conf` still works and is currently carrying the
+ListingsAISearch backend, but it is the **legacy path**. It is brittle: it
+breaks silently if an egress address moves, and it puts third-party production
+IPs a `git add` away from a public repo. Remove entries once the caller sends a
+key.
+
+Both files are bind-mounted as a *directory* at `/etc/nginx/llm-allowlist.d/`,
+which sidesteps the stale-inode problem single-file bind mounts have under
+Colima. Editing either still needs `docker-compose restart api-gateway`.
+
+Four traps:
+
+- The filenames in both `include`s are **fixed, not globs**. `include` inside a
+  `geo` or `map` block is handled by that module's own parser, which opens the
+  path literally and does not expand wildcards — `*.conf` fails startup with
   `open() ".../*.conf" failed (2: No such file or directory)`.
-- A **missing** `allowlist.conf` is fatal to nginx startup, deliberately. It
-  takes every vhost on this gateway down, not just `/llm`, so check
-  `docker logs codesmriti_nginx` for `[emerg]` after any recreate.
-
-The mount is a *directory*, which also sidesteps the stale-inode problem that
-single-file bind mounts have under Colima. Editing `allowlist.conf` still needs
-`docker-compose restart api-gateway` to take effect.
+- A **missing** `allowlist.conf` or `llm-key.conf` is fatal to nginx startup,
+  deliberately. It takes every vhost on this gateway down, not just `/llm`, so
+  check `docker logs codesmriti_nginx` for `[emerg]` after any recreate.
+- `map_hash_bucket_size 128` is load-bearing. A 64-char hex secret plus map
+  overhead exceeds the 64-byte default and nginx refuses to start with
+  `could not build map_hash`. Raise it (powers of two) before lengthening the
+  secret.
+- Never add `$http_x_smriti_key` to `log_format`. It would write the secret
+  into a log with a far wider readership than the config. The gateway also
+  strips the header before proxying upstream, so Ollama never sees it.
 
 ## Scheduled Ingestion (LaunchAgents)
 

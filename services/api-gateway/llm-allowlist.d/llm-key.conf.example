@@ -1,0 +1,24 @@
+# Shared secret(s) accepted on /llm and /llm/rerank from off-LAN callers.
+#
+# Copy to llm-key.conf (the real file is gitignored — this repo is public) and
+# `docker-compose restart api-gateway` to apply. A missing llm-key.conf is
+# fatal to nginx startup, which takes down every vhost on this gateway.
+#
+# Generate a value with:
+#     openssl rand -hex 32
+#
+# Hex specifically: map matching is case-insensitive, and hex has a single
+# canonical spelling, so no entropy is lost to case folding.
+#
+# Callers send it as a header:
+#     curl -H 'X-Smriti-Key: <secret>' https://smriti.agsci.com/llm/v1/models
+#
+# Format is the body of an nginx `map` block: "<secret>" 1;
+#
+# Rotation is zero-downtime: add the new line, deploy, move callers over, then
+# delete the old line. Every listed value is accepted while it is present.
+#
+# Never add $http_x_smriti_key to log_format — that writes the secret into a
+# log with a much wider readership than this file.
+
+# "0000000000000000000000000000000000000000000000000000000000000000" 1;
