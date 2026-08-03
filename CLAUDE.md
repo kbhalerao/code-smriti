@@ -121,6 +121,30 @@ curl http://localhost:1234/v1/models
 curl -H 'X-Forwarded-For: 192.168.11.29' http://localhost/llm/v1/models
 ```
 
+### Off-LAN callers on `/llm`
+
+Ollama has no authentication, so this allowlist is the only access control on
+the inference endpoints. Individual off-LAN callers are **not** in the tracked
+config — this repo is public and those addresses name third-party production
+infrastructure. They live in
+`services/api-gateway/llm-allowlist.d/allowlist.conf`, which is gitignored and
+bind-mounted at `/etc/nginx/llm-allowlist.d/`. Copy `allowlist.conf.example` to
+create it.
+
+Two traps:
+
+- The filename in the `include` is **fixed, not a glob**. `include` inside a
+  `geo` block is handled by the geo parser, which opens the path literally and
+  does not expand wildcards — `*.conf` fails startup with
+  `open() ".../*.conf" failed (2: No such file or directory)`.
+- A **missing** `allowlist.conf` is fatal to nginx startup, deliberately. It
+  takes every vhost on this gateway down, not just `/llm`, so check
+  `docker logs codesmriti_nginx` for `[emerg]` after any recreate.
+
+The mount is a *directory*, which also sidesteps the stale-inode problem that
+single-file bind mounts have under Colima. Editing `allowlist.conf` still needs
+`docker-compose restart api-gateway` to take effect.
+
 ## Scheduled Ingestion (LaunchAgents)
 
 Code ingestion runs automatically via macOS LaunchAgents. Both must remain loaded for the system to stay current.

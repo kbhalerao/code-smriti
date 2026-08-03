@@ -1,0 +1,17 @@
+# Off-LAN sources admitted to /llm and /llm/rerank.
+#
+# Copy to a sibling *.conf (the real files are gitignored — this repo is
+# public and these addresses name third-party production infrastructure)
+# and `docker-compose restart api-gateway` to apply.
+#
+# Every entry here is a public-internet host granted access to an endpoint
+# that has no authentication of its own. Add one only with a comment saying
+# what it is and who owns it, and remove it when that stops being true.
+#
+# Format is the body of an nginx `geo` block: <address|CIDR> 1;
+
+# ListingsAISearch backend (ai.farmworth.com, AWS us-east-2). Calls
+# server-to-server as pydantic-ai, so Cloudflare is not in this hop and its
+# published ranges are irrelevant here. Valid only while that egress address
+# is stable; if it is not an Elastic IP this breaks silently on any restart.
+# 203.0.113.10/32 1;

@@ -116,6 +116,7 @@ services:
       - "443:443"
     volumes:
       - ./services/api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./services/api-gateway/llm-allowlist.d:/etc/nginx/llm-allowlist.d:ro  # Off-LAN /llm callers (gitignored)
       - ./services/api-gateway/ssl:/etc/letsencrypt:ro  # Let's Encrypt certificates
       - ./services/api-gateway/certbot:/var/www/certbot:ro  # ACME challenges
       - ./landing:/usr/share/nginx/html:ro  # Landing page

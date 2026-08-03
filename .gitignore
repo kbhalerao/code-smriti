@@ -112,3 +112,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Off-LAN /llm allowlist entries. These name third-party production
+# infrastructure and this repo is public; only the .example is tracked.
+services/api-gateway/llm-allowlist.d/*.conf
+!services/api-gateway/llm-allowlist.d/*.conf.example
