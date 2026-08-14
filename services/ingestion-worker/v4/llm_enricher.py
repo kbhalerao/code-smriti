@@ -194,6 +194,75 @@ Be concise. Focus on the module's role in the codebase."""
             logger.debug(f"LLM module enrichment failed: {e}")
             raise
 
+    def build_module_prompt(
+        self,
+        module_path: str,
+        module_context: str,
+        repo_id: str,
+    ) -> str:
+        """
+        Prompt for symbol-aware module summarization.
+
+        Three deliberate differences from `enrich_module`'s prompt:
+
+        - It demands named symbols. The old prompt ended with "Be concise",
+          which the model obeyed by dropping every identifier its inputs
+          contained, leaving a summary that matched queries semantically and
+          answered none of them.
+        - It forbids speculating about callers. The old prompt asked "How other
+          code would use it" while supplying nothing about callers, so the model
+          reliably invented a closing sentence about "other parts of the system
+          or external frontend applications". Caller data exists in the
+          dependency graph and belongs in the context, not in a guess.
+        - No length ceiling below the useful amount. 2-4 sentences could not hold
+          a module's worth of named components.
+        """
+        return f"""Summarize the `{module_path}` module of {repo_id}.
+
+Below is each file in the module: its summary, its imports, and its significant \
+symbols with docstrings. Line ranges, where shown, are exact.
+
+{module_context}
+
+Write 3-6 sentences covering:
+1. What this module does and its role in the codebase
+2. Its key components — name the actual classes, functions, endpoints, models or \
+routes rather than describing them in general terms
+3. Any non-obvious domain logic, constraint or gotcha visible in the symbols
+
+Ground every claim in the material above. Prefer naming a real symbol over \
+characterising it. Do not speculate about which code calls this module — that \
+information is not given to you."""
+
+    async def enrich_module_symbol_aware(
+        self,
+        module_path: str,
+        module_context: str,
+        repo_id: str,
+    ) -> Dict:
+        """
+        Generate a module summary from symbol-aware context.
+
+        Args:
+            module_path: Path to the module folder
+            module_context: Output of v4.module_context.build_module_context
+            repo_id: Repository identifier
+
+        Returns:
+            Dict with 'summary' and 'tokens' keys
+        """
+        prompt = self.build_module_prompt(module_path, module_context, repo_id)
+
+        try:
+            response = await self.base_enricher.generate(prompt)
+            return {
+                "summary": response.strip(),
+                "tokens": self._estimate_tokens(prompt + response),
+            }
+        except Exception as e:
+            logger.debug(f"Symbol-aware module enrichment failed: {e}")
+            raise
+
     async def enrich_repo(
         self,
         repo_id: str,
