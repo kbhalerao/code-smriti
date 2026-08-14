@@ -33,6 +33,7 @@ from loguru import logger
 
 from storage.couchbase_client import CouchbaseClient
 from v4.schemas import FileIndex, ModuleSummary, SymbolRef
+from v4.doc_versions import file_key, newest_per_key
 from v4.module_context import build_module_context
 from v4.llm_enricher import V4LLMEnricher
 from llm_enricher import LLM_CONFIG
@@ -100,24 +101,8 @@ def _to_module_summary(row: Dict) -> ModuleSummary:
     )
 
 
-def _latest_per(rows: List[Dict], key: str) -> List[Dict]:
-    """
-    Keep only the most recently created doc per path.
-
-    Couchbase retains a doc per (path, commit) and nothing prunes superseded
-    versions, so a single file commonly has 3-5 rows spanning months. The live
-    aggregator never sees this — it builds FileIndex objects from the current
-    run — but any script reading the bucket back must collapse them or it will
-    feed the same file to the model several times over.
-    """
-    newest: Dict[str, Dict] = {}
-    for row in rows:
-        path = row.get(key, "")
-        created = ((row.get("version") or {}).get("created_at")) or ""
-        prev = newest.get(path)
-        if prev is None or created > ((prev.get("version") or {}).get("created_at") or ""):
-            newest[path] = row
-    return [newest[p] for p in sorted(newest)]
+def _module_key(doc: Dict) -> tuple:
+    return (doc.get("repo_id") or "", doc.get("module_path") or "")
 
 
 def gather(cb: CouchbaseClient, repo_id: str, module_path: str):
@@ -130,7 +115,7 @@ def gather(cb: CouchbaseClient, repo_id: str, module_path: str):
         repo_id=repo_id,
     ))
     file_indices = [
-        _to_file_index(r) for r in _latest_per(file_rows, "file_path")
+        _to_file_index(r) for r in newest_per_key(file_rows, file_key)
         if _is_direct_child(r.get("file_path", ""), module_path)
     ]
 
@@ -140,7 +125,7 @@ def gather(cb: CouchbaseClient, repo_id: str, module_path: str):
         'WHERE type="module_summary" AND repo_id=$repo_id AND content IS NOT NULL',
         repo_id=repo_id,
     ))
-    latest_mods = _latest_per(mod_rows, "module_path")
+    latest_mods = newest_per_key(mod_rows, _module_key)
     children = [
         _to_module_summary(r) for r in latest_mods
         if _is_direct_child_module(r.get("module_path", ""), module_path)

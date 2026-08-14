@@ -17,6 +17,7 @@ from .models import (
 from .git_utils import GitOperations
 from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
+from ..doc_versions import file_key, newest_per_key
 
 
 class IncrementalUpdater:
@@ -447,6 +448,24 @@ class IncrementalUpdater:
             if not file_indices:
                 return
 
+            # SELECT * nests fields under the bucket name.
+            docs = [row.get('code_kosha', row) for row in file_indices]
+
+            # This query is deliberately unscoped by commit — a file doc carries
+            # the commit at which that file was last processed, so unchanged
+            # files legitimately sit behind HEAD and filtering on commit_hash
+            # would drop nearly all of them. But nothing purges superseded
+            # versions on the full-reingest path either, so the raw result holds
+            # several generations of the same path. Aggregating those directly
+            # counted gislayers' 7 files as 21 and let stale summaries of deleted
+            # code into module summaries; collapse to the newest per path first.
+            docs = newest_per_key(docs, file_key)
+            if len(docs) != len(file_indices):
+                logger.debug(
+                    f"    Collapsed {len(file_indices)} file_index docs to "
+                    f"{len(docs)} current (superseded versions ignored)"
+                )
+
             # For dry-run: show comparison
             old_repo_summary = None
             if self.dry_run:
@@ -455,9 +474,7 @@ class IncrementalUpdater:
             # Convert to schema objects
             from v4.schemas import FileIndex, make_file_id
             file_index_objects = []
-            for row in file_indices:
-                # SELECT * nests fields under bucket name 'code_kosha'
-                doc = row.get('code_kosha', row)
+            for doc in docs:
                 metadata = doc.get('metadata', {})
                 fi = FileIndex(
                     document_id=doc.get('document_id') or make_file_id(
