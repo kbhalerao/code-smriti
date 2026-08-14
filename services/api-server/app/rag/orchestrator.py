@@ -57,13 +57,6 @@ DRILLDOWN_PATHS = {
 }
 
 
-# Doc types to search by persona (for multi-type searches)
-PERSONA_DOC_TYPES = {
-    Persona.DEVELOPER: ["file_index", "symbol_index", "module_summary", "document", "commit_index"],
-    Persona.SALES: ["repo_bdr", "repo_summary", "document", "module_summary"],
-}
-
-
 # OOD: if the top repo-level similarity is below this, the query is out of scope.
 # Tune empirically against known in-scope vs OOD queries.
 OOD_SCORE_THRESHOLD = float(os.getenv("RAG_OOD_THRESHOLD", "0.45"))
@@ -344,73 +337,85 @@ class RetrievalOrchestrator:
         flat BM25 scores. We re-rank results using actual embedding similarity.
         """
         import numpy as np
-        from app.rag.models import LEVEL_TO_DOCTYPE
+        from app.rag.models import doc_types_for_level
 
         # For sales persona at REPO level, search both BDR and summary
         if persona == Persona.SALES and level == SearchLevel.REPO:
             doc_types = ["repo_bdr", "repo_summary"]
         else:
-            doc_types = [LEVEL_TO_DOCTYPE[level]]
+            doc_types = doc_types_for_level(level)
 
-        # Build filter - use disjuncts for multiple doc types
-        if len(doc_types) == 1:
-            type_filter = {"term": doc_types[0], "field": "type"}
-        else:
-            type_filter = {
-                "disjuncts": [{"term": dt, "field": "type"} for dt in doc_types]
-            }
+        # One query per document type — never a disjunct over `type`.
+        #
+        # A `disjuncts` type filter combined with knn_operator "and" silently
+        # returns hits from only ONE clause. Measured: 'document' alone returns
+        # 30/30 documents and 'spec' alone 30/30 specs, but the two as disjuncts
+        # return 30/30 specs and zero documents at any k. The multi-type levels
+        # here (SALES/REPO over repo_bdr + repo_summary, DOC over document +
+        # spec) were therefore only ever searching one of their types.
+        #
+        # Note this applies to `type` specifically; the repo_id and parent_id
+        # disjuncts below are unaffected, as they sit alongside a single-term
+        # type clause rather than replacing it.
+        def build_filter(doc_type: str) -> dict:
+            """Filter query scoped to exactly one document type."""
+            conjuncts: list[dict] = [{"term": doc_type, "field": "type"}]
 
-        conjuncts: list[dict] = [type_filter]
+            if repo_filter:
+                conjuncts.append(
+                    {"term": repo_filter[0], "field": "repo_id"}
+                    if len(repo_filter) == 1
+                    else {"disjuncts": [
+                        {"term": rid, "field": "repo_id"} for rid in repo_filter
+                    ]}
+                )
 
-        if repo_filter:
-            conjuncts.append(
-                {"term": repo_filter[0], "field": "repo_id"}
-                if len(repo_filter) == 1
-                else {"disjuncts": [
-                    {"term": rid, "field": "repo_id"} for rid in repo_filter
-                ]}
-            )
+            if parent_id_filter:
+                conjuncts.append(
+                    {"term": parent_id_filter[0], "field": "parent_id"}
+                    if len(parent_id_filter) == 1
+                    else {"disjuncts": [
+                        {"term": pid, "field": "parent_id"} for pid in parent_id_filter
+                    ]}
+                )
 
-        if parent_id_filter:
-            conjuncts.append(
-                {"term": parent_id_filter[0], "field": "parent_id"}
-                if len(parent_id_filter) == 1
-                else {"disjuncts": [
-                    {"term": pid, "field": "parent_id"} for pid in parent_id_filter
-                ]}
-            )
-
-        filter_query = conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
+            return conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
 
         # NOTE: Pre-filter inside knn requires Couchbase 7.6.4+
         # We have 7.6.2, so use query + knn_operator: "and" approach instead
         # KNOWN BUG: On 7.6.2, large k values (>~100) break the filter
         # Workaround: use smaller k and post-filter results in application code
         oversample = min(limit * 5, 100)  # Keep k <= 100 to avoid 7.6.2 bug
-        fts_request = {
-            "query": filter_query,
-            "knn": [{
-                "field": "embedding",
-                "vector": query_embedding,
-                "k": oversample,
-            }],
-            "knn_operator": "and",
-            "size": oversample,
-            "fields": ["*"],
-        }
+
+        def build_request(doc_type: str) -> dict:
+            return {
+                "query": build_filter(doc_type),
+                "knn": [{
+                    "field": "embedding",
+                    "vector": query_embedding,
+                    "k": oversample,
+                }],
+                "knn_operator": "and",
+                "size": oversample,
+                "fields": ["*"],
+            }
 
         fts_url = f"http://{self.couchbase_host}:8094/api/index/code_vector_index/query"
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    fts_url,
-                    auth=(self.couchbase_user, self.couchbase_pass),
-                    json=fts_request,
-                )
-                response.raise_for_status()
 
-                hits = response.json().get("hits", [])
+                async def knn_hits(doc_type: str) -> list:
+                    response = await client.post(
+                        fts_url,
+                        auth=(self.couchbase_user, self.couchbase_pass),
+                        json=build_request(doc_type),
+                    )
+                    response.raise_for_status()
+                    return response.json().get("hits", [])
+
+                hit_lists = await asyncio.gather(*(knn_hits(dt) for dt in doc_types))
+                hits = [h for sub in hit_lists for h in sub]
                 results = []
 
                 # Convert query embedding to numpy for similarity computation

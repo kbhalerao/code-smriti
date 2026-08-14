@@ -21,7 +21,7 @@ from app.rag.models import (
     SearchResult,
     FileContent,
     SearchLevel,
-    LEVEL_TO_DOCTYPE,
+    doc_types_for_level,
 )
 
 
@@ -289,10 +289,13 @@ async def search_code(
     Returns:
         List of SearchResult sorted by relevance
     """
+    import asyncio
     import httpx
+    import numpy as np
 
     try:
-        doc_type = LEVEL_TO_DOCTYPE[level]
+        doc_types = doc_types_for_level(level)
+        doc_type = doc_types[0]  # fallback label when a hit carries no own type
 
         # Generate query embedding
         # Use search_query prefix for queries (bi-encoder expects different prefixes)
@@ -302,55 +305,79 @@ async def search_code(
             normalize_embeddings=True  # Must match DB embeddings (normalized)
         ).tolist()
 
-        # Build FTS request with hybrid search (query + knn)
-        # KNN filter alone doesn't pre-filter in Couchbase - need query + knn_operator: and
-        filter_conjuncts = [{"term": doc_type, "field": "type"}]
-        if repo_filter:
-            filter_conjuncts.append({"term": repo_filter, "field": "repo_id"})
+        # Oversample so the cosine re-rank below has a real candidate pool.
+        # Kept <= 100: on 7.6.2 larger k values break the type filter.
+        oversample = min(limit * 5, 100)
 
-        type_query = filter_conjuncts[0] if len(filter_conjuncts) == 1 else {"conjuncts": filter_conjuncts}
-
-        fts_request = {
-            "query": type_query,
-            "knn": [{
-                "field": "embedding",
-                "vector": query_embedding,
-                "k": min(limit * 2, 20),  # Oversample
-            }],
-            "knn_operator": "and",
-            "size": min(limit * 2, 20),
-            "fields": ["*"]
-        }
-
-        # Call Couchbase FTS
         couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
         couchbase_user = os.getenv('COUCHBASE_USERNAME', 'Administrator')
         couchbase_pass = os.environ['COUCHBASE_PASSWORD']
-
         fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                fts_url,
-                json=fts_request,
-                auth=(couchbase_user, couchbase_pass),
-                timeout=30.0
-            )
+        async def knn_hits(doc_type_term: str) -> list:
+            """Run one filtered KNN search for a single document type."""
+            conjuncts: list[dict] = [{"term": doc_type_term, "field": "type"}]
+            if repo_filter:
+                conjuncts.append({"term": repo_filter, "field": "repo_id"})
+            filter_query = conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
 
-        if response.status_code != 200:
-            logger.error(f"FTS search failed: {response.status_code} - {response.text}")
-            return []
+            request = {
+                "query": filter_query,
+                # KNN alone doesn't pre-filter on this version — the term query
+                # plus knn_operator "and" is what restricts it to the type.
+                "knn": [{
+                    "field": "embedding",
+                    "vector": query_embedding,
+                    "k": oversample,
+                }],
+                "knn_operator": "and",
+                "size": oversample,
+                "fields": ["*"],
+            }
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    fts_url, json=request, auth=(couchbase_user, couchbase_pass), timeout=30.0
+                )
+            if resp.status_code != 200:
+                logger.error(f"FTS search failed for type={doc_type_term}: "
+                             f"{resp.status_code} - {resp.text}")
+                return []
+            return resp.json().get('hits', [])
 
-        fts_results = response.json()
-        hits = fts_results.get('hits', [])
+        # One query per type, never a disjunct.
+        #
+        # A `disjuncts` filter combined with knn_operator "and" silently returns
+        # hits from only ONE of its clauses. Measured against this index: the
+        # term 'document' alone returns 30/30 documents and 'spec' alone 30/30
+        # specs, but the two as disjuncts return 30/30 specs and no documents at
+        # any k — so the better-matching document chunks were not merely ranked
+        # low, they never entered the candidate set. (Embeddings are not the
+        # cause; every type stores exactly unit-norm vectors.)
+        #
+        # Querying per type also gives each type its own top-k rather than
+        # making them compete for slots in one shared pool, which matters when
+        # one type is a small fraction of the index.
+        hit_lists = await asyncio.gather(*(knn_hits(dt) for dt in doc_types))
+        hits = [h for sub in hit_lists for h in sub]
 
         if not hits:
             return []
 
-        # Fetch documents (full or preview mode)
+        # Fetch documents (full or preview mode).
+        #
+        # In query+knn mode the BM25 component dominates and the filter term
+        # contributes a constant, so FTS scores arrive flat — whole result sets
+        # tie exactly, and taking them in returned order is arbitrary rather than
+        # relevant. `orchestrator._search_level` already worked around this by
+        # recomputing cosine similarity from the stored embedding; this path did
+        # not, so MCP searches were effectively unranked. That went unnoticed
+        # while each level held one doc type and any hit looked plausible; it
+        # became obvious once DOC spanned both documents and specs.
         results = []
+        doc_types_set = set(doc_types)
+        query_vec = np.array(query_embedding)
 
-        for hit in hits[:limit]:
+        for hit in hits:
             doc_id = hit.get('id')
             if not doc_id:
                 continue
@@ -359,12 +386,28 @@ async def search_code(
                 doc = await db.get_doc(tenant_id, doc_id)
                 if doc is None:
                     continue
+
+                # Post-filter: Couchbase 7.6.2 leaks non-matching types through
+                # the filter at larger k values.
+                if doc.get('type') not in doc_types_set:
+                    continue
+
                 metadata = doc.get('metadata', {})
 
                 # In preview mode, only return first ~200 chars of content
                 content = doc.get('content', '')
                 if preview and len(content) > 200:
                     content = content[:200] + "..."
+
+                # True cosine similarity against the stored embedding. Both
+                # sides are L2-normalised at write time, so the dot product is
+                # the cosine. Docs with no embedding sort last rather than
+                # vanishing.
+                doc_embedding = doc.get('embedding')
+                rank_score = (
+                    float(np.dot(query_vec, np.array(doc_embedding)))
+                    if doc_embedding else -1.0
+                )
 
                 actual_type = doc.get('type', doc_type)
                 if actual_type == 'commit_index':
@@ -373,7 +416,7 @@ async def search_code(
                         doc_type=actual_type,
                         repo_id=doc.get('repo_id', ''),
                         content=content,
-                        score=hit.get('score', 0.0),
+                        score=rank_score,
                         commit_hash=doc.get('commit_hash'),
                         author=doc.get('author'),
                         commit_date=doc.get('commit_date'),
@@ -387,15 +430,25 @@ async def search_code(
                         symbol_name=doc.get('symbol_name'),
                         symbol_type=doc.get('symbol_type') or doc.get('doc_type'),
                         content=content,
-                        score=hit.get('score', 0.0),
+                        score=rank_score,
                         parent_id=doc.get('parent_id'),
                         children_ids=doc.get('children_ids', []),
                         start_line=metadata.get('start_line'),
                         end_line=metadata.get('end_line'),
+                        # Doc/spec chunks are split on headers, so without this a
+                        # chunk arrives with no indication of where in the
+                        # document it came from.
+                        header_path=doc.get('header_path'),
+                        spec_name=doc.get('spec_name'),
+                        l_levels=doc.get('l_levels') or [],
+                        intent_patterns=doc.get('intent_patterns') or [],
                     ))
             except Exception as e:
                 logger.warning(f"Failed to fetch document {doc_id}: {e}")
                 continue
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        results = results[:limit]
 
         logger.info(f"search_code: query='{query[:50]}' level={level.value} preview={preview} found {len(results)} results")
         return results

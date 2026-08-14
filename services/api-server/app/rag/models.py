@@ -31,6 +31,27 @@ LEVEL_TO_DOCTYPE = {
     SearchLevel.COMMIT: "commit_index",
 }
 
+# Levels that span more than one document type. Two independent search paths
+# consume this — `tools.search` (explicit level, used by the MCP tools) and
+# `orchestrator._search_level` (the routed pipeline) — and they had already
+# drifted once, so the mapping lives here rather than in either of them.
+#
+# DOC covers specs as well as prose. Specs sit in the same docs/ tree and a
+# documentation question is often really about intended behaviour: which paths
+# were required, which edge cases the user story enumerated. Those live only in
+# specs. Both types are ranked on score alone, with no boost — a shipped
+# feature's spec stops being maintained while its docs keep up, so a spec should
+# surface only when it genuinely matches better. Synthesis marks spec hits as
+# design-time intent so they are not read as current behaviour.
+MULTI_TYPE_LEVELS = {
+    SearchLevel.DOC: ["document", "spec"],
+}
+
+
+def doc_types_for_level(level: "SearchLevel") -> List[str]:
+    """Document types to search for a given level."""
+    return MULTI_TYPE_LEVELS.get(level, [LEVEL_TO_DOCTYPE[level]])
+
 
 class RepoInfo(BaseModel):
     """Repository information."""
@@ -91,6 +112,27 @@ class SearchResult(BaseModel):
     commit_hash: Optional[str] = Field(default=None, description="Git commit hash")
     author: Optional[str] = Field(default=None, description="Commit author")
     commit_date: Optional[str] = Field(default=None, description="Commit date (ISO 8601)")
+
+    # For documentation retrieval. Doc and spec files are chunked on header
+    # boundaries, so the header path is what tells a reader which part of a long
+    # document a chunk came from.
+    header_path: Optional[str] = Field(
+        default=None,
+        description="Header hierarchy of the chunk, e.g. 'Title > Section > Subsection'",
+    )
+
+    # For spec retrieval — a spec states intended behaviour at authoring time,
+    # which is why its L-levels are worth surfacing: L4 carries user paths (the
+    # happy paths) and L3 the state contracts (the edge cases).
+    spec_name: Optional[str] = Field(default=None, description="Feature name from the spec title")
+    l_levels: List[str] = Field(
+        default_factory=list,
+        description="Constraint levels present in the spec, e.g. ['L3', 'L4']",
+    )
+    intent_patterns: List[str] = Field(
+        default_factory=list,
+        description="Interaction patterns the spec declares, e.g. ['ownership-gated-edit']",
+    )
 
 
 class FileContent(BaseModel):

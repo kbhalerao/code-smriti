@@ -20,6 +20,19 @@ from app.rag.orchestrator import RetrievalResult
 from app.rag.models import SearchResult
 
 
+# The six constraint levels a spec is written against. Naming them in the
+# context beats passing "L3" through raw — the model has no reason to know that
+# L4 is where user paths live and L3 is where the edge cases are.
+_L_LEVEL_NAMES = {
+    "L5": "L5 domain facts",
+    "L4": "L4 user paths",
+    "L3": "L3 state contracts",
+    "L2": "L2 composition",
+    "L1": "L1 components",
+    "L0": "L0 visual primitives",
+}
+
+
 class SynthesisResult(BaseModel):
     """Result of synthesis step."""
 
@@ -120,6 +133,11 @@ DEFAULT_PROMPTS = {
 - Answer based on the documentation provided
 - Quote relevant sections when appropriate
 - Reference document sources
+- Some results are feature specs, marked as design-time intent. Use them to
+  answer what behaviour was *required* — the user paths and the edge cases the
+  user story enumerated — and say so when you do. Do not present spec content as
+  a description of current behaviour; a shipped feature's spec is no longer
+  maintained, so prefer docs and code for what exists today.
 - If the context is insufficient, say what's missing
 
 ## Answer""",
@@ -364,34 +382,15 @@ class Synthesizer:
 
         sections = []
         for i, r in enumerate(results, 1):
-            # Build header
-            if r.doc_type == "commit_index":
-                short_hash = (r.commit_hash or "")[:7] or "unknown"
-                header = f"### {i}. Commit `{short_hash}` — {r.repo_id}"
-                if r.author:
-                    header += f" by {r.author}"
-                if r.commit_date:
-                    header += f" on {r.commit_date[:10]}"
-            elif r.symbol_name:
-                header = f"### {i}. {r.symbol_name} ({r.symbol_type or 'symbol'})"
-                if r.file_path:
-                    header += f" in {r.file_path}"
-                if r.start_line and r.end_line:
-                    header += f" [lines {r.start_line}-{r.end_line}]"
-            elif r.file_path:
-                header = f"### {i}. {r.file_path}"
-            elif r.doc_type == "module_summary":
-                header = f"### {i}. Module: {r.file_path or 'unknown'}/"
-            elif r.doc_type == "repo_summary":
-                header = f"### {i}. Repository: {r.repo_id}"
-            elif r.doc_type == "repo_bdr":
-                header = f"### {i}. Capability Brief: {r.repo_id}"
-            else:
-                header = f"### {i}. {r.repo_id}"
+            header = self._result_header(i, r)
 
             # Add metadata line — prefer cross-encoder rerank score when present
             display_score = r.rerank_score if r.rerank_score is not None else r.score
             meta = f"_Repo: {r.repo_id} | Type: {r.doc_type} | Score: {display_score:.2f}_"
+
+            provenance = self._result_provenance(r)
+            if provenance:
+                meta = f"{meta}\n{provenance}"
 
             # Truncate very long content
             content = r.content
@@ -401,6 +400,91 @@ class Synthesizer:
             sections.append(f"{header}\n{meta}\n\n{content}")
 
         return "\n\n---\n\n".join(sections)
+
+    @staticmethod
+    def _result_header(i: int, r: SearchResult) -> str:
+        """
+        Build the context header for one result.
+
+        Dispatches on doc_type before falling back to shape-based checks. The
+        previous ordering tested `r.file_path` first, which shadowed the
+        module_summary branch entirely — module results carry module_path in
+        file_path, so they rendered as a bare path rather than "Module: x/".
+        """
+        if r.doc_type == "commit_index":
+            short_hash = (r.commit_hash or "")[:7] or "unknown"
+            header = f"### {i}. Commit `{short_hash}` — {r.repo_id}"
+            if r.author:
+                header += f" by {r.author}"
+            if r.commit_date:
+                header += f" on {r.commit_date[:10]}"
+            return header
+
+        if r.doc_type == "spec":
+            name = r.spec_name or r.file_path or "unknown"
+            header = f"### {i}. Feature Spec: {name}"
+            if r.file_path:
+                header += f" ({r.file_path})"
+            if r.header_path:
+                header += f" — {r.header_path}"
+            return header
+
+        if r.doc_type == "document":
+            header = f"### {i}. Doc: {r.file_path or 'unknown'}"
+            if r.header_path:
+                header += f" — {r.header_path}"
+            return header
+
+        if r.doc_type == "module_summary":
+            return f"### {i}. Module: {r.file_path or 'unknown'}/"
+        if r.doc_type == "repo_summary":
+            return f"### {i}. Repository: {r.repo_id}"
+        if r.doc_type == "repo_bdr":
+            return f"### {i}. Capability Brief: {r.repo_id}"
+
+        if r.symbol_name:
+            header = f"### {i}. {r.symbol_name} ({r.symbol_type or 'symbol'})"
+            if r.file_path:
+                header += f" in {r.file_path}"
+            if r.start_line and r.end_line:
+                header += f" [lines {r.start_line}-{r.end_line}]"
+            return header
+        if r.file_path:
+            return f"### {i}. {r.file_path}"
+        return f"### {i}. {r.repo_id}"
+
+    @staticmethod
+    def _result_provenance(r: SearchResult) -> str:
+        """
+        A note telling the model what kind of claim a spec chunk supports.
+
+        Specs describe intended behaviour agreed while a feature was being built:
+        L4 enumerates user paths (the happy paths), L3 the state contracts (the
+        edge cases and their transitions). That makes them the best available
+        source for "what was this supposed to do in situation X" — and a poor
+        source for "what does it do now", because once a feature ships the spec
+        stops being maintained while the code and its docs move on. Without this
+        note the model has no way to tell the two apart and will state design
+        intent as current fact.
+        """
+        if r.doc_type != "spec":
+            return ""
+
+        parts = []
+        if r.l_levels:
+            described = ", ".join(_L_LEVEL_NAMES.get(l, l) for l in sorted(r.l_levels))
+            parts.append(f"Defines: {described}")
+        if r.intent_patterns:
+            parts.append(f"Intent patterns: {', '.join(r.intent_patterns)}")
+
+        note = (
+            "> Design-time spec — states intended behaviour agreed when the feature "
+            "was built. Authoritative for required paths and edge cases; may lag the "
+            "shipped code, so prefer code and current docs for what exists today."
+        )
+        if parts:
+            note += "\n> " + " | ".join(parts)
+        return note
 
     def _extract_gaps(self, answer: str) -> list[str]:
         """Extract [GAP: ...] markers from the answer."""
