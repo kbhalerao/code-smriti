@@ -18,6 +18,7 @@ from .git_utils import GitOperations
 from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
 from ..doc_versions import file_key, newest_per_key
+from ..doc_loader import rehydrate_file_index
 
 
 class IncrementalUpdater:
@@ -471,23 +472,18 @@ class IncrementalUpdater:
             if self.dry_run:
                 old_repo_summary = self.repo_lifecycle.get_old_repo_summary(repo_id)
 
-            # Convert to schema objects
-            from v4.schemas import FileIndex, make_file_id
+            # Convert to schema objects. rehydrate_file_index carries
+            # metadata.symbols across — the hand-rolled conversion this replaced
+            # dropped them, which left the symbol-aware module context with
+            # nothing to work from on the incremental path.
+            from v4.schemas import make_file_id
             file_index_objects = []
             for doc in docs:
-                metadata = doc.get('metadata', {})
-                fi = FileIndex(
-                    document_id=doc.get('document_id') or make_file_id(
+                fi = rehydrate_file_index(doc, commit_hash=commit_hash)
+                if not fi.document_id:
+                    fi.document_id = make_file_id(
                         doc.get('repo_id'), doc.get('file_path'), commit_hash
-                    ),
-                    repo_id=doc.get('repo_id'),
-                    file_path=doc.get('file_path'),
-                    commit_hash=commit_hash,
-                    content=doc.get('content', ''),
-                    language=metadata.get('language', doc.get('language', 'unknown')),
-                    line_count=metadata.get('line_count', doc.get('line_count', 0)),
-                    imports=metadata.get('imports', doc.get('imports', [])),
-                )
+                    )
                 file_index_objects.append(fi)
 
             # Load prior LLM module summaries so unaffected modules keep their

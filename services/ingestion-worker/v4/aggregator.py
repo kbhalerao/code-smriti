@@ -22,6 +22,7 @@ from .schemas import (
     make_module_id, make_repo_id,
 )
 from .quality import QualityTracker
+from .module_context import build_module_context
 
 
 class BottomUpAggregator:
@@ -107,13 +108,11 @@ class BottomUpAggregator:
         Returns:
             ModuleSummary document
         """
-        # Collect summaries from files
-        file_summaries = [f.content for f in file_indices if f.content]
-
-        # Collect summaries from nested modules
-        nested_summaries = [m.content for m in child_module_summaries if m.content]
-
-        all_summaries = file_summaries + nested_summaries
+        # Build the prompt context from file symbols rather than file prose. The
+        # prose-only context this replaced discarded every symbol name, docstring
+        # and import the file pass had already extracted, so module summaries
+        # were strictly lossier than their own inputs and named nothing.
+        module_context = build_module_context(file_indices, child_module_summaries)
 
         # Generate module summary. Preference order:
         #   1. Fresh LLM summary (module affected this run + LLM available)
@@ -122,9 +121,9 @@ class BottomUpAggregator:
         #   3. Mechanical structural fallback (no LLM summary ever / unavailable)
         summary, enrichment = "", EnrichmentLevel.BASIC
 
-        if use_llm and self.enable_llm and self.quality_tracker.llm_available and all_summaries:
+        if use_llm and self.enable_llm and self.quality_tracker.llm_available and module_context:
             summary, enrichment = await self._llm_module_summary(
-                module_path, all_summaries, repo_id
+                module_path, module_context, repo_id
             )
 
         if enrichment != EnrichmentLevel.LLM_SUMMARY and existing_summary:
@@ -162,7 +161,7 @@ class BottomUpAggregator:
             quality=QualityInfo(
                 enrichment_level=enrichment,
                 llm_available=self.quality_tracker.llm_available,
-                summary_source="aggregated_from_files",
+                summary_source="aggregated_from_symbols",
             ),
             version=VersionInfo(
                 schema_version=SCHEMA_VERSION,
@@ -177,17 +176,14 @@ class BottomUpAggregator:
     async def _llm_module_summary(
         self,
         module_path: str,
-        summaries: List[str],
+        module_context: str,
         repo_id: str
     ) -> tuple[str, EnrichmentLevel]:
         """Generate module summary using LLM."""
         try:
-            # Combine summaries as context
-            context = "\n\n---\n\n".join(summaries[:15])  # Limit
-
-            result = await self.llm_enricher.enrich_module(
+            result = await self.llm_enricher.enrich_module_symbol_aware(
                 module_path=module_path,
-                files_context=context,
+                module_context=module_context,
                 repo_id=repo_id
             )
 

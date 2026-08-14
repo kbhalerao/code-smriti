@@ -32,8 +32,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from loguru import logger
 
 from storage.couchbase_client import CouchbaseClient
-from v4.schemas import FileIndex, ModuleSummary, SymbolRef
-from v4.doc_versions import file_key, newest_per_key
+from v4.schemas import FileIndex, ModuleSummary
+from v4.doc_loader import (
+    load_repo_file_docs,
+    load_repo_module_docs,
+    resolve_module_children,
+)
 from v4.module_context import build_module_context
 from v4.llm_enricher import V4LLMEnricher
 from llm_enricher import LLM_CONFIG
@@ -45,93 +49,13 @@ DEFAULT_TARGETS: List[Tuple[str, str]] = [
 OUT_DIR = Path(__file__).parent / "eval_symbol_aware_results"
 
 
-def _is_direct_child(file_path: str, module_path: str) -> bool:
-    """True when file_path is directly inside module_path (no nested subdir)."""
-    if not module_path:
-        return "/" not in file_path
-    if not file_path.startswith(f"{module_path}/"):
-        return False
-    return "/" not in file_path[len(module_path) + 1:]
-
-
-def _is_direct_child_module(child: str, module_path: str) -> bool:
-    if not module_path:
-        return "/" not in child and child != ""
-    if not child.startswith(f"{module_path}/"):
-        return False
-    return "/" not in child[len(module_path) + 1:]
-
-
-def _to_file_index(row: Dict) -> FileIndex:
-    """Rebuild a FileIndex from its stored Couchbase document."""
-    meta = row.get("metadata") or {}
-    symbols = []
-    for s in meta.get("symbols") or []:
-        lines = s.get("lines") or [0, 0]
-        symbols.append(SymbolRef(
-            name=s.get("name", ""),
-            symbol_type=s.get("type", ""),
-            start_line=lines[0] if len(lines) > 0 else 0,
-            end_line=lines[1] if len(lines) > 1 else 0,
-            docstring=s.get("docstring"),
-            methods=s.get("methods") or [],
-        ))
-    return FileIndex(
-        document_id=row.get("document_id", ""),
-        repo_id=row.get("repo_id", ""),
-        file_path=row.get("file_path", ""),
-        commit_hash=row.get("commit_hash", ""),
-        content=row.get("content") or "",
-        line_count=meta.get("line_count", 0),
-        language=meta.get("language", "unknown"),
-        imports=meta.get("imports") or [],
-        symbols=symbols,
-    )
-
-
-def _to_module_summary(row: Dict) -> ModuleSummary:
-    meta = row.get("metadata") or {}
-    return ModuleSummary(
-        document_id=row.get("document_id", ""),
-        repo_id=row.get("repo_id", ""),
-        module_path=row.get("module_path", ""),
-        commit_hash=row.get("commit_hash", ""),
-        content=row.get("content") or "",
-        file_count=meta.get("file_count", 0),
-    )
-
-
-def _module_key(doc: Dict) -> tuple:
-    return (doc.get("repo_id") or "", doc.get("module_path") or "")
-
-
 def gather(cb: CouchbaseClient, repo_id: str, module_path: str):
     """Pull the file and child-module docs the aggregator would see."""
-    file_rows = list(cb.cluster.query(
-        'SELECT document_id, repo_id, file_path, commit_hash, content, metadata, version '
-        'FROM `code_kosha` '
-        'WHERE type="file_index" AND repo_id=$repo_id AND content IS NOT NULL '
-        'ORDER BY file_path',
-        repo_id=repo_id,
-    ))
-    file_indices = [
-        _to_file_index(r) for r in newest_per_key(file_rows, file_key)
-        if _is_direct_child(r.get("file_path", ""), module_path)
-    ]
-
-    mod_rows = list(cb.cluster.query(
-        'SELECT document_id, repo_id, module_path, commit_hash, content, metadata, version '
-        'FROM `code_kosha` '
-        'WHERE type="module_summary" AND repo_id=$repo_id AND content IS NOT NULL',
-        repo_id=repo_id,
-    ))
-    latest_mods = newest_per_key(mod_rows, _module_key)
-    children = [
-        _to_module_summary(r) for r in latest_mods
-        if _is_direct_child_module(r.get("module_path", ""), module_path)
-    ]
+    file_docs = load_repo_file_docs(cb.cluster, repo_id)
+    module_docs = load_repo_module_docs(cb.cluster, repo_id)
+    file_indices, children = resolve_module_children(file_docs, module_docs, module_path)
     baseline = next(
-        (r.get("content") for r in latest_mods if r.get("module_path") == module_path),
+        (d.get("content") for d in module_docs if d.get("module_path") == module_path),
         None,
     )
     return file_indices, children, baseline
