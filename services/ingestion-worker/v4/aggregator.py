@@ -248,25 +248,54 @@ class BottomUpAggregator:
             return text
         return text[:limit].rsplit(' ', 1)[0] + '…'
 
-    def _identify_key_files(self, file_indices: List[FileIndex]) -> List[str]:
-        """Identify important files in a module."""
-        key_patterns = [
-            "models.py", "views.py", "urls.py",  # Django
-            "index.ts", "index.js", "main.py",   # Entry points
-            "api.py", "routes.py", "handlers.py", # API
-            "config.py", "settings.py",           # Config
-            "__init__.py",                        # Python packages
-        ]
+    # Recognisable entry points, most structurally revealing first. Order is
+    # load-bearing: it ranks the result when more files qualify than fit.
+    KEY_FILE_PATTERNS = [
+        "models.py", "views.py", "urls.py",   # Django
+        "index.ts", "index.js", "main.py",    # Entry points
+        "api.py", "routes.py", "handlers.py",  # API
+        "config.py", "settings.py",            # Config
+        "__init__.py",                         # Python packages
+    ]
 
-        key_files = []
+    LARGE_FILE_LINES = 200
+
+    def _identify_key_files(self, file_indices: List[FileIndex], limit: int = 10) -> List[str]:
+        """
+        Identify the most informative files in a module, as repo-relative paths.
+
+        Returns paths rather than bare basenames. The old version stored
+        `Path(f.file_path).name` with no deduplication, which — combined with the
+        superseded-doc duplication that fed this method several copies of each
+        file — produced entries like ["urls.py", "urls.py", "urls.py",
+        "views.py", "urls.py"]: four indistinguishable names out of a 21-file
+        count for a module that really has 7 files.
+
+        Ranking, since more files can qualify than `limit` allows: recognised
+        entry points first in KEY_FILE_PATTERNS order, then merely-large files
+        by descending size. The previous `[:10]` kept whatever happened to come
+        first in the input.
+        """
+        pattern_rank = {name: i for i, name in enumerate(self.KEY_FILE_PATTERNS)}
+
+        matched: List[tuple] = []  # (sort key, file_path)
+        seen: Set[str] = set()
+
         for f in file_indices:
-            name = Path(f.file_path).name
-            if name in key_patterns:
-                key_files.append(name)
-            elif f.line_count > 200:  # Large files are often important
-                key_files.append(name)
+            if not f.file_path or f.file_path in seen:
+                continue
+            seen.add(f.file_path)
 
-        return key_files[:10]
+            rank = pattern_rank.get(Path(f.file_path).name)
+            if rank is not None:
+                # Tier 0: named entry point, ordered by pattern priority.
+                matched.append(((0, rank, f.file_path), f.file_path))
+            elif f.line_count > self.LARGE_FILE_LINES:
+                # Tier 1: large file, biggest first.
+                matched.append(((1, -f.line_count, f.file_path), f.file_path))
+
+        matched.sort(key=lambda pair: pair[0])
+        return [path for _, path in matched[:limit]]
 
     async def aggregate_repo_summary(
         self,

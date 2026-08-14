@@ -456,7 +456,21 @@ class CodeParser:
                         if class_docstring:
                             class_header += f":\n{class_docstring}"
 
-                        # Create class header chunk
+                        # Create class header chunk.
+                        #
+                        # `code_text` is deliberately the signature + docstring
+                        # only — methods are emitted as their own chunks below,
+                        # so including the body would duplicate them.
+                        #
+                        # The line range, though, describes the *class*, not this
+                        # chunk's text. It previously ended at the body's first
+                        # line (`body_node.start_point[0] + 2`), which made every
+                        # class look ~3 lines long. Two things read that range and
+                        # both broke: `SymbolRef.is_significant` requires >= 5
+                        # lines, so 13,337 of 15,908 classes (84%) never got their
+                        # own symbol_index document, and the `get_file` tool uses
+                        # it to slice source, returning a bare `class Foo:` line
+                        # instead of the class.
                         chunks.append(CodeChunk(
                             repo_id=repo_id,
                             file_path=relative_path,
@@ -467,7 +481,7 @@ class CodeParser:
                                 "language": "python",
                                 "class_name": class_name,
                                 "start_line": node.start_point[0] + 1,
-                                "end_line": body_node.start_point[0] + 2,
+                                "end_line": node.end_point[0] + 1,
                                 "docstring": class_docstring,
                                 **git_metadata
                             }
