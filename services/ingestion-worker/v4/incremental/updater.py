@@ -405,15 +405,17 @@ class IncrementalUpdater:
     def _existing_module_summaries(self, repo_id: str) -> dict:
         """Prior LLM module summaries keyed by module_path, for carry-forward.
 
-        Returns {module_path: (content, EnrichmentLevel.LLM_SUMMARY)}. Only
-        LLM-enriched summaries are returned — fallback ones aren't worth
-        preserving. Keys are normalized to the aggregator's loop convention
-        (root folder is "" there but stored as "(root)"). Must be called before
-        the old summaries are deleted.
+        Returns {module_path: (content, EnrichmentLevel.LLM_SUMMARY, source)}.
+        Only LLM-enriched summaries are returned — fallback ones aren't worth
+        preserving. The stored summary_source travels with the text so a carried
+        summary is not relabelled as something it isn't. Keys are normalized to
+        the aggregator's loop convention (root folder is "" there but stored as
+        "(root)"). Must be called before the old summaries are deleted.
         """
         from v4.schemas import EnrichmentLevel
         query = """
-            SELECT module_path, content, quality.enrichment_level AS lvl
+            SELECT module_path, content, quality.enrichment_level AS lvl,
+                   quality.summary_source AS src
             FROM `code_kosha`
             WHERE repo_id = $repo_id AND type = 'module_summary'
         """
@@ -428,7 +430,9 @@ class IncrementalUpdater:
                     continue
                 if path == "(root)":
                     path = ""
-                existing[path] = (content, EnrichmentLevel.LLM_SUMMARY)
+                existing[path] = (
+                    content, EnrichmentLevel.LLM_SUMMARY, row.get('src') or "",
+                )
         except Exception as e:
             logger.warning(f"Could not load existing module summaries for {repo_id}: {e}")
         return existing

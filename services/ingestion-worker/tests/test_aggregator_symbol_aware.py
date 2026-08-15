@@ -123,10 +123,39 @@ class TestFallbackBehaviourIsPreserved:
         doc = _aggregate(
             StubEnricher(), [_file()],
             use_llm=False,
-            existing_summary=("A previously generated summary.", EnrichmentLevel.LLM_SUMMARY),
+            existing_summary=(
+                "A previously generated summary.",
+                EnrichmentLevel.LLM_SUMMARY,
+                "aggregated_from_symbols",
+            ),
         )
         assert doc.content == "A previously generated summary."
         assert doc.quality.enrichment_level == EnrichmentLevel.LLM_SUMMARY
+
+    def test_carry_forward_keeps_the_prior_provenance(self):
+        """Carrying prose text must not relabel it as symbol-aware.
+
+        The backfill selects work by summary_source; a carried summary stamped
+        with the new provenance would be excluded from upgrade forever.
+        """
+        doc = _aggregate(
+            StubEnricher(), [_file()],
+            use_llm=False,
+            existing_summary=(
+                "Older prose-derived summary.",
+                EnrichmentLevel.LLM_SUMMARY,
+                "aggregated_from_files",
+            ),
+        )
+        assert doc.quality.summary_source == "aggregated_from_files"
+
+    def test_carry_forward_without_a_recorded_source_is_not_claimed_as_upgraded(self):
+        doc = _aggregate(
+            StubEnricher(), [_file()],
+            use_llm=False,
+            existing_summary=("Summary of unknown origin.", EnrichmentLevel.LLM_SUMMARY, ""),
+        )
+        assert doc.quality.summary_source != "aggregated_from_symbols"
 
     def test_llm_failure_falls_back_to_structural_summary(self):
         class Failing(StubEnricher):
@@ -136,3 +165,13 @@ class TestFallbackBehaviourIsPreserved:
         doc = _aggregate(Failing(), [_file()])
         assert doc.quality.enrichment_level == EnrichmentLevel.BASIC
         assert "pkg" in doc.content
+
+    def test_structural_fallback_is_not_labelled_symbol_aware(self):
+        """A mechanical file listing carries the fallback provenance, not the
+        symbol-aware one — otherwise an audit by source reports it as good."""
+        class Failing(StubEnricher):
+            async def enrich_module_symbol_aware(self, module_path, module_context, repo_id):
+                raise RuntimeError("model unavailable")
+
+        doc = _aggregate(Failing(), [_file()])
+        assert doc.quality.summary_source == "fallback"

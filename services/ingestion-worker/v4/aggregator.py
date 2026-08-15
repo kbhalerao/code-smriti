@@ -100,10 +100,11 @@ class BottomUpAggregator:
             commit_hash: Git commit hash
             parent_module_id: document_id of parent (repo or parent module)
             use_llm: Whether to use LLM for this module (False = fallback only)
-            existing_summary: Optional (content, EnrichmentLevel) from the prior
-                commit. Carried forward when this run won't LLM-regenerate the
-                module, so an unaffected module keeps its LLM summary instead of
-                being downgraded to the fallback.
+            existing_summary: Optional (content, EnrichmentLevel, summary_source)
+                from the prior commit. Carried forward when this run won't
+                LLM-regenerate the module, so an unaffected module keeps its LLM
+                summary instead of being downgraded to the fallback. The source
+                travels with the text so provenance stays truthful.
 
         Returns:
             ModuleSummary document
@@ -119,23 +120,32 @@ class BottomUpAggregator:
         #   2. Prior LLM summary carried forward (unaffected module) — avoids the
         #      quality downgrade of overwriting a good summary with the fallback
         #   3. Mechanical structural fallback (no LLM summary ever / unavailable)
-        summary, enrichment = "", EnrichmentLevel.BASIC
+        summary, enrichment, summary_source = "", EnrichmentLevel.BASIC, ""
 
         if use_llm and self.enable_llm and self.quality_tracker.llm_available and module_context:
             summary, enrichment = await self._llm_module_summary(
                 module_path, module_context, repo_id
             )
+            if enrichment == EnrichmentLevel.LLM_SUMMARY:
+                summary_source = "aggregated_from_symbols"
 
         if enrichment != EnrichmentLevel.LLM_SUMMARY and existing_summary:
-            prev_content, prev_level = existing_summary
+            prev_content, prev_level, prev_source = existing_summary
             if prev_content and prev_level == EnrichmentLevel.LLM_SUMMARY:
+                # Carry the prior provenance forward with the prior text. Stamping
+                # a carried-over prose summary as symbol-aware would hide it from
+                # every "which modules still need upgrading" query, permanently.
+                # An unrecorded source is assumed not-yet-upgraded: a redundant
+                # regeneration is cheap, a silently skipped one is not.
                 summary, enrichment = prev_content, EnrichmentLevel.LLM_SUMMARY
+                summary_source = prev_source or "unknown"
 
         if not summary:
             summary = self._fallback_module_summary(
                 module_path, file_indices, child_module_summaries
             )
             enrichment = EnrichmentLevel.BASIC
+            summary_source = "fallback"
 
         # Determine key files
         key_files = self._identify_key_files(file_indices)
@@ -161,7 +171,7 @@ class BottomUpAggregator:
             quality=QualityInfo(
                 enrichment_level=enrichment,
                 llm_available=self.quality_tracker.llm_available,
-                summary_source="aggregated_from_symbols",
+                summary_source=summary_source,
             ),
             version=VersionInfo(
                 schema_version=SCHEMA_VERSION,
@@ -475,10 +485,11 @@ class BottomUpAggregator:
             repo_id: Repository identifier
             commit_hash: Git commit hash
             affected_modules: If provided, only use LLM for these modules (optimization)
-            existing_summaries: Optional {module_path: (content, EnrichmentLevel)}
-                from the prior commit. When a module is not being LLM-regenerated
-                this run (unaffected), its prior LLM summary is carried forward
-                instead of being downgraded to the mechanical fallback.
+            existing_summaries: Optional
+                {module_path: (content, EnrichmentLevel, summary_source)} from the
+                prior commit. When a module is not being LLM-regenerated this run
+                (unaffected), its prior LLM summary is carried forward instead of
+                being downgraded to the mechanical fallback.
 
         Returns:
             (module_summaries, repo_summary)
