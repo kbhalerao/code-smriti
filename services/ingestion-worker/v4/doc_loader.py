@@ -115,7 +115,7 @@ def load_repo_module_docs(cluster, repo_id: str) -> List[Dict]:
     """Current module_summary docs for a repo, one per module path."""
     rows = list(cluster.query(
         f"SELECT document_id, repo_id, module_path, commit_hash, content, metadata, "
-        f"parent_id, children_ids, version FROM `{BUCKET}` "
+        f"parent_id, children_ids, version, quality FROM `{BUCKET}` "
         f"WHERE type = 'module_summary' AND repo_id = $repo_id",
         repo_id=repo_id,
     ))

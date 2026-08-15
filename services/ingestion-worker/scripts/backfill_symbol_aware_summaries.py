@@ -18,6 +18,13 @@ Children are resolved by path, not by the stored `children_ids`. Those ids can
 reference documents the superseded-doc purge removed, and they encode the
 duplicate-inflated child set that motivated this work in the first place.
 
+Only modules that still need upgrading are regenerated. That makes the script
+resumable by construction: if the model goes away mid-run — as it did on
+2026-08-14, when the LLM stopped accepting connections and the circuit breaker
+failed the remaining ~2,990 modules in eleven seconds — rerunning it picks up
+exactly what is left, rather than spending hours redoing finished work. Pass
+`--force-all` to regenerate everything regardless.
+
 Usage:
     ./.venv/bin/python scripts/backfill_symbol_aware_summaries.py --dry-run --limit 5
     ./.venv/bin/python scripts/backfill_symbol_aware_summaries.py --repo kbhalerao/agkit.io-backend
@@ -60,8 +67,34 @@ def module_depth(module_path: str) -> int:
     return len(module_path.split("/")) if module_path else 0
 
 
-def repos_with_modules(cb: CouchbaseClient, repo_filter: str) -> List[str]:
+# A module counts as upgraded only when it holds an LLM summary that was actually
+# built from symbols. Anything else — the old prose path, a structural fallback,
+# a summary carried forward from before this migration — is still work to do.
+# Expressed twice, once in N1QL to skip whole repos without loading them and once
+# in Python to select modules within a repo; the two must agree.
+UPGRADED_SOURCE = "aggregated_from_symbols"
+
+STALE_PREDICATE_N1QL = (
+    f"(IFMISSINGORNULL(quality.summary_source, '') != '{UPGRADED_SOURCE}'"
+    f" OR IFMISSINGORNULL(quality.enrichment_level, '') != "
+    f"'{EnrichmentLevel.LLM_SUMMARY.value}')"
+)
+
+
+def is_stale(mod_doc: Dict) -> bool:
+    quality = mod_doc.get("quality") or {}
+    return not (
+        quality.get("summary_source") == UPGRADED_SOURCE
+        and quality.get("enrichment_level") == EnrichmentLevel.LLM_SUMMARY.value
+    )
+
+
+def repos_with_modules(
+    cb: CouchbaseClient, repo_filter: str, stale_only: bool
+) -> List[str]:
     where = "type = 'module_summary'"
+    if stale_only:
+        where += f" AND {STALE_PREDICATE_N1QL}"
     params = {}
     if repo_filter:
         where += " AND repo_id = $repo_id"
@@ -134,16 +167,24 @@ async def process_repo(
     concurrency: int,
     dry_run: bool,
     limit: int,
+    stale_only: bool,
 ) -> Dict[str, int]:
-    file_docs = load_repo_file_docs(cb.cluster, repo_id)
     module_docs = load_repo_module_docs(cb.cluster, repo_id)
     if not module_docs:
         return {}
 
+    # Narrow to the modules needing work before loading files. Children are still
+    # resolved against the *full* module set, so an upgraded submodule's summary
+    # still reaches its stale parent's context.
+    module_docs_to_do = [d for d in module_docs if is_stale(d)] if stale_only \
+        else module_docs
+    if not module_docs_to_do:
+        return {}
+
+    file_docs = load_repo_file_docs(cb.cluster, repo_id)
+
     if limit:
-        module_docs_to_do = module_docs[:limit]
-    else:
-        module_docs_to_do = module_docs
+        module_docs_to_do = module_docs_to_do[:limit]
 
     by_depth: Dict[int, List[Dict]] = defaultdict(list)
     for d in module_docs_to_do:
@@ -176,16 +217,22 @@ async def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="Max modules per repo (sampling)")
     ap.add_argument("--concurrency", type=int, default=4, help="Parallel LLM calls")
     ap.add_argument("--dry-run", action="store_true", help="Generate but do not write")
+    ap.add_argument(
+        "--force-all", action="store_true",
+        help="Regenerate every module, including ones already symbol-aware",
+    )
     args = ap.parse_args()
+    stale_only = not args.force_all
 
     cb = CouchbaseClient()
     enricher = V4LLMEnricher()
     embed_gen = LocalEmbeddingGenerator()
 
-    repos = repos_with_modules(cb, args.repo)
+    repos = repos_with_modules(cb, args.repo, stale_only)
     logger.info(
         f"Model: {LLM_CONFIG.model} @ {LLM_CONFIG.base_url} | repos: {len(repos)} | "
-        f"concurrency: {args.concurrency} | dry_run: {args.dry_run}"
+        f"concurrency: {args.concurrency} | dry_run: {args.dry_run} | "
+        f"scope: {'stale only' if stale_only else 'ALL modules'}"
     )
 
     totals: Dict[str, int] = defaultdict(int)
@@ -193,7 +240,8 @@ async def main() -> int:
     for i, repo_id in enumerate(repos, 1):
         t0 = time.time()
         tally = await process_repo(
-            enricher, embed_gen, cb, repo_id, args.concurrency, args.dry_run, args.limit
+            enricher, embed_gen, cb, repo_id, args.concurrency, args.dry_run,
+            args.limit, stale_only,
         )
         if not tally:
             continue
