@@ -82,7 +82,7 @@ class RAGPipeline:
         db: CouchbaseClient,
         tenant_id: str = "code_kosha",
         ollama_host: str = None,
-        llm_model: str = "qwen/qwen3-30b-a3b-2507",
+        llm_model: str = "general",
         embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5",
     ):
         self.db = db
@@ -141,7 +141,7 @@ class RAGPipeline:
         """
         logger.info(f"Pipeline: persona={persona.value} query='{query[:80]}...'")
 
-        # Step 1: Intent Classification (Qwen3 tool call, ~2-3s)
+        # Step 1: Intent Classification (LLM tool call, ~2-3s)
         intent = await self.classifier.classify(
             query=query,
             persona=persona,
@@ -194,7 +194,7 @@ class RAGPipeline:
                 },
             )
 
-        # Step 3: Synthesis (Qwen3, ~5-15s depending on response length)
+        # Step 3: Synthesis (LLM, ~5-15s depending on response length)
         synthesis = await self.synthesizer.synthesize(
             query=query,
             intent=intent,
@@ -258,7 +258,7 @@ def create_pipeline(
         db=db,
         tenant_id=tenant_id,
         ollama_host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        llm_model=os.getenv("LMSTUDIO_MODEL", "qwen/qwen3-30b-a3b-2507"),
+        llm_model=os.getenv("LLM_MODEL_NAME", "general"),
         embedding_model_name=os.getenv(
             "EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"
         ),

@@ -1,7 +1,7 @@
 """
 Synthesis Module for RAG Pipeline
 
-Generates answers using Qwen3 with intent-specific prompts.
+Generates answers using the configured LLM with intent-specific prompts.
 Loads templates from files for easy customization.
 """
 
@@ -224,13 +224,13 @@ DEFAULT_PROMPTS = {
 
 class Synthesizer:
     """
-    Generates answers using Qwen3 with intent-specific prompts.
+    Generates answers using the `general` role alias with intent-specific prompts.
     """
 
     def __init__(
         self,
         ollama_host: str = None,
-        model: str = "qwen/qwen3-30b-a3b-2507",
+        model: str = "general",
         prompts_dir: str = None,
     ):
         self.ollama_host = ollama_host or os.getenv(
@@ -272,7 +272,7 @@ class Synthesizer:
         conversation_history: list[dict] = None,
     ) -> SynthesisResult:
         """
-        Generate answer using Qwen3 with intent-specific prompt.
+        Generate answer using the configured LLM with an intent-specific prompt.
 
         Args:
             query: Original user query
@@ -323,7 +323,7 @@ class Synthesizer:
 
         messages.append({"role": "user", "content": prompt})
 
-        # Call Qwen3
+        # Call the LLM
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(

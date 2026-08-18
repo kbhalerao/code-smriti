@@ -42,7 +42,7 @@ class QueryRewriter:
     def __init__(
         self,
         ollama_host: Optional[str] = None,
-        model: str = "qwen/qwen3-30b-a3b-2507",
+        model: str = "general",
         timeout: float = 15.0,
         max_vocabulary_chars: int = 2000,
     ):

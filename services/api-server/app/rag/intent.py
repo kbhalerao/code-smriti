@@ -1,7 +1,7 @@
 """
 Intent Classification for RAG Pipeline
 
-Uses Qwen3 tool calling to classify queries and expand search terms
+Uses LLM tool calling to classify queries and expand search terms
 in a single LLM call. Supports conversation history for context.
 """
 
@@ -87,7 +87,7 @@ class ClassifiedIntent(BaseModel):
         return f"{original} {keywords}"
 
 
-# Tool definition for Qwen3 function calling
+# Tool definition for LLM function calling
 def get_classify_tool(persona: Persona) -> dict:
     """Get tool definition filtered by persona's valid intents."""
 
@@ -197,12 +197,12 @@ Always call the classify_query function."""
 
 
 class IntentClassifier:
-    """Classifies queries using Qwen3 tool calling."""
+    """Classifies queries using LLM tool calling."""
 
     def __init__(
         self,
         ollama_host: str = None,
-        model: str = "qwen/qwen3-30b-a3b-2507"
+        model: str = "general"
     ):
         self.ollama_host = ollama_host or os.getenv(
             "OLLAMA_HOST", "http://localhost:11434"
@@ -216,7 +216,7 @@ class IntentClassifier:
         history: list[dict] = None
     ) -> ClassifiedIntent:
         """
-        Classify query intent using Qwen3 tool calling.
+        Classify query intent using LLM tool calling.
 
         Args:
             query: The user's question

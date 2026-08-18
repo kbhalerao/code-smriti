@@ -40,7 +40,12 @@ class Settings(BaseSettings):
 
     # LLM and Embedding Models
     # Note: LLM must support tool/function calling for RAG agent to work
-    llm_model_name: str = "general"  # alias -> qwen3.5:35b-mlx (pinned/always-loaded); thinking+tools, reasoning_effort=none for clean output
+    # Role alias, not a raw tag — resolves server-side, so the weights can churn
+    # without a redeploy. Check the current target with `ollama show general`;
+    # do not trust a comment here to stay true. Pinned/always-loaded, so RAG and
+    # ingestion share one resident model. Supports tools + thinking; we send
+    # reasoning_effort=none for clean output.
+    llm_model_name: str = "general"
     embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
 
     # Application

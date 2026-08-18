@@ -387,7 +387,7 @@ async def unified_ask_endpoint(
     and capability/proposal questions (sales persona).
 
     Features:
-    - Intent classification via Qwen3 tool calling
+    - Intent classification via LLM tool calling
     - Query expansion for better retrieval
     - Progressive drilldown when initial results are inadequate
     - Intent-specific synthesis prompts
