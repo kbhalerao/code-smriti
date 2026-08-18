@@ -50,10 +50,16 @@ class LLMConfig:
     base_url: str
     temperature: float = 0.3
     max_tokens: int = 2000
-    timeout_seconds: float = 60.0  # Per-request timeout
+    # Per-request timeout. Must cover server-side queue time as well as
+    # generation — see config.llm_timeout_seconds for why 60s was too tight.
+    timeout_seconds: float = config.llm_timeout_seconds
     max_retries: int = 2  # Retries on failure
-    # LM Studio /v1/responses "reasoning.effort" — set to "none" to disable thinking.
-    # Leave None for the model's default behavior.
+    # /v1/responses "reasoning.effort" — set to "none" to disable thinking.
+    #
+    # "none" is the only value that reliably means *off*. The rest of the scale
+    # is renderer-dependent: on gemma4 (the current `general`) low/medium/high
+    # all collapse to plain "thinking on", while qwen3.8 does distinguish them.
+    # Never treat this as a dial without checking the model's renderer first.
     reasoning_effort: Optional[str] = None
 
 
@@ -130,13 +136,29 @@ class LLMEnricher:
         data = response.json()
         # Extract text from the responses API format
         # Response structure: {"output": [{"type": "message", "content": [{"type": "output_text", "text": "..."}]}]}
+        #
+        # An empty output_text is a failure, not a result. A thinking model that
+        # spends its whole max_output_tokens budget reasoning returns exactly
+        # this: status="completed", no incomplete_details, and a message block
+        # holding "". Returning that silently is how the daily digest posted
+        # empty content nine times between June and August 2026. Raising sends
+        # it through generate()'s retry loop like any other bad response.
         output = data.get("output", [])
         for item in output:
             if item.get("type") == "message":
                 content = item.get("content", [])
                 for block in content:
                     if block.get("type") == "output_text":
-                        return block.get("text", "")
+                        text = block.get("text") or ""
+                        if not text.strip():
+                            usage = data.get("usage", {})
+                            raise ValueError(
+                                f"LLM returned an empty message "
+                                f"(output_tokens={usage.get('output_tokens')}, "
+                                f"max_output_tokens={self.config.max_tokens}); "
+                                f"likely truncated while thinking"
+                            )
+                        return text
         # Fallback: try to get text directly if format differs
         if "text" in data:
             return data["text"]
@@ -181,8 +203,15 @@ class LLMEnricher:
                         output_text = block.get("text", "")
                         break
 
-        if output_text is None:
-            raise ValueError(f"Could not extract output from responses API: {data}")
+        # Same contract as _call_responses: a missing *or* empty message is a
+        # failed call, so it retries rather than yielding an empty BDR.
+        if output_text is None or not output_text.strip():
+            usage = data.get("usage", {})
+            raise ValueError(
+                f"Could not extract a non-empty output from responses API "
+                f"(output_tokens={usage.get('output_tokens')}, "
+                f"max_output_tokens={self.config.max_tokens})"
+            )
 
         return {
             "reasoning": reasoning_text,

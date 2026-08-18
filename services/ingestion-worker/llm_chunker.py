@@ -41,14 +41,57 @@ class SemanticChunk:
     confidence: float = 0.0
 
 
+# Output budget for one chunker call. Generous on purpose: this is a ceiling, not
+# an allocation, and typical calls finish around 900 tokens. Hitting it is a
+# silent corruption, not a soft limit — see _call_llm's truncation check.
+MAX_OUTPUT_TOKENS = 8000
+
+
 @dataclass
 class EnrichmentPass:
     """Configuration for an enrichment pass"""
     name: str
     focus: str  # What to look for
     prompt_template: str
+    # The closed vocabulary for this pass's `type` field. Enforced by the JSON
+    # schema (see response_schema), so the model cannot invent a category.
+    types: List[str] = field(default_factory=list)
     min_file_size: int = 500  # Only analyze files larger than this
     languages: List[str] = field(default_factory=list)  # Empty = all languages
+
+
+def response_schema(types: List[str]) -> dict:
+    """JSON schema for one enrichment pass's response.
+
+    Every pass returns the same shape — an array of found items — differing only
+    in the `type` vocabulary. Handing this to the server as a `json_schema`
+    response format constrains decoding, so the reply is parseable JSON by
+    construction rather than by instruction. Prompt-only "respond with JSON"
+    produced 532 unparseable replies in production (~5% of calls), most often by
+    wrapping the array in a ```json fence.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": types},
+                "name": {"type": "string"},
+                "content": {"type": "string"},
+                "start_line": {"type": "integer"},
+                "end_line": {"type": "integer"},
+                "purpose": {"type": "string"},
+                "related_symbols": {"type": "array", "items": {"type": "string"}},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "confidence": {"type": "number"},
+            },
+            "required": [
+                "type", "name", "content", "start_line", "end_line",
+                "purpose", "related_symbols", "tags", "confidence",
+            ],
+            "additionalProperties": False,
+        },
+    }
 
 
 # Enrichment pass configurations
@@ -83,7 +126,7 @@ Respond with JSON array of found items:
 ```json
 [
   {{
-    "type": "embedded_sql",
+    "type": "sql",
     "name": "get_user_transactions_query",
     "content": "SELECT t.*, u.name FROM transactions t JOIN users u...",
     "start_line": 45,
@@ -97,6 +140,7 @@ Respond with JSON array of found items:
 ```
 
 Return empty array [] if no embedded code found. Only include items with confidence > 0.7.""",
+        types=["sql", "html", "regex", "shell", "graphql", "json_schema"],
         languages=["python", "javascript", "typescript"]
     ),
 
@@ -144,6 +188,7 @@ Respond with JSON array:
 ```
 
 Return empty array [] if no significant business logic found. Only include items with confidence > 0.7.""",
+        types=["validation", "workflow", "calculation", "authorization", "transform", "integration"],
         languages=[]  # All languages
     ),
 
@@ -191,6 +236,7 @@ Respond with JSON array:
 ```
 
 Return empty array [] if no API patterns found.""",
+        types=["endpoint", "schema", "middleware", "resolver", "websocket", "rpc"],
         languages=["python", "javascript", "typescript"]
     ),
 ]
@@ -284,20 +330,27 @@ class LLMChunker:
         temperature: float = 0.2,
         reasoning_effort: str = None,
     ):
-        # Env-driven (LLM_BASE_URL / LLM_MODEL / LLM_REASONING_EFFORT) — no
-        # specific server implied.
+        # Env-driven (LLM_BASE_URL / LLM_CHUNKER_MODEL) — no specific server implied.
         self.base_url = (base_url or config.llm_base_url).rstrip("/")
-        self.model = model or config.llm_model
+        # Deliberately NOT config.llm_model: the chunker is the one caller that
+        # depends on schema-constrained decoding, which only ollama's GGUF engine
+        # implements. See config.llm_chunker_model.
+        self.model = model or config.llm_chunker_model
         self.temperature = temperature
-        # reasoning="none" keeps thinking-capable models (e.g. gemma) from
-        # spending the output budget on a reasoning trace and returning an empty
-        # message — which surfaced as "Failed to parse LLM response as JSON".
-        self.reasoning_effort = (
-            reasoning_effort if reasoning_effort is not None
-            else (config.llm_reasoning_effort or None)
-        )
+        # Thinking is pinned OFF here, NOT inherited from LLM_REASONING_EFFORT.
+        # Chunking is extraction against a fixed schema — there is nothing to
+        # reason about, and a reasoning trace only spends the output budget (and
+        # wall clock) before the answer. Two reasons this is pinned rather than
+        # configured:
+        #   1. Inheriting the global means a change made for RAG's benefit
+        #      silently slows every ingestion run.
+        #   2. "none" is the only value that means off. Omitting the key does NOT
+        #      mean off — on gemma4 an absent `reasoning` renders as thinking ON,
+        #      so an unset/empty env var would have quietly enabled it.
+        self.reasoning_effort = reasoning_effort or "none"
         self._client = None  # Lazy init to avoid event loop issues
         self._client_loop = None  # Track which loop the client was created on
+        self._schema_support_checked = False
         logger.info(f"LLM Chunker initialized: {self.model} @ {self.base_url}")
 
     @property
@@ -321,30 +374,92 @@ class LLMChunker:
         if needs_new_client:
             # Discard old client (don't await close - it's bound to closed loop)
             self._client = None
-            self._client = httpx.AsyncClient(timeout=180.0)
+            self._client = httpx.AsyncClient(timeout=config.llm_timeout_seconds)
             self._client_loop = current_loop
 
         return self._client
 
-    async def _call_llm(self, prompt: str) -> str:
-        """Call the OpenAI-compatible /v1/responses endpoint."""
+    async def _warn_if_schema_unsupported(self) -> None:
+        """Warn once if this model's runtime can't honour a response schema.
+
+        A safetensors/MLX build accepts `text.format` and ignores it, returning
+        fenced prose that fails to parse — with nothing in the response marking
+        it as unsupported. That silence is what made this cost ~3-5% of chunks
+        undetected, so surface it at the first call instead.
+
+        `/api/show` is ollama-specific while the rest of this class is
+        provider-agnostic, so a server without it is not an error — just skip.
+        """
+        if self._schema_support_checked:
+            return
+        self._schema_support_checked = True
         try:
-            # Combine system and user content for responses API
-            full_prompt = "You are a code analysis expert. Respond only with valid JSON.\n\n" + prompt
+            resp = await self.client.post(f"{self.base_url}/api/show", json={"model": self.model})
+            resp.raise_for_status()
+            fmt = (resp.json().get("details") or {}).get("format", "unknown")
+        except Exception as e:
+            logger.debug(f"Could not determine model format for {self.model}: {e}")
+            return
+        if fmt != "gguf":
+            logger.warning(
+                f"Chunker model {self.model!r} is format={fmt}, not gguf — ollama only "
+                f"enforces json_schema on its GGUF engine, so responses will be "
+                f"unconstrained and some will fail to parse. Set LLM_CHUNKER_MODEL to a "
+                f"GGUF build (e.g. 'structured')."
+            )
+
+    async def _call_llm(self, prompt: str, schema: dict = None) -> str:
+        """Call the OpenAI-compatible /v1/responses endpoint.
+
+        When `schema` is given it is sent as a `json_schema` response format, so
+        the server constrains decoding to that shape. The reply is then valid
+        JSON by construction — no fences, no prose, no invented `type` values.
+        """
+        try:
+            if schema is not None:
+                await self._warn_if_schema_unsupported()
+            full_prompt = "You are a code analysis expert.\n\n" + prompt
             payload = {
                 "model": self.model,
                 "input": full_prompt,
                 "temperature": self.temperature,
-                "max_output_tokens": 4000,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
             }
-            if self.reasoning_effort:
-                payload["reasoning"] = {"effort": self.reasoning_effort}
+            if schema is not None:
+                payload["text"] = {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "semantic_chunks",
+                        "strict": True,
+                        "schema": schema,
+                    }
+                }
+            # Always sent, never conditional: an absent `reasoning` key is not
+            # "off", it is the model's default, which for gemma4 is thinking ON.
+            payload["reasoning"] = {"effort": self.reasoning_effort}
             response = await self.client.post(
                 f"{self.base_url}/v1/responses",
                 json=payload,
             )
             response.raise_for_status()
             data = response.json()
+
+            # Truncation check. A reply cut off at the token ceiling is still a
+            # valid *prefix* under schema-constrained decoding — an unterminated
+            # string, typically — so it fails to parse for a reason that has
+            # nothing to do with the model ignoring instructions. ollama reports
+            # status="completed" with incomplete_details=None even when it
+            # stopped at the cap, so output_tokens hitting the ceiling is the
+            # only available tell. Say so plainly rather than letting it land as
+            # a generic "Failed to parse LLM response as JSON".
+            usage = data.get("usage", {})
+            if usage.get("output_tokens") is not None and usage["output_tokens"] >= MAX_OUTPUT_TOKENS:
+                logger.warning(
+                    f"LLM response hit the {MAX_OUTPUT_TOKENS}-token output ceiling and was "
+                    f"truncated mid-structure; chunks from this call are lost. "
+                    f"Raise MAX_OUTPUT_TOKENS or shrink the analysed content window."
+                )
+
             # Extract text from responses API format
             output = data.get("output", [])
             for item in output:
@@ -352,7 +467,21 @@ class LLMChunker:
                     content = item.get("content", [])
                     for block in content:
                         if block.get("type") == "output_text":
-                            return block.get("text", "")
+                            text = block.get("text") or ""
+                            if not text.strip():
+                                # A thinking model that burns its whole output
+                                # budget reasoning returns status="completed"
+                                # with an empty message. Report it as what it
+                                # is instead of letting it become a spurious
+                                # "Failed to parse JSON".
+                                logger.warning(
+                                    f"LLM returned an empty message "
+                                    f"(output_tokens={usage.get('output_tokens')}, "
+                                    f"max_output_tokens={MAX_OUTPUT_TOKENS}); "
+                                    f"treating as no chunks"
+                                )
+                                return "[]"
+                            return text
             # Fallback
             if "text" in data:
                 return data["text"]
@@ -371,7 +500,12 @@ class LLMChunker:
             return "[]"
 
     def _parse_llm_response(self, response: str) -> List[Dict]:
-        """Parse JSON from LLM response, handling markdown code blocks"""
+        """Parse JSON from LLM response, handling markdown code blocks.
+
+        With schema-constrained decoding the response is already valid JSON;
+        the fence-stripping and escape-repair below are the boundary guard for a
+        server that ignores or mis-implements the response format.
+        """
         # Extract JSON from markdown code blocks if present
         json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
         if json_match:
@@ -439,9 +573,9 @@ class LLMChunker:
                 existing_chunks=json.dumps([c.get("symbol_name", c.get("name", "")) for c in existing_chunks[:20]])
             )
 
-            # Call LLM
+            # Call LLM, constrained to this pass's response shape and type vocabulary
             logger.debug(f"Running {pass_config.name} pass on {file_path}")
-            response = await self._call_llm(prompt)
+            response = await self._call_llm(prompt, schema=response_schema(pass_config.types))
 
             # Parse response
             items = self._parse_llm_response(response)
