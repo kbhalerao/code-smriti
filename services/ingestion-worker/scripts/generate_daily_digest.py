@@ -4,8 +4,8 @@ Daily Ingestion Digest -> Chief of Staff
 
 Runs as the final step of the daily incremental ingestion (see run_incremental.sh).
 Reads the most recent `ingestion_run` doc from Couchbase, pulls the `commit_index`
-docs it produced, synthesizes a per-repo / per-author markdown summary via the configured LLM,
-the configured LLM, and POSTs the result as a `note` into the
+docs it produced, synthesizes a per-repo / per-author markdown summary via the
+configured LLM, and POSTs the result as a `note` into the
 Chief of Staff inbox (tags=['updates'], status=inbox, priority=low).
 
 Originating idea: cos doc fe595161.
@@ -230,12 +230,21 @@ def fallback_markdown(
 
 
 async def synthesize(grouped: dict[str, dict[str, list[dict]]], run_doc: dict, digest_date: str) -> tuple[str, str]:
-    """Call gemma-4-26b-a4b. Returns (markdown, mode) where mode is 'llm' or 'fallback'."""
-    # gemma-4-26b-a4b is a thinking model. the /v1/responses API isolates
-    # reasoning tokens from output content (see llm_enricher._call_responses, which
-    # extracts only type="message" blocks). Use reasoning_effort="medium" for this
-    # cross-repo synthesis task — the digest benefits from reasoning about themes
-    # across repos, unlike single-file summaries where "none" tested better.
+    """Call the configured LLM. Returns (markdown, mode) where mode is 'llm' or 'fallback'."""
+    # Thinking is off, matching LLM_REASONING_EFFORT=none and every other call
+    # site (generate_bdr.py, backfill_module_summaries.py).
+    #
+    # This used to pass reasoning_effort="medium". On the current model
+    # (`general` -> gemma4 26b-a4b) thinking is binary, so the whole scale
+    # collapses: "low"/"medium"/"high"/omitted are all just thinking ON, and
+    # only "none" turns it off. Thinking on, this prompt consumed 5.2k-8k+
+    # output tokens across runs — straddling the 8000 cap, so roughly one run in
+    # five spent the entire budget reasoning and emitted an empty message.
+    #
+    # Measured on the 2026-08-17 run, same prompt: thinking on took 80s / 7364
+    # tokens; thinking off took 4s / 428 tokens and produced a slightly more
+    # specific digest. build_prompt already hands the model a complete
+    # per-repo/per-author rollup, so there is nothing left for it to reason out.
     cfg = LLMConfig(
         provider=LLM_CONFIG.provider,
         model=LLM_CONFIG.model,
@@ -243,14 +252,20 @@ async def synthesize(grouped: dict[str, dict[str, list[dict]]], run_doc: dict, d
         temperature=0.3,
         max_tokens=8000,
         timeout_seconds=600.0,
-        reasoning_effort="medium",
+        reasoning_effort="none",
     )
     enricher = LLMEnricher(cfg)
     try:
         prompt = build_prompt(run_doc, grouped, digest_date)
         logger.info(f"Calling {cfg.model} with prompt length {len(prompt)} chars")
-        out = await enricher.generate(prompt)
-        return out.strip(), "llm"
+        out = (await enricher.generate(prompt)).strip()
+        if not out:
+            # generate() raises on an empty message, so reaching here means an
+            # alternate extraction path produced nothing. Never return "" —
+            # cos rejects empty content with a 422.
+            logger.warning("LLM returned empty markdown; using fallback rollup")
+            return fallback_markdown(grouped, digest_date, "empty LLM response"), "fallback"
+        return out, "llm"
     except LLMUnavailableError as e:
         logger.warning(f"LLM unavailable: {e}; using fallback rollup")
         return fallback_markdown(grouped, digest_date, str(e)), "fallback"
@@ -275,6 +290,12 @@ def post_to_cos(
             "cos_api_url or cos_token not set; skipping POST. "
             "Set COS_API_URL and COS_TOKEN in .env."
         )
+        return False
+
+    # cos requires content of at least 1 character. Catch an empty body here
+    # rather than spending a round trip to be told so by a 422.
+    if not markdown.strip():
+        logger.error("Refusing to POST an empty digest; nothing to send.")
         return False
 
     # Hard cap on content to fit the cos schema.
@@ -320,7 +341,7 @@ async def amain(args: argparse.Namespace) -> int:
     run_doc = fetch_latest_run(cb, args.run_id)
     if not run_doc:
         logger.error("No ingestion_run doc found; nothing to digest.")
-        return 0  # fail-soft
+        return 1
 
     run_id = run_doc.get("run_id") or "unknown"
     started_at = run_doc.get("timestamp") or ""
@@ -351,7 +372,7 @@ async def amain(args: argparse.Namespace) -> int:
             body, title, run_id, digest_date, "empty",
             {"repos_active": 0, "commits": 0, "authors": 0},
         )
-        return 0 if ok else 0  # fail-soft regardless
+        return 0 if ok else 1
 
     commits = fetch_commits_for_run(cb, active_repos, started_at)
     if not commits:
@@ -368,11 +389,11 @@ async def amain(args: argparse.Namespace) -> int:
         if args.dry_run:
             print(body)
             return 0
-        post_to_cos(
+        ok = post_to_cos(
             body, title, run_id, digest_date, "no_commits",
             {"repos_active": len(active_repos), "commits": 0, "authors": 0},
         )
-        return 0
+        return 0 if ok else 1
 
     grouped = group_commits(commits)
     grouped = trim_to_budget(grouped)
@@ -398,8 +419,12 @@ async def amain(args: argparse.Namespace) -> int:
         print(markdown)
         return 0
 
+    # Non-zero on a failed post. run_incremental.sh already fail-softs the run's
+    # own exit code around this step (`set +e`) and turns a non-zero digest into
+    # a high-priority cos alert — swallowing the failure here is what kept nine
+    # missing digests invisible.
     ok = post_to_cos(markdown, title, run_id, digest_date, mode, counts)
-    return 0 if ok else 0  # fail-soft: never break the LaunchAgent run
+    return 0 if ok else 1
 
 
 def main():
