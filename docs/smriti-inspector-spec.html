@@ -1,392 +1,214 @@
 <title>The Judgment Layer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 
 <style>
   :root{
     --ground:#F4F6F8; --surface:#FFFFFF; --ink:#141A22; --ink-2:#4A5666; --ink-3:#77869A;
-    --rule:#DDE3E9; --accent:#3F3D8F; --accent-soft:#ECEBF7;
-    --good:#127f57; --bad:#c23b3a; --warn:#9a6a00;
-    --good-bg:#E4F3EC; --bad-bg:#FBE9E8; --warn-bg:#F8EFDC;
-    --code-bg:#F0F3F6; --tint:#FFF3D6;
+    --rule:#DDE3E9; --accent:#3F3D8F; --good:#127f57; --code-bg:#F0F3F6;
     --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
-    --serif:"Source Serif 4",Georgia,serif;
     --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
       --ground:#0F131A; --surface:#171C24; --ink:#E7ECF2; --ink-2:#A9B6C6; --ink-3:#77869A;
-      --rule:#28303A; --accent:#A29BEF; --accent-soft:#221F3A;
-      --good:#4cc38a; --bad:#f07a78; --warn:#d8a63a;
-      --good-bg:#12281F; --bad-bg:#2C1817; --warn-bg:#2A2213;
-      --code-bg:#111620; --tint:#2E2718;
+      --rule:#28303A; --accent:#A29BEF; --good:#4cc38a; --code-bg:#111620;
     }
   }
   :root[data-theme="dark"]{
     --ground:#0F131A; --surface:#171C24; --ink:#E7ECF2; --ink-2:#A9B6C6; --ink-3:#77869A;
-    --rule:#28303A; --accent:#A29BEF; --accent-soft:#221F3A;
-    --good:#4cc38a; --bad:#f07a78; --warn:#d8a63a;
-    --good-bg:#12281F; --bad-bg:#2C1817; --warn-bg:#2A2213;
-    --code-bg:#111620; --tint:#2E2718;
+    --rule:#28303A; --accent:#A29BEF; --good:#4cc38a; --code-bg:#111620;
   }
-
   *{box-sizing:border-box}
-  body{
-    background:var(--ground); color:var(--ink); font-family:var(--sans);
-    line-height:1.6; margin:0; padding:0 1.5rem 6rem;
-    -webkit-font-smoothing:antialiased;
-  }
-  .wrap{max-width:52rem; margin:0 auto}
-  header{padding:4.5rem 0 2.5rem; border-bottom:1px solid var(--rule)}
-  .eyebrow{
-    font-family:var(--mono); font-size:.7rem; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--accent); margin:0 0 1.1rem;
-  }
-  h1{
-    font-family:var(--serif); font-weight:600; font-size:clamp(2.1rem,5vw,3rem);
-    line-height:1.1; margin:0 0 1rem; text-wrap:balance; letter-spacing:-.015em;
-  }
-  .standfirst{
-    font-family:var(--serif); font-size:1.18rem; color:var(--ink-2);
-    margin:0; max-width:38rem;
-  }
-  .meta{
-    font-family:var(--mono); font-size:.72rem; color:var(--ink-3);
-    margin-top:1.8rem; display:flex; flex-wrap:wrap; gap:.5rem 1.4rem;
-  }
-  h2{
-    font-family:var(--serif); font-weight:600; font-size:1.6rem; line-height:1.25;
-    margin:3.5rem 0 .3rem; text-wrap:balance; letter-spacing:-.01em;
-  }
-  h2 .num{
-    font-family:var(--mono); font-size:.72rem; color:var(--accent);
-    display:block; margin-bottom:.55rem; letter-spacing:.1em; font-weight:400;
-  }
-  h3{
-    font-family:var(--sans); font-weight:600; font-size:1rem;
-    margin:2.1rem 0 .4rem; letter-spacing:-.005em;
-  }
-  p{margin:.9rem 0; max-width:38rem}
-  a{color:var(--accent)}
-  strong{font-weight:600}
-  code{
-    font-family:var(--mono); font-size:.855em; background:var(--code-bg);
-    padding:.12em .38em; border-radius:3px;
-  }
-  .lede{font-size:1.05rem}
-
-  .callout{
-    background:var(--surface); border:1px solid var(--rule);
-    border-left:3px solid var(--accent); border-radius:4px;
-    padding:1.15rem 1.35rem; margin:1.8rem 0; max-width:38rem;
-  }
-  .callout p{margin:.4rem 0}
-  .callout p:first-child{margin-top:0}
-  .callout p:last-child{margin-bottom:0}
-  .callout .label{
-    font-family:var(--mono); font-size:.68rem; letter-spacing:.12em;
-    text-transform:uppercase; color:var(--accent); display:block; margin-bottom:.5rem;
-  }
-
-  .scroll{overflow-x:auto; margin:1.5rem 0; -webkit-overflow-scrolling:touch}
-  table{border-collapse:collapse; width:100%; min-width:32rem; font-size:.9rem}
-  th,td{text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--rule); vertical-align:top}
-  th{
-    font-family:var(--mono); font-size:.68rem; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--ink-3); font-weight:400;
-    border-bottom:1px solid var(--ink-3);
-  }
-  td.num{font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
-  .verdict{
-    font-family:var(--mono); font-size:.8rem; font-weight:500;
-    padding:.15em .5em; border-radius:3px; white-space:nowrap;
-  }
-  .v-good{background:var(--good-bg); color:var(--good)}
-  .v-warn{background:var(--warn-bg); color:var(--warn)}
-  .v-bad{background:var(--bad-bg); color:var(--bad)}
-
-  pre{
-    font-family:var(--mono); font-size:.8rem; line-height:1.65;
-    background:var(--surface); border:1px solid var(--rule); border-radius:4px;
-    padding:1rem 1.15rem; overflow-x:auto; margin:1.5rem 0;
-  }
-  pre .c{color:var(--ink-3)}
-  pre .k{color:var(--accent)}
-
-  /* interface mockup */
-  .mock{
-    display:grid; grid-template-columns:11rem 1fr 13rem; gap:2px;
-    background:var(--rule); border:1px solid var(--rule); border-radius:5px;
-    overflow:hidden; margin:1.8rem 0; font-size:.7rem; line-height:1.5;
-  }
-  .pane{background:var(--surface); padding:.75rem .8rem; min-height:15rem}
-  .pane-h{
-    font-family:var(--mono); font-size:.6rem; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--ink-3); margin-bottom:.7rem;
-    padding-bottom:.4rem; border-bottom:1px solid var(--rule);
-  }
-  .tree{font-family:var(--mono); font-size:.66rem; color:var(--ink-2)}
-  .tree div{padding:.13rem 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .tree .sel{background:var(--accent-soft); color:var(--accent); margin:0 -.3rem; padding-left:.3rem; padding-right:.3rem; border-radius:2px}
-  .tree .ghost{color:var(--bad); opacity:.85}
-  .codeline{font-family:var(--mono); font-size:.66rem; color:var(--ink-2); white-space:pre; overflow:hidden}
-  .codeline .ln{color:var(--ink-3); display:inline-block; width:1.7rem}
-  .codeline.hl{background:var(--tint); margin:0 -.8rem; padding:0 .8rem}
-  .stack{border-left:2px solid var(--rule); padding-left:.6rem; margin-bottom:.7rem}
-  .stack .lvl{font-family:var(--mono); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3)}
-  .stack .txt{color:var(--ink-2); font-size:.66rem}
-  .stack.cur{border-left-color:var(--accent)}
-  .figcap{
-    font-size:.8rem; color:var(--ink-3); max-width:38rem;
-    margin:-.6rem 0 2rem; font-style:italic;
-  }
-  @media (max-width:640px){
-    .mock{grid-template-columns:1fr}
-    .pane{min-height:0}
-  }
-
-  .kv{display:grid; grid-template-columns:auto 1fr; gap:.35rem 1.1rem; font-size:.88rem; margin:1.2rem 0; max-width:38rem}
-  .kv dt{font-family:var(--mono); font-size:.78rem; color:var(--accent); white-space:nowrap}
-  .kv dd{margin:0; color:var(--ink-2)}
-
-  footer{
-    margin-top:4.5rem; padding-top:1.5rem; border-top:1px solid var(--rule);
-    font-family:var(--mono); font-size:.72rem; color:var(--ink-3);
-  }
+  body{background:var(--ground); color:var(--ink); font-family:var(--sans);
+       font-size:.94rem; line-height:1.55; margin:0; padding:0 1.5rem 5rem;
+       -webkit-font-smoothing:antialiased}
+  .wrap{max-width:46rem; margin:0 auto}
+  header{padding:3.5rem 0 1.2rem; border-bottom:1px solid var(--rule)}
+  h1{font-size:1.9rem; font-weight:600; margin:0 0 .5rem; letter-spacing:-.02em}
+  .meta{font-family:var(--mono); font-size:.72rem; color:var(--ink-3);
+        display:flex; flex-wrap:wrap; gap:.4rem 1.3rem}
+  h2{font-size:.76rem; font-family:var(--mono); font-weight:500; letter-spacing:.12em;
+     text-transform:uppercase; color:var(--accent); margin:2.8rem 0 .8rem;
+     padding-bottom:.4rem; border-bottom:1px solid var(--rule)}
+  h3{font-size:.9rem; font-weight:600; margin:1.6rem 0 .3rem}
+  p{margin:.5rem 0; max-width:40rem; color:var(--ink-2)}
+  ul{margin:.5rem 0; padding-left:1.1rem; max-width:40rem; color:var(--ink-2)}
+  li{margin:.22rem 0}
+  code{font-family:var(--mono); font-size:.86em; background:var(--code-bg);
+       padding:.1em .35em; border-radius:3px; color:var(--ink)}
+  strong{font-weight:600; color:var(--ink)}
+  .scroll{overflow-x:auto; margin:.9rem 0}
+  table{border-collapse:collapse; width:100%; min-width:28rem; font-size:.86rem}
+  th,td{text-align:left; padding:.42rem .7rem; border-bottom:1px solid var(--rule)}
+  th{font-family:var(--mono); font-size:.66rem; letter-spacing:.09em; text-transform:uppercase;
+     color:var(--ink-3); font-weight:400; border-bottom:1px solid var(--ink-3)}
+  td.n{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+  .up{color:var(--good)}
+  footer{margin-top:3.5rem; padding-top:1.2rem; border-top:1px solid var(--rule);
+         font-family:var(--mono); font-size:.7rem; color:var(--ink-3)}
 </style>
 
 <div class="wrap">
-
 <header>
-  <p class="eyebrow">Smriti 2.0 · Design note 02</p>
   <h1>The Judgment Layer</h1>
-  <p class="standfirst">An inspector for the smriti corpus, and the argument that its real job is not browsing but making summary quality measurable for the first time.</p>
   <div class="meta">
-    <span>2026-08-19</span>
-    <span>Internal · code-smriti</span>
-    <span>Companion to “Fingerprints Over Vectors”</span>
+    <span>2026-08-19</span><span>design note 02</span><span>internal</span>
   </div>
 </header>
 
-<h2><span class="num">01</span>What this is for</h2>
+<h2>Purpose</h2>
+<ul>
+  <li>Three-pane browser over the smriti corpus: document hierarchy, source, metadata.</li>
+  <li>Records whether a generated summary is any good. Presence is measured across the corpus;
+      quality has never been measured.</li>
+  <li>Not a defect-discovery tool. Every defect found to date came from aggregate measurement;
+      per-file counts looked correct throughout.</li>
+</ul>
 
-<p class="lede">A three-column browser over the smriti corpus: repository navigation on the left, source in the centre, smriti's own metadata on the right. Internal only.</p>
+<h2>Preconditions</h2>
+<ul>
+  <li>Annotations anchor to <code>document_id</code>. Under commit-keyed identity every re-ingest
+      orphaned every annotation, so this was not buildable before v2.</li>
+  <li>Documents are now upserted in place, so the judged text is mutable. Annotations must snapshot
+      what they judged.</li>
+</ul>
 
-<p>The stated goal is to see what indexing information is being captured at the symbol, file, module and project level. That is worth building. But it is worth being precise about which question it answers, because it is not the one that has found anything so far.</p>
+<h2>Deployment</h2>
+<ul>
+  <li>Page lives in Chief of Staff. Shared JWT secret and user table; no separate credential.</li>
+  <li>smriti exposes <code>/api/inspect/*</code>; the page is a presentation-only client.</li>
+  <li>Schema knowledge stays on the smriti side. A page reading <code>code_kosha</code> directly would
+      have kept reading <code>symbol_name</code> after the <code>semantic_unit</code> split.</li>
+  <li>api-server already mounts the repository clones at <code>/repos</code>; CoS needs no mount.</li>
+</ul>
 
-<p>Every defect caught this month was found by aggregate measurement, not by looking at a file: 10,433 classes with no documents, 21,055 symbols sharing a single id, 34% of “symbols” turning out to be LLM-chunker regions. The class gap in particular hid <em>because the file-level view looked fine</em> — you would have opened a file, seen five method documents, and moved on. Per-file counts looked plausible throughout.</p>
+<h2>Interface</h2>
 
-<div class="callout">
-  <span class="label">The job</span>
-  <p>A browser is the wrong instrument for finding what is broken. It is the only instrument for the question aggregates cannot reach: <strong>is this summary any good?</strong></p>
-  <p>Presence is now measured exhaustively. Quality has never been measured at all. Nobody has read one of the 12,128 class summaries written yesterday.</p>
-</div>
+<h3>Left — document tree</h3>
+<ul>
+  <li>smriti's hierarchy, not the filesystem: <code>repo_summary → module_summary → file_index →
+      symbol_index / semantic_unit</code>.</li>
+  <li>Filesystem overlaid so a file present on disk with no <code>file_index</code> is visible.
+      Neither tree shows that alone.</li>
+  <li>Files whose directory has no <code>module_summary</code> are marked.</li>
+</ul>
 
-<p>So the tool's job is <strong>quality adjudication, not defect discovery</strong>. That distinction drives every decision below.</p>
+<h3>Centre — source</h3>
+<ul>
+  <li>Read from disk. smriti stores no file content.</li>
+  <li>Each symbol's <code>start_line</code>/<code>end_line</code> tinted over current disk content.</li>
+  <li><code>content_hash</code> compared against a live hash of the span. Documents predating the field
+      report <code>unknown</code>, not <code>stale</code>.</li>
+  <li>Gutter rail: one column per nesting depth, coloured by verdict.</li>
+</ul>
 
-<h2><span class="num">02</span>Why this is buildable now</h2>
+<h3>Right — ancestry</h3>
+<ul>
+  <li>Symbol, file, module and repository summaries shown together.</li>
+  <li>Outstanding defects are rollup defects; ~472 file→module links dangle.</li>
+</ul>
 
-<p>An annotation anchored to a smriti <code>document_id</code> was impossible a week ago. Ids hashed the commit, so every re-ingest minted a new document and orphaned whatever pointed at the old one. Location-based identity is what makes a durable annotation layer viable.</p>
+<h3>Neighbours</h3>
+<ul>
+  <li>Top-<em>k</em> by the document's own stored vector. No model in the frontend.</li>
+</ul>
 
-<p>The same change has a second edge, and it is the one that shapes the schema in section 06. Documents are now upserted <em>in place</em>. Under the old scheme a judged document sat frozen forever, orphaned but intact; now the next ingest silently overwrites it. Durable anchors, mutable subject.</p>
-
-<h2><span class="num">03</span>Where it lives</h2>
-
-<p>Chief of Staff is the right shell — authentication, TLS, domain and the write-back target all already exist there. But CoS is a <strong>separate repository</strong> (three containers: <code>cos-web</code> on :3000, <code>cos-api</code> on :8001, <code>cos-mcp</code> on :8002), and that creates two problems if its page reads <code>code_kosha</code> directly.</p>
-
-<p>First, smriti's schema knowledge would live in a repository that does not move when smriti's schema moves. Yesterday's <code>semantic_unit</code> split would have broken such a page silently — it would have gone on reading <code>symbol_name</code> and presenting chunker regions as parsed symbols. That is the same failure mode as a parser fix that never reaches the corpus, one level up. Second, the source pane reads from <code>repos_path</code> on disk, so the CoS container would need a bind mount of smriti's clones purely to render a page.</p>
-
-<div class="callout">
-  <span class="label">The seam</span>
-  <p>smriti exposes a read API in <code>api-server</code> — <code>/api/inspect/*</code> for tree, document chain, neighbours and file content. The CoS page is a presentation-only client of it.</p>
-  <p><code>api-server</code> already runs on the host with <code>repos_path</code>, so no mount. Schema knowledge stays where it changes. CoS gains a page, not a dependency.</p>
-</div>
-
-<p>Worth noting: <code>clients/web-ui</code> in this repo is already a SvelteKit 2 / Svelte 5 app with server-side Couchbase access and auth wired up — but <code>+page.svelte</code> is two lines and nothing is deployed. It is a viable alternative shell, at the cost of standing up a vhost and a second login. CoS is the cheaper path.</p>
-
-<h2><span class="num">04</span>The interface</h2>
-
-<div class="mock">
-  <div class="pane">
-    <div class="pane-h">Document tree</div>
-    <div class="tree">
-      <div>▾ pinionfe</div>
-      <div>&nbsp;&nbsp;▾ src/lib/js</div>
-      <div class="sel">&nbsp;&nbsp;&nbsp;&nbsp;utils.js · 51</div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;draw/ · 12</div>
-      <div class="ghost">&nbsp;&nbsp;&nbsp;&nbsp;legacy.js · —</div>
-      <div>&nbsp;&nbsp;▸ src/routes</div>
-      <div>&nbsp;&nbsp;▸ tests</div>
-    </div>
-  </div>
-  <div class="pane">
-    <div class="pane-h">Source · from disk</div>
-    <div class="codeline"><span class="ln">45</span>}</div>
-    <div class="codeline"><span class="ln">46</span></div>
-    <div class="codeline hl"><span class="ln">47</span>const findLayer = (</div>
-    <div class="codeline hl"><span class="ln">48</span>  layers, id) => {</div>
-    <div class="codeline hl"><span class="ln">49</span>  return layers.find(</div>
-    <div class="codeline hl"><span class="ln">50</span>    l =&gt; l.id === id)</div>
-    <div class="codeline hl"><span class="ln">51</span>}</div>
-    <div class="codeline"><span class="ln">52</span></div>
-    <div class="codeline"><span class="ln">53</span>const findFarm = (</div>
-  </div>
-  <div class="pane">
-    <div class="pane-h">Ancestry</div>
-    <div class="stack cur">
-      <div class="lvl">symbol 47–53</div>
-      <div class="txt">Searches a list of layers for a matching id…</div>
-    </div>
-    <div class="stack">
-      <div class="lvl">file</div>
-      <div class="txt">Map and layer helpers for the drawing surface…</div>
-    </div>
-    <div class="stack">
-      <div class="lvl">module</div>
-      <div class="txt">Client-side utilities…</div>
-    </div>
-    <div class="stack">
-      <div class="lvl">repo</div>
-      <div class="txt">Field mapping front-end…</div>
-    </div>
-  </div>
-</div>
-<p class="figcap">Three panes. The red entry on the left is a file present on disk with no <code>file_index</code> document — an absence the filesystem tree alone cannot show, and the document tree alone cannot either.</p>
-
-<h3>Left — the document tree, overlaid on the filesystem</h3>
-<p>These are not the same tree, and the difference is the information. Render the filesystem and you get a comforting hierarchy where everything appears present. Render smriti's own hierarchy — <code>repo_summary → module_summary → file_index → symbol_index</code>/<code>semantic_unit</code> — and the holes appear as holes. Neither alone can show a file that exists on disk but was never indexed, which is the single most valuable thing this pane can display.</p>
-
-<h3>Centre — source from disk, and that is a feature</h3>
-<p>smriti stores no file content, only summaries and spans, so the centre pane reads <code>repos_path</code> directly. Every symbol's <code>start_line</code>/<code>end_line</code> therefore renders against <em>current</em> disk content. If the tint lands on the wrong function, staleness is visible in a glance rather than inferred from a query.</p>
-<p>Stronger: symbol and file documents now carry <code>content_hash</code>. Comparing it against a live hash of the span turns that glance into a hard bit. The span tint costs nothing and is essential; syntax colouring needs a dependency and can wait until reading unhighlighted source genuinely grates.</p>
-
-<h3>Right — an ancestry stack, not a property sheet</h3>
-<p>The premise of the v4 hierarchy is that summaries roll up, and the defects still outstanding are rollup defects — module summaries that do not reflect their files, roughly 472 dangling file→module links. Showing symbol, file, module and repo summaries simultaneously is how a rollup lie becomes visible. A tabbed property sheet hides exactly the comparison worth making.</p>
-
-<h3>The fourth pane: neighbours</h3>
-<p>Click a symbol, see its top-<em>k</em> from the vector index with scores and source inline. This is cheap — the symbol's own 768-float vector is already stored, so kNN needs no model in the frontend — and it is the one thing a terminal cannot do, because judging similarity means reading two blocks of code side by side.</p>
-<p>It is also the evaluation harness for the whole 2.0 similarity effort. The companion note established that embeddings separate renamed clones from random code by <strong>+0.034</strong>, where AST k-gram fingerprints manage <strong>+0.973</strong>. Right now that is a number in a table. A neighbours pane makes it something you feel, and when fingerprints exist the same pane shows both rankings against each other.</p>
-
-<h2><span class="num">05</span>Write-back</h2>
-
-<p>“Findings, updates, issues” are three things, and only one belongs in CoS.</p>
+<h2>Write-back</h2>
 
 <div class="scroll">
 <table>
-  <thead><tr><th>Object</th><th>Lives in</th><th>Why</th></tr></thead>
+  <thead><tr><th>object</th><th>stored in</th><th>rationale</th></tr></thead>
   <tbody>
-    <tr>
-      <td><strong>Judgment</strong><br><span style="color:var(--ink-3)">this summary is wrong</span></td>
-      <td><code>code_kosha</code><br>as <code>annotation</code></td>
-      <td>Per-symbol, high-volume, meaningful only beside the document. Put these in an inbox and there will be twelve thousand notes by Friday.</td>
-    </tr>
-    <tr>
-      <td><strong>Issue</strong><br><span style="color:var(--ink-3)">the chunker mislabels test files</span></td>
-      <td>CoS</td>
-      <td>Few, need state and follow-up, and CoS already does that. Carries links back to the documents that prompted it.</td>
-    </tr>
+    <tr><td>Judgment</td><td><code>code_kosha</code>, type <code>annotation</code></td>
+        <td>Per-symbol, high volume, meaningful only beside the document.</td></tr>
+    <tr><td>Issue</td><td>CoS</td>
+        <td>Few, needs state and follow-up. Created through the CoS API, which owns its schema.</td></tr>
   </tbody>
 </table>
 </div>
 
-<p>Promoting a judgment to an issue should be one click. They should not be one object.</p>
-
-<h3>The four verdicts</h3>
-<p>A verdict axis, not a taxonomy of failure modes — four slots cannot hold a taxonomy and it would be outgrown within a week. Failure modes go in the note.</p>
-
+<h3>Verdicts</h3>
 <div class="scroll">
 <table>
-  <thead><tr><th>Verdict</th><th>Means</th><th>Routes to</th></tr></thead>
+  <thead><tr><th>verdict</th><th>definition</th><th>routes to</th></tr></thead>
   <tbody>
-    <tr><td><span class="verdict v-good">good</span></td><td>I would ship it. Enough to find this code and decide whether to open it.</td><td>baseline</td></tr>
-    <tr><td><span class="verdict v-warn">generic</span></td><td>True, but carries no discriminating information. <em>“This function processes data.”</em> Nothing false.</td><td>the prompt</td></tr>
-    <tr><td><span class="verdict v-bad">inaccurate</span></td><td>Describes this code, says false things about it.</td><td>the model</td></tr>
-    <tr><td><span class="verdict v-bad">misattributed</span></td><td>Points at the wrong code — summary describes something defined elsewhere, or the span highlights the wrong lines.</td><td>a pipeline bug</td></tr>
+    <tr><td><code>good</code></td><td>Sufficient to find this code and decide whether to open it.</td><td>baseline</td></tr>
+    <tr><td><code>generic</code></td><td>True, carries no discriminating information.</td><td>prompt</td></tr>
+    <tr><td><code>inaccurate</code></td><td>Describes this code, states falsehoods about it.</td><td>model</td></tr>
+    <tr><td><code>misattributed</code></td><td>Describes other code, or the span is wrong.</td><td>pipeline</td></tr>
   </tbody>
 </table>
 </div>
+<ul>
+  <li>A verdict axis, not a taxonomy. Failure modes go in the note field.</li>
+  <li><code>generic</code> is schema-valid, non-empty and correctly attributed, so no automated check
+      detects it.</li>
+  <li><code>misattributed</code> observed: <code>listings/tests/test_realistack_helper.py</code> indexed
+      under <code>RealstackAPI.get_users</code> and <code>get_cities</code>, neither defined in that file.</li>
+</ul>
 
-<p><code>generic</code> is the important one. It is the dominant failure mode of LLM summarisation and it is invisible to every automated check in the stack — schema-valid, non-empty, correctly attributed, and useless. Nothing else measures it.</p>
-
-<p><code>misattributed</code> is not hypothetical: <code>listings/tests/test_realistack_helper.py</code>, a test file, was indexed under <code>RealstackAPI.get_users</code> and <code>get_cities</code> — the names of the client methods it tests, none of them defined in that file.</p>
-
-<p>“Bad” is simply <em>not good</em>, so aggregation never needs to enumerate the failure modes. Deliberately squeezed out: <em>“this should not be a document at all”</em> — a significance-threshold call rather than a summary judgment. It goes in the note.</p>
-
-<h2><span class="num">06</span>The annotation document</h2>
-
-<pre><span class="c">// append-only; current verdict is newest per (target_id, author)</span>
-{
-  <span class="k">"type"</span>:        "annotation",
-  <span class="k">"target_id"</span>:   "&lt;smriti document_id&gt;",
-  <span class="k">"target_type"</span>: "symbol_index | semantic_unit | file_index | module_summary | repo_summary",
-
-  <span class="k">"verdict"</span>:     "good | generic | inaccurate | misattributed",
-  <span class="k">"note"</span>:        "free text",
-  <span class="k">"author"</span>:      "...",
-  <span class="k">"created_at"</span>:  "2026-08-19T09:14:22",
-
-  <span class="c">// anchor — lets a dangling annotation be re-attached rather than lost</span>
-  <span class="k">"anchor"</span>: { "repo_id", "file_path", "symbol_name", "start_line", "end_line", "content_hash" },
-
-  <span class="c">// snapshot — what was actually judged</span>
-  <span class="k">"judged"</span>: { "content", "summary_source", "enrichment_level",
-              "pipeline_version", "schema_version" }
-}</pre>
-
-<p>Append-only, because you judge, fix, and re-judge, and the delta is the measurement. Current verdict is newest per <code>(target_id, author)</code> — which is exactly what <code>v4/doc_versions.newest_per_key</code> already does. No embedding, and no <code>annotation</code> entry in <code>code_vector_index</code>: these are not search targets.</p>
-
-<h3>Why the snapshot block is load-bearing</h3>
-<p>Stable identity makes the anchor durable but makes the subject mutable — the next ingest overwrites the judged document in place. Without a snapshot of the summary text and its provenance, the eval set decays into unfalsifiable claims about text that no longer exists.</p>
-
-<div class="callout">
-  <span class="label">The trap most likely to be fallen into</span>
-  <p>An annotation must record <code>summary_source</code>, <code>enrichment_level</code> and <code>pipeline_version</code> <strong>at judgment time</strong>. A summary judged good under gemma4 is not evidence about qwen.</p>
-  <p>Skip this and the eval set silently mixes generations — precisely the rot that took two days to purge out of the corpus itself.</p>
-</div>
-
-<h3>Where the anchor will fail</h3>
+<h2>Annotation document</h2>
 <div class="scroll">
 <table>
-  <thead><tr><th>Case</th><th>Behaviour</th></tr></thead>
+  <thead><tr><th>field group</th><th>contents</th></tr></thead>
   <tbody>
-    <tr><td>Named symbol, re-ingested</td><td>Id unchanged. Annotation holds.</td></tr>
-    <tr><td>Named symbol, moved down the file</td><td>Id unchanged — this is why name-keying was kept. Annotation holds.</td></tr>
-    <tr><td>Symbol renamed</td><td>New id. Annotation dangles.</td></tr>
-    <tr><td>Anonymous or colliding symbol, moved</td><td>Span-keyed, so new id. Annotation dangles.</td></tr>
+    <tr><td>target</td><td><code>target_id</code>, <code>target_type</code></td></tr>
+    <tr><td>judgment</td><td><code>verdict</code>, <code>note</code>, <code>author</code>, <code>created_at</code></td></tr>
+    <tr><td>anchor</td><td><code>repo_id</code>, <code>file_path</code>, <code>symbol_name</code>,
+        <code>start_line</code>, <code>end_line</code>, <code>content_hash</code></td></tr>
+    <tr><td>snapshot</td><td><code>content</code>, <code>summary_source</code>,
+        <code>enrichment_level</code>, <code>pipeline_version</code>, <code>schema_version</code></td></tr>
   </tbody>
 </table>
 </div>
-<p>A dangling annotation is re-attachable rather than lost: the same <code>content_hash</code> found elsewhere in the file means the symbol moved. Anything not re-attachable is shown as stale, never silently dropped.</p>
+<ul>
+  <li>Append-only. Current verdict is newest per <code>(target_id, author)</code>.</li>
+  <li>Client sends target and judgment only. Snapshot is read server-side; a client-supplied snapshot
+      allows a stale tab to judge replaced text.</li>
+  <li>Provenance is snapshotted because a summary judged under one model is not evidence about another.</li>
+  <li>No embedding; not indexed in <code>code_vector_index</code>.</li>
+</ul>
 
-<h2><span class="num">07</span>Open decisions</h2>
+<h3>Anchor stability</h3>
+<div class="scroll">
+<table>
+  <thead><tr><th>case</th><th>behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Named symbol, re-ingested</td><td>Id unchanged.</td></tr>
+    <tr><td>Named symbol, moved</td><td>Id unchanged.</td></tr>
+    <tr><td>Symbol renamed</td><td>New id; annotation dangles.</td></tr>
+    <tr><td>Unnamed or colliding symbol, moved</td><td>Span-keyed; new id; annotation dangles.</td></tr>
+  </tbody>
+</table>
+</div>
+<ul>
+  <li>Dangling annotations are re-attachable by <code>content_hash</code>, or shown as stale.
+      Never silently dropped.</li>
+</ul>
 
-<dl class="kv">
-  <dt>indexes</dt>
-  <dd>The inspector's core queries — children of a file, children of a module, annotations by target — are precisely the ones with no index. Either adopt the per-repo fetch pattern or add real indexes; either works, but it must be a decision rather than a discovery.</dd>
-  <dt>highlighting</dt>
-  <dd>Span tint first, free. Syntax colouring costs a dependency; defer until reading unhighlighted source proves painful.</dd>
-  <dt>authorship</dt>
-  <dd>Single-author for now. The <code>(target, author)</code> key already admits a second judge, and inter-rater disagreement is the honest measure of whether the rubric is real.</dd>
-</dl>
+<h2>Sampling</h2>
+<ul>
+  <li><code>/sample</code> returns documents with no judgment, ordered by <code>document_id</code> —
+      a hash of location, so ordering is arbitrary with respect to content and reproducible.</li>
+  <li>Judging only what is browsed biases the set toward what was browsed.</li>
+  <li>Scoped to one repository; corpus-wide ordered scans have no index.</li>
+</ul>
 
-<h3>Existing indexes on <code>code_kosha</code></h3>
-<pre>idx_user_repo       (user_id, repo_id, type)
-adv_repo_id         (repo_id)
-idx_repo_doc_stats  (repo_id, type, metadata.language)
-                    WHERE type IN [file_index, symbol_index,
-                                   module_summary, repo_summary]</pre>
-<p>Note that <code>semantic_unit</code> is absent from that condition — a type added yesterday whose covering index was never extended, so those queries fall back to <code>adv_repo_id</code> and filter. Working, slower than it should be, and being fixed independently of this design.</p>
+<h2>Open decisions</h2>
+<ul>
+  <li><strong>Indexes.</strong> Children of a file, children of a module, and annotations by target had
+      no index. Resolved by per-repo fetch and six added indexes.</li>
+  <li><strong>Highlighting.</strong> Span tint is free. Syntax colouring costs a dependency (shiki).</li>
+  <li><strong>Authorship.</strong> Single-author. The <code>(target, author)</code> key admits a second.</li>
+</ul>
 
-<h2><span class="num">08</span>Out of scope, on purpose</h2>
+<h2>Out of scope</h2>
+<ul>
+  <li>Findings queue. The same cohorts are already reachable by ad-hoc N1QL.</li>
+  <li>Summary editing. A human-written override must survive re-ingestion, which is a different object.</li>
+</ul>
 
-<p>No findings queue. A second left-column mode listing stale hashes, dangling parents and the 230 files whose parse yields no significant symbols is a plausible feature — and every one of those cohorts has been found this month with ad-hoc N1QL that is far more flexible than any UI worth building. The browser should do what the terminal cannot.</p>
-
-<p>No editing of summaries. A human-written replacement is a different object with different consequences: it must survive re-ingestion as an override rather than be silently overwritten. Worth doing, not worth conflating with judgment.</p>
-
-<footer>
-  code-smriti · internal design note · 2026-08-19<br>
-  Companion to “Fingerprints Over Vectors” (design note 01).
-</footer>
-
+<footer>code-smriti · design note 02 · 2026-08-19</footer>
 </div>
