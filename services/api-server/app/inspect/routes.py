@@ -668,8 +668,11 @@ async def add_annotation(
         db,
         _bucket(current_user),
         payload,
+        # Email before user_id: CoS mints inter-service tokens carrying only
+        # {email, exp}, so user_id is absent on any call proxied for a PAT
+        # caller, and keying judgments on "unknown" would pool distinct authors.
         author=current_user.get("email") or current_user.get("user_id") or "unknown",
-        author_id=current_user.get("user_id") or "unknown",
+        author_id=current_user.get("user_id") or current_user.get("email") or "unknown",
     )
 
 
