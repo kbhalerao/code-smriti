@@ -105,10 +105,9 @@ def _snippet_digest(content: str, start_line: int, end_line: int) -> str:
 
 class RepoRow(BaseModel):
     repo_id: str
-    modules: int = 0
     files: int = 0
-    symbols: int = 0
-    has_summary: bool = False
+    lines: int = 0
+    languages: Dict[str, int] = Field(default_factory=dict)
 
 
 class ReposResponse(BaseModel):
@@ -223,40 +222,39 @@ async def list_repos(
     db: Annotated[CouchbaseClient, Depends(get_db)],
 ):
     """
-    Every indexed repository, with what smriti holds for it.
+    Every indexed repository, read from its own `repo_summary`.
 
-    `semantic_unit` is deliberately not counted here. It is absent from
-    `idx_repo_doc_stats`'s WHERE clause, so a corpus-wide count of it falls back
-    to scanning `adv_repo_id` and fetching documents to filter — slow enough to
-    matter on a page that loads first. Those counts appear in the tree, where the
-    query is scoped to one repository.
+    Counted from the summary rather than aggregated over the corpus. The obvious
+    query — GROUP BY repo_id, type across every document — takes twelve seconds
+    on 180,000 documents, and this is the first thing the page loads, so it
+    presented as an empty picker with no indication anything was happening.
+
+    `repo_id IS NOT MISSING` is load-bearing, not decoration: a GSI is only
+    considered when the query constrains its leading key, so without it the
+    partial index on `repo_summary` is ignored and this falls back to a full
+    scan. Same query, same index, 9.9s versus effectively instant.
     """
     bucket = _bucket(current_user)
     rows = await db.query(f"""
-        SELECT d.repo_id, d.type, COUNT(*) AS n
+        SELECT d.repo_id,
+               d.metadata.total_files AS files,
+               d.metadata.total_lines AS lines,
+               d.metadata.languages AS languages
         FROM `{bucket}` d
-        WHERE d.type IN ['file_index', 'symbol_index', 'module_summary', 'repo_summary']
-        GROUP BY d.repo_id, d.type
+        WHERE d.type = 'repo_summary' AND d.repo_id IS NOT MISSING
     """)
-
-    repos: Dict[str, RepoRow] = {}
-    for row in rows:
-        repo_id = row.get("repo_id")
-        if not repo_id:
-            continue
-        entry = repos.setdefault(repo_id, RepoRow(repo_id=repo_id))
-        count, doc_type = row["n"], row["type"]
-        if doc_type == "file_index":
-            entry.files = count
-        elif doc_type == "symbol_index":
-            entry.symbols = count
-        elif doc_type == "module_summary":
-            entry.modules = count
-        elif doc_type == "repo_summary":
-            entry.has_summary = True
-
-    ordered = sorted(repos.values(), key=lambda r: r.repo_id)
-    return ReposResponse(repos=ordered, total_repos=len(ordered))
+    repos = [
+        RepoRow(
+            repo_id=row["repo_id"],
+            files=row.get("files") or 0,
+            lines=row.get("lines") or 0,
+            languages=row.get("languages") or {},
+        )
+        for row in rows
+        if row.get("repo_id")
+    ]
+    repos.sort(key=lambda r: r.repo_id)
+    return ReposResponse(repos=repos, total_repos=len(repos))
 
 
 @router.get("/tree", response_model=TreeResponse)
