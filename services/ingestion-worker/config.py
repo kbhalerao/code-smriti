@@ -146,6 +146,7 @@ class WorkerConfig(BaseSettings):
         ".java", ".kt",                        # JVM
         ".swift",                              # iOS / macOS
         ".erl", ".hrl", ".ex", ".exs",         # BEAM
+        ".rs",                                 # Rust
     ]
     supported_doc_extensions: list = [
         ".md", ".rst",                    # Markdown, reStructuredText (Sphinx)

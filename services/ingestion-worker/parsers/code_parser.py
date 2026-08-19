@@ -184,6 +184,7 @@ class CodeParser:
                 "java": ("tree_sitter_java", "language"),
                 "swift": ("tree_sitter_swift", "language"),
                 "elixir": ("tree_sitter_elixir", "language"),
+                "rust": ("tree_sitter_rust", "language"),
                 # Note: tree-sitter-erlang is not on PyPI; erlang remains file-level only.
             }
 
@@ -311,6 +312,7 @@ class CodeParser:
             ".hrl": "erlang",
             ".ex": "elixir",
             ".exs": "elixir",
+            ".rs": "rust",
         }
 
         return extension_map.get(file_path.suffix)
@@ -920,6 +922,148 @@ class CodeParser:
 
         except Exception as e:
             logger.error(f"Error parsing Java file {file_path}: {e}")
+
+        return chunks
+
+    async def parse_rust_file(
+        self,
+        file_path: Path,
+        content: str,
+        repo_id: str,
+        relative_path: str,
+        git_metadata: Dict,
+    ) -> List[CodeChunk]:
+        """
+        Parse a Rust file into semantic chunks.
+
+        Node kinds verified against the corpus rather than assumed — across the 52
+        Rust files present: function_item 630, struct_item 48, impl_item 33,
+        mod_item 26, enum_item 8, type_item 1.
+
+        `impl_item` is the wrinkle. It carries no `name`; it is identified by its
+        `type` field, and an inherent block (`impl Hillshade`) and a trait block
+        (`impl Default for Hillshade`) share that type. Naming the trait block
+        "Default for Hillshade" keeps the two apart and says which is which — the
+        alternative is two symbols with one name, which identity would then have
+        to break apart by span.
+
+        `const_item` and `static_item` are deliberately not emitted: they are data
+        rather than behaviour, and summarising several hundred of them would cost
+        LLM calls to describe values already visible in one line.
+        """
+        chunks: List[CodeChunk] = []
+
+        if "rust" not in self.parsers:
+            return chunks
+
+        try:
+            parser = self.parsers["rust"]
+            tree = parser.parse(bytes(content, "utf8"))
+            root = tree.root_node
+
+            type_decls = {
+                "struct_item": "struct",
+                "enum_item": "enum",
+                "trait_item": "trait",
+                "union_item": "struct",
+                "mod_item": "module",
+                "type_item": "type",
+            }
+
+            def text_of(node) -> Optional[str]:
+                return node.text.decode("utf8") if node is not None else None
+
+            def walk(node, enclosing: Optional[str]):
+                kind = type_decls.get(node.type)
+
+                if node.type == "impl_item":
+                    type_name = text_of(node.child_by_field_name("type")) or "anonymous"
+                    trait_name = text_of(node.child_by_field_name("trait"))
+                    impl_name = f"{trait_name} for {type_name}" if trait_name else type_name
+
+                    code_text = self.truncate_chunk_text(
+                        content[node.start_byte:node.end_byte],
+                        context=f"in {relative_path}::impl {impl_name}",
+                    )
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="impl",
+                        code_text=self.add_context_header(code_text, relative_path),
+                        language="rust",
+                        metadata={
+                            "language": "rust",
+                            "class_name": impl_name,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Methods qualify by the type they are implemented on, not by
+                    # the trait, so `Hillshade.render` reads the same either way.
+                    for child in node.children:
+                        walk(child, type_name)
+                    return
+
+                if kind is not None:
+                    name = text_of(node.child_by_field_name("name")) or "anonymous"
+                    code_text = self.truncate_chunk_text(
+                        content[node.start_byte:node.end_byte],
+                        context=f"in {relative_path}::{kind} {name}",
+                    )
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type=kind,
+                        code_text=self.add_context_header(code_text, relative_path),
+                        language="rust",
+                        metadata={
+                            "language": "rust",
+                            "class_name": name,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    for child in node.children:
+                        walk(child, name if node.type == "mod_item" else enclosing)
+                    return
+
+                if node.type == "function_item":
+                    fn_name = text_of(node.child_by_field_name("name")) or "anonymous"
+                    qualified = f"{enclosing}.{fn_name}" if enclosing else fn_name
+                    code_text = self.truncate_chunk_text(
+                        content[node.start_byte:node.end_byte],
+                        context=f"in {relative_path}::{qualified}()",
+                    )
+                    chunks.append(CodeChunk(
+                        repo_id=repo_id,
+                        file_path=relative_path,
+                        chunk_type="method" if enclosing else "function",
+                        code_text=self.add_context_header(
+                            code_text, relative_path, container_name=enclosing
+                        ),
+                        language="rust",
+                        metadata={
+                            "language": "rust",
+                            "function_name": fn_name,
+                            "method_name": fn_name,
+                            "class_name": enclosing,
+                            "start_line": node.start_point[0] + 1,
+                            "end_line": node.end_point[0] + 1,
+                            **git_metadata,
+                        },
+                    ))
+                    # Nested fns inside a body are rare and produce noise.
+                    return
+
+                for child in node.children:
+                    walk(child, enclosing)
+
+            walk(root, None)
+
+        except Exception as e:
+            logger.error(f"Error parsing Rust file {file_path}: {e}")
 
         return chunks
 

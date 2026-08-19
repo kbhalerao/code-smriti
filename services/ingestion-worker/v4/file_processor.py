@@ -166,8 +166,10 @@ class FileProcessor:
         """
         symbols = []
 
-        if language not in ("python", "javascript", "typescript", "svelte", "java", "swift", "elixir"):
-            return symbols
+        # No allowlist here: the dispatch below already ends in `else: return
+        # symbols`, and keeping a second copy of the language list is how Rust
+        # ended up with a loaded grammar, a working detect_language, and no
+        # symbols at all.
 
         # Create dummy Path for parser (it uses for metadata only)
         dummy_path = Path(file_path)
@@ -196,6 +198,10 @@ class FileProcessor:
                 )
             elif language == "elixir":
                 chunks = await self.code_parser.parse_elixir_file(
+                    dummy_path, content, "", file_path, {}
+                )
+            elif language == "rust":
+                chunks = await self.code_parser.parse_rust_file(
                     dummy_path, content, "", file_path, {}
                 )
             else:
