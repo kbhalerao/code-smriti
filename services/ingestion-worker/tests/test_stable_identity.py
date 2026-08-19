@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from v4.schemas import (
     SemanticUnit,
+    assign_symbol_ids,
     SymbolIndex,
     make_content_hash,
     make_file_id,
@@ -193,3 +194,53 @@ class TestMigrationPlanner:
         assert not m.is_parser_symbol({"symbol_type": "workflow"})
         assert not m.is_parser_symbol({"symbol_type": "integration"})
         assert not m.is_parser_symbol({})
+
+
+class _Sym:
+    """Stand-in for SymbolRef — assign_symbol_ids only reads these three fields."""
+
+    def __init__(self, name, start_line, end_line):
+        self.name = name
+        self.start_line = start_line
+        self.end_line = end_line
+
+
+class TestUnnamedSymbolsAreAddressable:
+    """
+    A name the parser invented for lack of a real one cannot be identity.
+
+    Every anonymous function in a file carried the string `anonymous` or
+    `arrow_function`, so name-keyed ids collapsed them onto one document and each
+    file kept only whichever was written last — 21,055 symbols corpus-wide.
+    """
+
+    def test_anonymous_symbols_get_distinct_ids(self):
+        syms = [_Sym("anonymous", 10, 20), _Sym("anonymous", 40, 55)]
+        assert len(set(assign_symbol_ids("r", "f.js", syms))) == 2
+
+    def test_named_symbol_keeps_a_span_free_id(self):
+        # The point of name-keying: moving a function must not re-summarise it.
+        here = assign_symbol_ids("r", "f.py", [_Sym("parse", 10, 20)])
+        moved = assign_symbol_ids("r", "f.py", [_Sym("parse", 90, 100)])
+        assert here == moved
+        assert here[0] == make_symbol_id("r", "f.py", "parse")
+
+    def test_real_names_that_collide_fall_back_to_span(self):
+        # Overloads and repeated delegate methods: `tableView` 38 times in one file.
+        syms = [_Sym("tableView", 10, 20), _Sym("tableView", 30, 45)]
+        ids = assign_symbol_ids("r", "V.swift", syms)
+        assert len(set(ids)) == 2
+        assert ids[0] == make_symbol_id("r", "V.swift", "tableView", 10, 20)
+
+    def test_uniqueness_is_judged_over_all_symbols_not_just_significant(self):
+        # A one-line namesake is not indexed, but it still forces the span, so the
+        # indexed symbol cannot be re-keyed by an edit that crosses the threshold.
+        syms = [_Sym("init", 10, 40), _Sym("init", 60, 61)]
+        assert assign_symbol_ids("r", "f.py", syms)[0] != make_symbol_id("r", "f.py", "init")
+
+    def test_ids_are_returned_parallel_to_input(self):
+        syms = [_Sym("a", 1, 9), _Sym("anonymous", 20, 30), _Sym("b", 40, 50)]
+        ids = assign_symbol_ids("r", "f.py", syms)
+        assert len(ids) == len(syms)
+        assert ids[0] == make_symbol_id("r", "f.py", "a")
+        assert ids[2] == make_symbol_id("r", "f.py", "b")

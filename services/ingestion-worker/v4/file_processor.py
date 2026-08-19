@@ -25,7 +25,7 @@ from loguru import logger
 from .schemas import (
     FileIndex, SymbolIndex, SemanticUnit, SymbolRef, QualityInfo, VersionInfo,
     EnrichmentLevel, SCHEMA_VERSION,
-    make_file_id, make_symbol_id, make_semantic_unit_id, make_content_hash,
+    make_file_id, assign_symbol_ids, make_semantic_unit_id, make_content_hash,
 )
 from .quality import QualityTracker
 
@@ -556,7 +556,11 @@ class FileProcessor:
         symbol_docs = []
         symbol_summaries = []
 
-        for symbol in symbols:
+        # Assigned over the whole list, not per symbol: whether a name needs its
+        # span to identify it depends on the other symbols in the file.
+        symbol_ids = assign_symbol_ids(repo_id, relative_path, symbols)
+
+        for symbol, symbol_doc_id in zip(symbols, symbol_ids):
             if not symbol.is_significant:
                 continue  # Skip symbols < 5 lines
 
@@ -572,7 +576,6 @@ class FileProcessor:
             symbol_summaries.append(summary)
 
             # Create symbol_index document
-            symbol_doc_id = make_symbol_id(repo_id, relative_path, symbol.name)
             file_doc_id = make_file_id(repo_id, relative_path)
 
             symbol_doc = SymbolIndex(

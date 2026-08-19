@@ -23,6 +23,15 @@ Background:
     `v4/schemas.py` now derives identity from location alone and gives chunker
     regions their own `semantic_unit` type. This script moves the corpus over.
 
+Spent, and superseded on one point:
+    This ran to completion on 2026-08-18 and is kept as the record of that move.
+    It keys symbols by name alone, which is what `make_symbol_id` did at the time.
+    Names are not always unique inside a file — the parser writes `anonymous` or
+    `arrow_function` when it cannot name a symbol — so `assign_symbol_ids` now
+    falls back to the span in those cases and
+    `scripts/reconcile_symbol_documents.py` moved the corpus onto that rule. Do
+    not re-run this script; it would write ids under the older, colliding scheme.
+
 Why generations cannot simply be deduped:
     Neither the chunker's labels nor its spans are stable between runs — the same
     region of `fema/LOMRs.py` came back as `fema_api_response_validation` at lines

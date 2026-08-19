@@ -27,7 +27,7 @@ a renamed or deleted symbol. That is reconciliation against the current parse
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from enum import Enum
 import hashlib
 
@@ -493,7 +493,19 @@ def make_file_id(repo_id: str, file_path: str) -> str:
     return _hash_id(f"file:{repo_id}:{file_path}")
 
 
-def make_symbol_id(repo_id: str, file_path: str, symbol_name: str) -> str:
+# Names the parser emits when it could not find one. They are placeholders, not
+# identifiers: every anonymous function in a file carries the same string, so a
+# name-keyed id would collapse them all onto one document.
+UNNAMED_SYMBOL_LABELS = frozenset({"anonymous", "arrow_function", ""})
+
+
+def make_symbol_id(
+    repo_id: str,
+    file_path: str,
+    symbol_name: str,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+) -> str:
     """
     Generate document_id for symbol_index.
 
@@ -501,8 +513,51 @@ def make_symbol_id(repo_id: str, file_path: str, symbol_name: str) -> str:
 
     Renaming a symbol produces a new identity, which is correct: the old name no
     longer exists and its document is removed by reconciliation, not superseded.
+
+    Passing a span appends `@{start}-{end}`, which is how a symbol whose name
+    cannot identify it is told apart from its namesakes. Prefer `assign_symbol_ids`
+    over calling this directly — it decides *whether* a span is needed, and that
+    decision needs the whole file.
     """
-    return _hash_id(f"symbol:{repo_id}:{file_path}:{symbol_name}")
+    key = f"symbol:{repo_id}:{file_path}:{symbol_name}"
+    if start_line is not None and end_line is not None:
+        key = f"{key}@{start_line}-{end_line}"
+    return _hash_id(key)
+
+
+def assign_symbol_ids(
+    repo_id: str,
+    file_path: str,
+    symbols: Sequence[Any],
+) -> List[str]:
+    """
+    document_ids for one file's symbols, parallel to `symbols`.
+
+    A symbol is keyed by name, because a name survives the symbol moving down the
+    file and that is what keeps an edit from re-summarising everything below it.
+    Two cases have no usable name and fall back to the span:
+
+      - the parser could not name it (`anonymous`, `arrow_function`). Measured
+        across the corpus, 21,055 symbols shared an id this way — 12,084 arrow
+        functions and 8,971 `anonymous` — each file keeping whichever one was
+        written last and silently dropping the rest.
+      - the name is real but not unique in the file: overloads and repeated
+        delegate methods, ~1,300 symbols (`tableView` 38 times, `init` 22).
+
+    Uniqueness is judged over *every* symbol in the file, not just the significant
+    ones, so that a symbol crossing the significance threshold cannot re-key its
+    namesake.
+    """
+    counts: Dict[str, int] = {}
+    for s in symbols:
+        counts[s.name] = counts.get(s.name, 0) + 1
+
+    ids: List[str] = []
+    for s in symbols:
+        needs_span = s.name in UNNAMED_SYMBOL_LABELS or counts[s.name] > 1
+        span = (s.start_line, s.end_line) if needs_span else (None, None)
+        ids.append(make_symbol_id(repo_id, file_path, s.name, *span))
+    return ids
 
 
 def make_semantic_unit_id(repo_id: str, file_path: str, start_line: int, end_line: int) -> str:
