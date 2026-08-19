@@ -658,7 +658,31 @@ __pycache__/     Cargo.lock           *.map
             <section id="performance">
                 <h2>5. Performance</h2>
 
-                <h3>V4 Production Stats (November 2025)</h3>
+                <h3>Changes in v2 (August 2026)</h3>
+                <p>
+                    The embedding model moved from <code>nomic-embed-text-v1.5</code> to
+                    <code>Qwen3-Embedding-0.6B</code>, stored Matryoshka-truncated to 768 dimensions so
+                    the vector index keeps its existing shape. The model was selected on retrieval
+                    rather than on published benchmarks: measured over 5,000 documents and 300
+                    natural-language queries, mean reciprocal rank improved from <strong>0.752 to
+                    0.886</strong> and recall@1 from <strong>0.667 to 0.817</strong>.
+                </p>
+                <p>
+                    Larger variants of the same family were measured and rejected — the 4B and 8B score
+                    within one standard error of the 0.6B on this task, so the smallest model ships. The
+                    whole corpus was re-embedded, since a corpus holding two embedding spaces returns
+                    similarity scores that are numbers rather than measurements, and no dimension check
+                    can detect it.
+                </p>
+                <p>
+                    v2 also corrected four indexing defects that had been silently wrong: documents keyed
+                    by commit rather than location, unnamed functions collapsing onto a shared identifier,
+                    class extents measured as three lines, and documents written without a language field.
+                    Rust joined the parsed languages.
+                </p>
+
+
+                <h3>V4 Production Stats (August 2026)</h3>
                 <p>Full ingestion of 101 repositories on Mac M3 Ultra with LM Studio (qwen3-30b-a3b-2507):</p>
 
                 <table>
@@ -669,13 +693,13 @@ __pycache__/     Cargo.lock           *.map
                     </tr>
                     <tr>
                         <td>Total repositories</td>
-                        <td>101</td>
-                        <td>99 processed, 2 skipped (pre-existing)</td>
+                        <td>236</td>
+                        <td>up from 101 in November 2025</td>
                     </tr>
                     <tr>
                         <td>Documents indexed</td>
-                        <td>48,795</td>
-                        <td>13K files, 31K symbols, 4K modules</td>
+                        <td>181,157</td>
+                        <td>32K files, 87K symbols, 25K semantic units, 8K modules</td>
                     </tr>
                     <tr>
                         <td>Total ingestion time</td>
@@ -699,7 +723,7 @@ __pycache__/     Cargo.lock           *.map
                     <tr>
                         <td>Embedding generation</td>
                         <td>1,280 docs/min</td>
-                        <td>MPS GPU, nomic-embed-text-v1.5</td>
+                        <td>MPS GPU, Qwen3-Embedding-0.6B (768d)</td>
                     </tr>
                     <tr>
                         <td>Search latency</td>

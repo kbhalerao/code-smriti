@@ -1,0 +1,227 @@
+<title>Smriti v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+<style>
+  :root{
+    --ground:#F4F6F8; --surface:#FFFFFF; --ink:#141A22; --ink-2:#4A5666; --ink-3:#77869A;
+    --rule:#DDE3E9; --accent:#3F3D8F; --accent-soft:#ECEBF7;
+    --good:#127f57; --bad:#c23b3a; --warn:#9a6a00;
+    --good-bg:#E4F3EC; --bad-bg:#FBE9E8; --warn-bg:#F8EFDC; --code-bg:#F0F3F6;
+    --sans:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+    --serif:"Source Serif 4",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0F131A; --surface:#171C24; --ink:#E7ECF2; --ink-2:#A9B6C6; --ink-3:#77869A;
+      --rule:#28303A; --accent:#A29BEF; --accent-soft:#221F3A;
+      --good:#4cc38a; --bad:#f07a78; --warn:#d8a63a;
+      --good-bg:#12281F; --bad-bg:#2C1817; --warn-bg:#2A2213; --code-bg:#111620;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0F131A; --surface:#171C24; --ink:#E7ECF2; --ink-2:#A9B6C6; --ink-3:#77869A;
+    --rule:#28303A; --accent:#A29BEF; --accent-soft:#221F3A;
+    --good:#4cc38a; --bad:#f07a78; --warn:#d8a63a;
+    --good-bg:#12281F; --bad-bg:#2C1817; --warn-bg:#2A2213; --code-bg:#111620;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground); color:var(--ink); font-family:var(--sans);
+       line-height:1.6; margin:0; padding:0 1.5rem 6rem; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:52rem; margin:0 auto}
+  header{padding:4.5rem 0 2.5rem; border-bottom:1px solid var(--rule)}
+  .eyebrow{font-family:var(--mono); font-size:.7rem; letter-spacing:.14em;
+           text-transform:uppercase; color:var(--accent); margin:0 0 1.1rem}
+  h1{font-family:var(--serif); font-weight:600; font-size:clamp(2.1rem,5vw,3rem);
+     line-height:1.1; margin:0 0 1rem; letter-spacing:-.015em}
+  .standfirst{font-family:var(--serif); font-size:1.18rem; color:var(--ink-2); margin:0; max-width:38rem}
+  .meta{font-family:var(--mono); font-size:.72rem; color:var(--ink-3); margin-top:1.8rem;
+        display:flex; flex-wrap:wrap; gap:.5rem 1.4rem}
+  h2{font-family:var(--serif); font-weight:600; font-size:1.6rem; line-height:1.25;
+     margin:3.5rem 0 .3rem; letter-spacing:-.01em}
+  h2 .num{font-family:var(--mono); font-size:.72rem; color:var(--accent); display:block;
+          margin-bottom:.55rem; letter-spacing:.1em; font-weight:400}
+  h3{font-size:1rem; font-weight:600; margin:2rem 0 .4rem}
+  p{margin:.9rem 0; max-width:38rem}
+  code{font-family:var(--mono); font-size:.855em; background:var(--code-bg); padding:.12em .38em; border-radius:3px}
+  strong{font-weight:600}
+  .callout{background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--accent);
+           border-radius:4px; padding:1.15rem 1.35rem; margin:1.8rem 0; max-width:38rem}
+  .callout p:first-child{margin-top:0} .callout p:last-child{margin-bottom:0}
+  .callout .label{font-family:var(--mono); font-size:.68rem; letter-spacing:.12em;
+                  text-transform:uppercase; color:var(--accent); display:block; margin-bottom:.5rem}
+  .scroll{overflow-x:auto; margin:1.5rem 0}
+  table{border-collapse:collapse; width:100%; min-width:30rem; font-size:.9rem}
+  th,td{text-align:left; padding:.55rem .8rem; border-bottom:1px solid var(--rule); vertical-align:top}
+  th{font-family:var(--mono); font-size:.68rem; letter-spacing:.1em; text-transform:uppercase;
+     color:var(--ink-3); font-weight:400; border-bottom:1px solid var(--ink-3)}
+  td.n{font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap}
+  .up{color:var(--good); font-weight:600} .dn{color:var(--bad)}
+  .arrow{color:var(--ink-3); padding:0 .3rem}
+  footer{margin-top:4.5rem; padding-top:1.5rem; border-top:1px solid var(--rule);
+         font-family:var(--mono); font-size:.72rem; color:var(--ink-3)}
+  .tag{font-family:var(--mono); font-size:.68rem; padding:.1em .45em; border-radius:3px;
+       background:var(--accent-soft); color:var(--accent); white-space:nowrap}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">code-smriti · release notes</p>
+  <h1>Smriti v2</h1>
+  <p class="standfirst">A new embedding model, chosen by measurement rather than by benchmark reputation, and the corpus repairs that had to happen first.</p>
+  <div class="meta">
+    <span>2026-08-19</span><span>17 commits</span><span>181,157 documents</span><span>236 repositories</span>
+  </div>
+</header>
+
+<h2><span class="num">01</span>The headline</h2>
+
+<p>The embedding model moves from <code>nomic-embed-text-v1.5</code> to
+<strong><code>Qwen/Qwen3-Embedding-0.6B</code></strong>, stored Matryoshka-truncated to 768 dimensions.</p>
+
+<p>It was chosen on retrieval — the workload the index actually serves — over 5,000 documents and 300
+natural-language queries:</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>model</th><th class="n">MRR</th><th class="n">recall@1</th><th class="n">significance</th></tr></thead>
+  <tbody>
+    <tr><td>nomic-embed-text</td><td class="n">0.752</td><td class="n">0.667</td><td class="n">—</td></tr>
+    <tr><td><strong>Qwen3-Embedding-0.6B</strong></td><td class="n up">0.886</td><td class="n up">0.817</td><td class="n">7.7σ</td></tr>
+    <tr><td>Qwen3-Embedding-4B</td><td class="n">0.885</td><td class="n">0.807</td><td class="n">0.9σ vs 0.6B</td></tr>
+    <tr><td>Qwen3-Embedding-8B</td><td class="n">0.888</td><td class="n">0.820</td><td class="n">0.1σ vs 0.6B</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The smallest model captures the entire gain. Thirteen times the parameters buys nothing measurable,
+so v2 ships the 0.6B: it re-embeds the corpus in hours rather than half a day, and truncating to 768
+costs nothing (0.884 against 0.886) while leaving both FTS indexes their existing shape. This is a
+model swap in the same slot, not a reindex.</p>
+
+<div class="callout">
+  <span class="label">The measurement that nearly went the other way</span>
+  <p>A first benchmark on <em>clone detection</em> said <strong>do not migrate</strong> — Qwen was better
+  there too, but nowhere near enough to matter against AST fingerprints, which score 1.000 AUC where the
+  8B scores 0.877.</p>
+  <p>That benchmark was measuring the wrong thing. Retrieval is what the index does all day, and on
+  retrieval the ranking inverted and the gap was large. Same models, same week, opposite conclusions —
+  the axis you measure decides the answer.</p>
+</div>
+
+<p>Source per symbol also rises from 2,000 to 8,000 characters, since the model's window went from
+2,048 tokens to 32,768. Stated honestly: 2,000 scored MRR 0.887 and 8,000 scored 0.890, which is under
+half a standard error and <strong>not an established gain</strong>. It was taken because it costs 56
+minutes once, discards 4.3% of code characters instead of 25.9%, and choosing low and later finding it
+mattered would mean re-embedding everything again.</p>
+
+<h2><span class="num">02</span>Corpus repairs</h2>
+
+<p>None of the above was reachable until the documents being embedded were correct. Four defects, all
+of which had been silently wrong for months and none of which raised an error.</p>
+
+<h3>Documents were keyed by commit</h3>
+<p>Identity hashed the commit, so re-ingesting a file <em>inserted</em> a parallel generation rather
+than overwriting it. Cleanup ran on one narrow path only, so every full re-ingest stranded a complete
+generation; 1,835 files carried more than one. Identity now derives from location alone.</p>
+
+<h3>Unnamed symbols collapsed onto a single document</h3>
+<p>The parser writes the placeholder <code>anonymous</code> or <code>arrow_function</code> when it cannot
+name a symbol, and identity keyed on that name — so every unnamed symbol in a file hashed to the same id
+and overwrote its predecessors. <strong>21,055 symbols corpus-wide shared an id.</strong> One file held
+a single document describing 51 distinct functions.</p>
+
+<h3>Classes measured three lines long</h3>
+<p>Until a parser fix in August, a class's extent ended at the first line of its body, putting every
+class under the significance threshold. Methods indexed normally, which is why per-file counts looked
+plausible and the loss stayed hidden. The parser fix reached almost nothing on its own — incremental
+ingestion is change-driven — so it needed a backfill.</p>
+
+<h3>14,950 documents had no language recorded</h3>
+<p>Ordinary Python, JavaScript and TypeScript files written before the schema carried the field. A
+document with no language cannot be routed to a grammar, filtered when sampling, or stratified into a
+training set.</p>
+
+<div class="scroll">
+<table>
+  <thead><tr><th>repair</th><th class="n">before</th><th></th><th class="n">after</th></tr></thead>
+  <tbody>
+    <tr><td>class documents</td><td class="n">3,445</td><td class="arrow">→</td><td class="n up">13,976</td></tr>
+    <tr><td>symbols sharing an id</td><td class="n">21,055</td><td class="arrow">→</td><td class="n up">0</td></tr>
+    <tr><td>documents with no language</td><td class="n">14,950</td><td class="arrow">→</td><td class="n up">0</td></tr>
+    <tr><td>documents re-keyed on location</td><td class="n">—</td><td class="arrow"></td><td class="n">127,327</td></tr>
+    <tr><td>chunker regions split into <code>semantic_unit</code></td><td class="n">—</td><td class="arrow"></td><td class="n">24,530</td></tr>
+    <tr><td>symbols created by reconciliation</td><td class="n">—</td><td class="arrow"></td><td class="n">19,197</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="num">03</span>Also in v2</h2>
+
+<p><span class="tag">new</span> <strong>Rust is parsed.</strong> A 52-file Rust repository held four
+documents — the <code>.md</code> and <code>.toml</code> files. <code>.rs</code> appeared in no extension
+list, so the source never reached the index at all. Now 746 symbols, 621 of them significant.</p>
+
+<p><span class="tag">new</span> <strong>A corpus inspector</strong> at <code>/smriti</code>: three panes
+over the document hierarchy, source tinted by each symbol's recorded span, summaries stacked from symbol
+up to repository, nearest neighbours by stored vector, and a four-verdict judgment layer that records
+whether a generated summary is any good — the first labelled data about summary quality, which has never
+been measured.</p>
+
+<p><span class="tag">fix</span> <strong>Listing repositories took twelve seconds</strong> and is now
+0.077s. It aggregated 180,000 documents to produce counts already stored per repository. A partial index
+also went unused until the query constrained its leading key — same query, same index, 9.9s versus
+instant.</p>
+
+<p><span class="tag">fix</span> <strong>Commit embeddings were double-prefixed.</strong> Two layers each
+prepended <code>search_document:</code>, so every commit vector was embedded from
+<code>search_document: search_document: …</code>.</p>
+
+<h2><span class="num">04</span>Breaking, and what to know</h2>
+
+<p><strong>Every vector had to be regenerated.</strong> 180,637 documents. A corpus holding two embedding
+spaces does not fail — it returns similarity scores that are numbers rather than measurements. Measured
+directly during the migration: the same document embedded by the old and new models scores a cosine of
+<strong>0.02</strong>. Both vectors are 768-dimensional, both unit-norm, both perfectly valid to the index.</p>
+
+<div class="callout">
+  <span class="label">Why a dimension check cannot protect you</span>
+  <p>768 truncated from Qwen is <em>the same shape</em> nomic produced and a completely different space.
+  The obvious guard passes while the space changes underneath it.</p>
+  <p>So the services agree at runtime instead: the re-embed writes an <code>embedding_manifest</code>
+  into the corpus <strong>last</strong>, and the API checks it at startup. Its absence means a migration
+  did not finish. Loud, not fatal — wrong results with a healthy service deserve a klaxon, not an outage.</p>
+</div>
+
+<p>Model, prefixing, dimensionality and batching now live in one module per service rather than as string
+literals at six call sites across two of them. Prefixing is model-specific and asymmetric: nomic took
+literal prefixes on both sides, Qwen takes an instruction on the query side only. Getting that wrong cost
+0.11 AUC when measured.</p>
+
+<p>Batching is bounded by an <strong>attention</strong> budget as well as a token budget, because attention
+is quadratic and a single token budget once requested a 182 GiB buffer outright. Sizing uses effective
+length rather than character count, since the model truncates at its sequence limit and a 200,000-character
+generated file therefore costs exactly what an 8,000-character one does. Together these took throughput
+from 4.5 to 12.9 documents per second.</p>
+
+<h2><span class="num">05</span>Not in v2</h2>
+
+<p>The similarity work this system was heading toward — structural fingerprints, clone detection,
+cross-repository change porting — is <strong>designed and benchmarked but not built</strong>.</p>
+
+<p>The benchmarks are worth stating because they set the direction: AST k-gram fingerprints separate
+renamed clones from unrelated code at <strong>1.000 AUC with zero false positives</strong>, where the best
+embedding manages 0.877 and recovers 38% of clones at a usable threshold. That is a modality limit, not a
+capacity one — text embeddings encode identifiers and topic, and renaming removes the identifiers.
+Thirteen times the parameters moves it by 0.075.</p>
+
+<p>So embeddings do retrieval, and fingerprints will do structure. v2 makes the first of those
+substantially better and leaves the second to be built.</p>
+
+<footer>
+  code-smriti · v2 · 2026-08-19<br>
+  Companions: “Fingerprints Over Vectors” (design note 01), “The Judgment Layer” (design note 02).
+</footer>
+</div>
