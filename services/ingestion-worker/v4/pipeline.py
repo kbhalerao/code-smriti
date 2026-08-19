@@ -25,7 +25,7 @@ from datetime import datetime
 from loguru import logger
 
 from .schemas import (
-    FileIndex, SymbolIndex, ModuleSummary, RepoSummary,
+    FileIndex, SymbolIndex, SemanticUnit, ModuleSummary, RepoSummary,
     make_repo_id, SCHEMA_VERSION,
 )
 from .quality import QualityTracker
@@ -151,7 +151,7 @@ class V4Pipeline:
         repo_id: str,
         commit_hash: str,
         concurrency: int = 4,
-    ) -> Tuple[List[FileIndex], List[SymbolIndex]]:
+    ) -> Tuple[List[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
         """
         Process all files in parallel.
 
@@ -163,10 +163,11 @@ class V4Pipeline:
             concurrency: Number of concurrent file processors
 
         Returns:
-            (file_indices, symbol_indices)
+            (file_indices, symbol_indices, semantic_units)
         """
         all_file_indices = []
         all_symbol_indices = []
+        all_semantic_units = []
         total_files = len(files)
 
         # Use semaphore to limit concurrency
@@ -177,11 +178,13 @@ class V4Pipeline:
         progress_lock = threading.Lock()
         progress = {"completed": 0}
 
-        async def process_one(file_path: Path) -> Tuple[Optional[FileIndex], List[SymbolIndex]]:
+        async def process_one(
+            file_path: Path,
+        ) -> Tuple[Optional[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
             async with semaphore:
                 try:
                     # Parent module ID will be set during aggregation
-                    file_doc, symbol_docs = await self.file_processor.process(
+                    file_doc, symbol_docs, semantic_docs = await self.file_processor.process(
                         file_path=file_path,
                         repo_path=repo_path,
                         repo_id=repo_id,
@@ -195,10 +198,14 @@ class V4Pipeline:
                         current = progress["completed"]
                     relative_path = str(file_path.relative_to(repo_path))
                     symbols_count = len(symbol_docs) if symbol_docs else 0
+                    units_count = len(semantic_docs) if semantic_docs else 0
                     status = "ok" if file_doc else "skip"
-                    logger.info(f"[{current}/{total_files}] {relative_path} ({status}, {symbols_count} symbols)")
+                    logger.info(
+                        f"[{current}/{total_files}] {relative_path} "
+                        f"({status}, {symbols_count} symbols, {units_count} semantic units)"
+                    )
 
-                    return file_doc, symbol_docs
+                    return file_doc, symbol_docs, semantic_docs
                 except Exception as e:
                     with progress_lock:
                         progress["completed"] += 1
@@ -206,7 +213,7 @@ class V4Pipeline:
                     relative_path = str(file_path.relative_to(repo_path))
                     logger.error(f"[{current}/{total_files}] {relative_path} - ERROR: {e}")
                     self.quality_tracker.record_file_failed(relative_path, str(e))
-                    return None, []
+                    return None, [], []
 
         # Process all files concurrently
         tasks = [process_one(f) for f in files]
@@ -216,17 +223,19 @@ class V4Pipeline:
             if isinstance(result, Exception):
                 logger.error(f"Task exception: {result}")
                 continue
-            file_doc, symbol_docs = result
+            file_doc, symbol_docs, semantic_docs = result
             if file_doc:
                 all_file_indices.append(file_doc)
                 all_symbol_indices.extend(symbol_docs)
+                all_semantic_units.extend(semantic_docs)
 
         logger.info(
             f"Processed {len(all_file_indices)} files, "
-            f"{len(all_symbol_indices)} symbols"
+            f"{len(all_symbol_indices)} symbols, "
+            f"{len(all_semantic_units)} semantic units"
         )
 
-        return all_file_indices, all_symbol_indices
+        return all_file_indices, all_symbol_indices, all_semantic_units
 
     async def generate_embeddings(
         self,
@@ -234,6 +243,7 @@ class V4Pipeline:
         symbol_indices: List[SymbolIndex],
         module_summaries: List[ModuleSummary],
         repo_summary: RepoSummary,
+        semantic_units: Optional[List[SemanticUnit]] = None,
     ) -> None:
         """
         Generate embeddings for all documents.
@@ -255,9 +265,8 @@ class V4Pipeline:
                 texts.append(text)
                 docs.append(f)
 
-        # Symbol indices
-        for s in symbol_indices:
-            # Use code + summary for symbol embedding
+        # Symbol indices and semantic units both embed summary + code snippet
+        for s in [*symbol_indices, *(semantic_units or [])]:
             code = getattr(s, '_code_for_embedding', '')
             text = f"{s.content}\n\nCode:\n{code}" if code else s.content
             if text:
@@ -300,6 +309,7 @@ class V4Pipeline:
         symbol_indices: List[SymbolIndex],
         module_summaries: List[ModuleSummary],
         repo_summary: RepoSummary,
+        semantic_units: Optional[List[SemanticUnit]] = None,
     ) -> Dict[str, int]:
         """
         Store all documents to Couchbase.
@@ -312,6 +322,7 @@ class V4Pipeline:
             return {
                 "file_index": len(file_indices),
                 "symbol_index": len(symbol_indices),
+                "semantic_unit": len(semantic_units or []),
                 "module_summary": len(module_summaries),
                 "repo_summary": 1 if repo_summary else 0,
             }
@@ -319,6 +330,7 @@ class V4Pipeline:
         counts = {
             "file_index": 0,
             "symbol_index": 0,
+            "semantic_unit": 0,
             "module_summary": 0,
             "repo_summary": 0,
         }
@@ -340,6 +352,14 @@ class V4Pipeline:
                 counts["symbol_index"] += 1
             except Exception as e:
                 logger.error(f"Error storing symbol_index {s.symbol_name}: {e}")
+
+        # Store semantic units
+        for u in (semantic_units or []):
+            try:
+                self.storage.collection.upsert(u.document_id, u.to_dict())
+                counts["semantic_unit"] += 1
+            except Exception as e:
+                logger.error(f"Error storing semantic_unit {u.file_path}:{u.start_line}: {e}")
 
         # Store module summaries
         for m in module_summaries:
@@ -451,7 +471,7 @@ class V4Pipeline:
             return {"error": "No code files found"}
 
         # Phase 2: Process files
-        file_indices, symbol_indices = await self.process_files(
+        file_indices, symbol_indices, semantic_units = await self.process_files(
             files=files,
             repo_path=repo_path,
             repo_id=repo_id,
@@ -476,6 +496,7 @@ class V4Pipeline:
             symbol_indices=symbol_indices,
             module_summaries=module_summaries,
             repo_summary=repo_summary,
+            semantic_units=semantic_units,
         )
 
         # Phase 5: Store documents
@@ -484,6 +505,7 @@ class V4Pipeline:
             symbol_indices=symbol_indices,
             module_summaries=module_summaries,
             repo_summary=repo_summary,
+            semantic_units=semantic_units,
         )
 
         # End tracking

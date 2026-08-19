@@ -1,15 +1,32 @@
 """
 V4 Document Schemas
 
-All documents use unified `document_id` field with format:
-- repo:{repo_id}:{commit}
-- module:{repo_id}:{path}:{commit}
-- file:{repo_id}:{path}:{commit}
-- symbol:{repo_id}:{path}:{name}:{commit}
+All documents use a unified `document_id` derived from *where the thing lives*,
+never from the commit it was last seen at:
+- repo:{repo_id}
+- module:{repo_id}:{path}
+- file:{repo_id}:{path}
+- symbol:{repo_id}:{path}:{name}
+- semantic:{repo_id}:{path}:{start}-{end}
+
+Identity deliberately excludes the commit. Keying on commit made re-ingestion an
+*insert* rather than an upsert, so every full re-ingest minted a fresh generation
+of every document and orphaned the previous one — one file was found carrying five
+generations and 26 documents for its 12 functions. Superseding a document is now
+the storage engine's job (same key, same doc) instead of something every write
+path has to remember to clean up after itself.
+
+`commit_hash` survives as a *field*: it records when this version was last
+processed, which is what the RAG layer displays and what incremental uses to skip
+unchanged work. `content_hash` records what was actually hashed, so a change can
+be detected without re-deriving identity.
+
+Documents still have to be removed when the thing they describe stops existing —
+a renamed or deleted symbol. That is reconciliation against the current parse
+(see `file_processor.reconcile_file_children`), not generational cleanup.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import List, Dict, Optional
 from enum import Enum
 import hashlib
@@ -108,10 +125,10 @@ class SymbolIndex:
     Only created for significant symbols (>= 5 lines).
     Contains LLM-generated summary from docstring + code.
     """
-    document_id: str  # symbol:{repo_id}:{path}:{name}:{commit}
+    document_id: str  # symbol:{repo_id}:{path}:{name}
     repo_id: str
     file_path: str
-    commit_hash: str
+    commit_hash: str  # commit this version was processed at — a field, not identity
     symbol_name: str
     symbol_type: str  # "function", "class", "method"
 
@@ -126,9 +143,10 @@ class SymbolIndex:
     docstring: Optional[str] = None
     methods: List[Dict] = field(default_factory=list)
     inherits: List[str] = field(default_factory=list)
+    content_hash: str = ""  # digest of the source this summary was derived from
 
     # Hierarchy
-    parent_id: str = ""  # file:{repo_id}:{path}:{commit}
+    parent_id: str = ""  # file:{repo_id}:{path}
 
     # Quality & Version
     quality: QualityInfo = field(default_factory=QualityInfo)
@@ -156,6 +174,76 @@ class SymbolIndex:
                 "docstring": self.docstring,
                 "methods": self.methods,
                 "inherits": self.inherits,
+                "content_hash": self.content_hash,
+            },
+            "parent_id": self.parent_id,
+            "quality": self.quality.to_dict(),
+            "version": self.version.to_dict(),
+        }
+
+
+@dataclass
+class SemanticUnit:
+    """
+    V4 semantic_unit document — a region of a file the LLM chunker identified.
+
+    Kept deliberately separate from `symbol_index`. These are not symbols: the
+    chunker names regions rather than parsing them, and those names are neither
+    stable across runs nor guaranteed to exist in the file. One test file was
+    indexed under `RealstackAPI.get_users` / `get_cities` — the names of the
+    client methods it *tests*, none of which are defined there. Mixing that into
+    the symbol table makes the symbol table untrustworthy for every consumer.
+
+    So the LLM's name is stored as `label`, never `symbol_name`, and identity
+    comes from the line span it pointed at.
+    """
+    document_id: str  # semantic:{repo_id}:{path}:{start}-{end}
+    repo_id: str
+    file_path: str
+    commit_hash: str
+    label: str  # the LLM's name for this region — descriptive, NOT an identifier
+    unit_type: str  # embedded_sql, business_logic, api_endpoint, data_transform, …
+
+    content: str  # Summary for search
+    language: str = ""
+    embedding: Optional[List[float]] = None
+
+    start_line: int = 0
+    end_line: int = 0
+    purpose: str = ""
+    related_symbols: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    confidence: float = 0.0
+    content_hash: str = ""
+
+    parent_id: str = ""  # file:{repo_id}:{path}
+
+    quality: QualityInfo = field(default_factory=QualityInfo)
+    version: VersionInfo = field(default_factory=VersionInfo)
+
+    _code_for_embedding: str = ""
+
+    def to_dict(self) -> Dict:
+        return {
+            "document_id": self.document_id,
+            "type": "semantic_unit",
+            "repo_id": self.repo_id,
+            "file_path": self.file_path,
+            "commit_hash": self.commit_hash,
+            "label": self.label,
+            "unit_type": self.unit_type,
+            "language": self.language,
+            "content": self.content,
+            "embedding": self.embedding,
+            "metadata": {
+                "start_line": self.start_line,
+                "end_line": self.end_line,
+                "line_count": self.end_line - self.start_line + 1,
+                "purpose": self.purpose,
+                "related_symbols": self.related_symbols,
+                "tags": self.tags,
+                "confidence": self.confidence,
+                "content_hash": self.content_hash,
             },
             "parent_id": self.parent_id,
             "quality": self.quality.to_dict(),
@@ -171,10 +259,10 @@ class FileIndex:
     Contains LLM-generated summary from chunk summaries + file content.
     Lists ALL symbols in metadata, but only significant ones have children docs.
     """
-    document_id: str  # file:{repo_id}:{path}:{commit}
+    document_id: str  # file:{repo_id}:{path}
     repo_id: str
     file_path: str
-    commit_hash: str
+    commit_hash: str  # commit this version was processed at — a field, not identity
 
     # LLM-generated content
     content: str  # Summary for search
@@ -185,10 +273,11 @@ class FileIndex:
     language: str = "unknown"
     imports: List[str] = field(default_factory=list)
     symbols: List[SymbolRef] = field(default_factory=list)  # ALL symbols
+    content_hash: str = ""  # digest of the file content this summary describes
 
     # Hierarchy
-    parent_id: str = ""  # module:{repo_id}:{path}:{commit}
-    children_ids: List[str] = field(default_factory=list)  # Only significant symbol docs
+    parent_id: str = ""  # module:{repo_id}:{path}
+    children_ids: List[str] = field(default_factory=list)  # symbol + semantic_unit docs
 
     # Quality & Version
     quality: QualityInfo = field(default_factory=QualityInfo)
@@ -211,6 +300,7 @@ class FileIndex:
                 "language": self.language,
                 "imports": self.imports,
                 "symbols": [s.to_dict() for s in self.symbols],
+                "content_hash": self.content_hash,
             },
             "parent_id": self.parent_id,
             "children_ids": self.children_ids,
@@ -227,7 +317,7 @@ class ModuleSummary:
     Represents a folder in the repo hierarchy.
     Contains LLM-generated summary aggregated from file summaries.
     """
-    document_id: str  # module:{repo_id}:{path}:{commit}
+    document_id: str  # module:{repo_id}:{path}
     repo_id: str
     module_path: str  # Folder path relative to repo root
     commit_hash: str
@@ -241,7 +331,7 @@ class ModuleSummary:
     key_files: List[str] = field(default_factory=list)
 
     # Hierarchy
-    parent_id: str = ""  # repo:{repo_id}:{commit} or module:{repo_id}:{parent_path}:{commit}
+    parent_id: str = ""  # repo:{repo_id} or module:{repo_id}:{parent_path}
     children_ids: List[str] = field(default_factory=list)  # file or nested module docs
 
     # Quality & Version
@@ -275,7 +365,7 @@ class RepoSummary:
 
     Top of hierarchy. Contains LLM-generated summary aggregated from module summaries.
     """
-    document_id: str  # repo:{repo_id}:{commit}
+    document_id: str  # repo:{repo_id}
     repo_id: str
     commit_hash: str
 
@@ -376,45 +466,62 @@ def _hash_id(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-def make_repo_id(repo_id: str, commit: str) -> str:
+def make_repo_id(repo_id: str) -> str:
     """
     Generate document_id for repo_summary.
 
-    Hash of: repo:{repo_id}:{commit}
-    Same repo + commit = same ID (deduplication)
+    Hash of: repo:{repo_id}  — one document per repository, forever.
     """
-    key = f"repo:{repo_id}:{commit[:12]}"
-    return _hash_id(key)
+    return _hash_id(f"repo:{repo_id}")
 
 
-def make_module_id(repo_id: str, module_path: str, commit: str) -> str:
+def make_module_id(repo_id: str, module_path: str) -> str:
     """
     Generate document_id for module_summary.
 
-    Hash of: module:{repo_id}:{path}:{commit}
+    Hash of: module:{repo_id}:{path}  — one document per folder.
     """
-    key = f"module:{repo_id}:{module_path}:{commit[:12]}"
-    return _hash_id(key)
+    return _hash_id(f"module:{repo_id}:{module_path}")
 
 
-def make_file_id(repo_id: str, file_path: str, commit: str) -> str:
+def make_file_id(repo_id: str, file_path: str) -> str:
     """
     Generate document_id for file_index.
 
-    Hash of: file:{repo_id}:{path}:{commit}
+    Hash of: file:{repo_id}:{path}  — one document per file.
     """
-    key = f"file:{repo_id}:{file_path}:{commit[:12]}"
-    return _hash_id(key)
+    return _hash_id(f"file:{repo_id}:{file_path}")
 
 
-def make_symbol_id(repo_id: str, file_path: str, symbol_name: str, commit: str) -> str:
+def make_symbol_id(repo_id: str, file_path: str, symbol_name: str) -> str:
     """
     Generate document_id for symbol_index.
 
-    Hash of: symbol:{repo_id}:{path}:{symbol_name}:{commit}
+    Hash of: symbol:{repo_id}:{path}:{symbol_name}  — one document per symbol.
+
+    Renaming a symbol produces a new identity, which is correct: the old name no
+    longer exists and its document is removed by reconciliation, not superseded.
     """
-    key = f"symbol:{repo_id}:{file_path}:{symbol_name}:{commit[:12]}"
-    return _hash_id(key)
+    return _hash_id(f"symbol:{repo_id}:{file_path}:{symbol_name}")
+
+
+def make_semantic_unit_id(repo_id: str, file_path: str, start_line: int, end_line: int) -> str:
+    """
+    Generate document_id for semantic_unit (LLM-identified region).
+
+    Hash of: semantic:{repo_id}:{path}:{start}-{end}
+
+    Keyed on the line span rather than the LLM's label, because the label is not
+    stable: the same region has come back as `fema_api_response_validation` on one
+    run and `fema_response_validation` on the next. The span is what the model
+    actually pointed at, so it is the only part of its output fit to be identity.
+    """
+    return _hash_id(f"semantic:{repo_id}:{file_path}:{start_line}-{end_line}")
+
+
+def make_content_hash(text: str) -> str:
+    """Short digest of the source a document was derived from, for change detection."""
+    return hashlib.sha256((text or "").encode()).hexdigest()[:16]
 
 
 def make_bdr_id(repo_id: str) -> str:

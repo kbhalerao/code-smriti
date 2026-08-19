@@ -5,7 +5,7 @@ Incremental Updater - Main orchestrator for git-based incremental updates.
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from loguru import logger
 
@@ -130,29 +130,44 @@ class IncrementalUpdater:
                 modules.add(module_path)
         return modules
 
-    def _delete_old_file_docs(self, repo_id: str, file_path: str, new_commit: str):
-        """Delete old file/symbol docs, excluding the newly inserted commit."""
+    def _reconcile_file_children(self, repo_id: str, file_path: str, live_ids: List[str]):
+        """
+        Drop child docs of a file that the current parse no longer produces.
+
+        Document identity is per-symbol and per-span, not per-commit, so
+        reprocessing a file *supersedes* its children by upserting over them. The
+        only leftovers are children that stopped existing — a renamed or deleted
+        symbol, or a semantic region whose span moved. Those have no new document
+        to overwrite them, so they are deleted here by exclusion.
+
+        This replaces a delete keyed on `commit_hash != current`, which was the
+        mechanism that let full re-ingests strand whole generations: it only ran
+        on the incremental path, so any write that did not go through it left its
+        predecessors behind for good.
+        """
         try:
             from couchbase.options import QueryOptions
             query = """
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
                   AND file_path = $file_path
-                  AND type IN ['file_index', 'symbol_index']
-                  AND commit_hash != $new_commit
+                  AND type IN ['symbol_index', 'semantic_unit']
+                  AND document_id NOT IN $live_ids
             """
             result = self.cb_client.cluster.query(
                 query,
                 QueryOptions(named_parameters={
                     "repo_id": repo_id,
                     "file_path": file_path,
-                    "new_commit": new_commit
+                    "live_ids": live_ids,
                 })
             )
-            # Consume to ensure execution
+            # N1QL is lazy — the DELETE does not reach the server unless the
+            # result is consumed. Silently skipping this is what let the original
+            # generational cleanup no-op for months.
             _ = list(result)
         except Exception as e:
-            logger.warning(f"Could not delete old docs for {file_path}: {e}")
+            logger.warning(f"Could not reconcile children of {file_path}: {e}")
 
     def process_repo(self, repo_id: str, repo_path: Path, loop=None) -> UpdateResult:
         """Process a single repository with incremental update logic."""
@@ -297,14 +312,15 @@ class IncrementalUpdater:
         # 7b. Process changed code files
         file_indices = []
         all_symbol_indices = []
+        all_semantic_units = []
 
         # Use a SINGLE event loop for ALL async operations in this surgical update
         # This is critical because httpx.AsyncClient binds to the loop it's used with
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        # Track files we successfully process (for deferred delete)
-        processed_files = []
+        # Child doc ids produced this run, per file — the input to reconciliation
+        live_children: Dict[str, List[str]] = {}
 
         try:
             for file_path in code_to_process:
@@ -318,7 +334,7 @@ class IncrementalUpdater:
                 file_diff = self.git.get_file_diff(repo_path, base_commit, origin_head, file_path)
 
                 try:
-                    file_index, symbol_indices = loop.run_until_complete(
+                    file_index, symbol_indices, semantic_units = loop.run_until_complete(
                         self.pipeline.file_processor.process(
                             file_path=full_path,
                             repo_path=repo_path,
@@ -331,7 +347,10 @@ class IncrementalUpdater:
                     if file_index:
                         file_indices.append(file_index)
                         all_symbol_indices.extend(symbol_indices)
-                        processed_files.append(file_path)
+                        all_semantic_units.extend(semantic_units)
+                        live_children[file_path] = [
+                            d.document_id for d in (*symbol_indices, *semantic_units)
+                        ]
                         files_processed += 1
 
                         # Check if significant (using embedding similarity when available)
@@ -352,7 +371,7 @@ class IncrementalUpdater:
                     logger.error(f"    Error processing {file_path}: {e}")
 
             # 7c. Generate embeddings and store
-            all_docs = file_indices + all_symbol_indices
+            all_docs = file_indices + all_symbol_indices + all_semantic_units
             if all_docs:
                 if self.pipeline.embedding_generator:
                     for doc in all_docs:
@@ -366,9 +385,10 @@ class IncrementalUpdater:
                     doc_dict = doc.to_dict()
                     self.cb_client.collection.upsert(doc.document_id, doc_dict)
 
-                # Now delete old versions (excluding new commit) - safe because new docs are already saved
-                for file_path in processed_files:
-                    self._delete_old_file_docs(repo_id, file_path, origin_head)
+                # Now drop children that no longer exist — safe because the docs
+                # that survive have already been upserted above.
+                for file_path, live_ids in live_children.items():
+                    self._reconcile_file_children(repo_id, file_path, live_ids)
 
             # 7d. Regenerate summaries only if significant changes (INSIDE same loop)
             if any_significant_change or code_deleted:
@@ -486,7 +506,7 @@ class IncrementalUpdater:
                 fi = rehydrate_file_index(doc, commit_hash=commit_hash)
                 if not fi.document_id:
                     fi.document_id = make_file_id(
-                        doc.get('repo_id'), doc.get('file_path'), commit_hash
+                        doc.get('repo_id'), doc.get('file_path')
                     )
                 file_index_objects.append(fi)
 

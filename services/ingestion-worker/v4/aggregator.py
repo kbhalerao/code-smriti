@@ -156,7 +156,7 @@ class BottomUpAggregator:
             [m.document_id for m in child_module_summaries]
         )
 
-        module_doc_id = make_module_id(repo_id, module_path, commit_hash)
+        module_doc_id = make_module_id(repo_id, module_path)
 
         module_doc = ModuleSummary(
             document_id=module_doc_id,
@@ -356,7 +356,7 @@ class BottomUpAggregator:
             if '/' not in m.module_path and m.module_path  # No nested path
         ]
 
-        repo_doc_id = make_repo_id(repo_id, commit_hash)
+        repo_doc_id = make_repo_id(repo_id)
 
         repo_doc = RepoSummary(
             document_id=repo_doc_id,
@@ -511,7 +511,7 @@ class BottomUpAggregator:
         folder_order = self.get_folder_hierarchy(all_folders)
 
         module_summaries = {}  # {path: ModuleSummary}
-        repo_doc_id = make_repo_id(repo_id, commit_hash)
+        repo_doc_id = make_repo_id(repo_id)
 
         # Log optimization stats
         if affected_modules is not None:
@@ -543,7 +543,7 @@ class BottomUpAggregator:
                 if parent_folder == ".":
                     parent_folder = ""
                 if parent_folder:
-                    parent_id = make_module_id(repo_id, parent_folder, commit_hash)
+                    parent_id = make_module_id(repo_id, parent_folder)
                 else:
                     parent_id = repo_doc_id  # Parent is repo
             else:

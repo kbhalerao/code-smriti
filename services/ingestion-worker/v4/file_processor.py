@@ -1,15 +1,17 @@
 """
 V4 File Processor
 
-Processes a single file into file_index + symbol_index documents.
+Processes a single file into file_index + symbol_index + semantic_unit documents.
 
 Flow:
 1. Parse with tree-sitter (correct symbol name mapping)
 2. Check is_underchunked()
-3. If underchunked, invoke LLM chunker for additional semantic chunks
-4. Merge tree-sitter symbols + LLM chunks
-5. Generate symbol summaries (>5 lines only)
-6. Generate file summary from ALL symbol summaries
+3. If underchunked, invoke LLM chunker for additional semantic regions
+4. Summarise parsed symbols (>= 5 lines) into symbol_index docs
+5. Summarise LLM regions into semantic_unit docs — a SEPARATE type, never merged
+   into the symbol table, because the chunker labels regions it did not parse and
+   those labels are unstable between runs (see schemas.SemanticUnit)
+6. Generate file summary from both sets of summaries
 7. Return documents ready for embedding
 """
 
@@ -21,9 +23,9 @@ from datetime import datetime
 from loguru import logger
 
 from .schemas import (
-    FileIndex, SymbolIndex, SymbolRef, QualityInfo, VersionInfo,
-    EnrichmentLevel, SCHEMA_VERSION, SYMBOL_MIN_LINES,
-    make_file_id, make_symbol_id,
+    FileIndex, SymbolIndex, SemanticUnit, SymbolRef, QualityInfo, VersionInfo,
+    EnrichmentLevel, SCHEMA_VERSION,
+    make_file_id, make_symbol_id, make_semantic_unit_id, make_content_hash,
 )
 from .quality import QualityTracker
 
@@ -474,7 +476,7 @@ class FileProcessor:
         repo_id: str,
         commit_hash: str,
         parent_module_id: str
-    ) -> Tuple[Optional[FileIndex], List[SymbolIndex]]:
+    ) -> Tuple[Optional[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
         """
         Process a single file into V4 documents.
 
@@ -486,7 +488,7 @@ class FileProcessor:
             parent_module_id: document_id of parent module
 
         Returns:
-            (file_index, [symbol_indices])
+            (file_index, [symbol_indices], [semantic_units])
         """
         relative_path = str(file_path.relative_to(repo_path))
 
@@ -495,11 +497,11 @@ class FileProcessor:
         if not content:
             logger.warning(f"[SKIP] {relative_path}: could not read file content")
             self.quality_tracker.record_file_skipped()
-            return None, []
+            return None, [], []
         if len(content.strip()) < 50:
             logger.debug(f"[SKIP] {relative_path}: file too small ({len(content.strip())} chars)")
             self.quality_tracker.record_file_skipped()
-            return None, []
+            return None, [], []
 
         # Detect language
         language = self.code_parser.detect_language(file_path)
@@ -531,12 +533,15 @@ class FileProcessor:
                 existing_symbols=symbols,
             )
 
-            # Convert LLM chunks to SymbolRefs and add to symbols list
+            # LLM chunks deliberately do NOT join `symbols`. They become their own
+            # semantic_unit documents further down: the chunker names regions it
+            # did not parse, and those names are neither stable between runs nor
+            # guaranteed to exist in the file, so promoting them into the symbol
+            # table poisons it for every consumer. See schemas.SemanticUnit.
             for chunk in llm_chunks:
-                symbol_ref = self.semantic_chunk_to_symbol_ref(chunk)
-                symbols.append(symbol_ref)
                 logger.debug(
-                    f"[LLM-CHUNK] {relative_path}: added '{chunk.name}' ({chunk.chunk_type})"
+                    f"[LLM-CHUNK] {relative_path}: region '{chunk.name}' ({chunk.chunk_type}) "
+                    f"lines {chunk.start_line}-{chunk.end_line}"
                 )
 
             if llm_chunks:
@@ -567,10 +572,8 @@ class FileProcessor:
             symbol_summaries.append(summary)
 
             # Create symbol_index document
-            symbol_doc_id = make_symbol_id(
-                repo_id, relative_path, symbol.name, commit_hash
-            )
-            file_doc_id = make_file_id(repo_id, relative_path, commit_hash)
+            symbol_doc_id = make_symbol_id(repo_id, relative_path, symbol.name)
+            file_doc_id = make_file_id(repo_id, relative_path)
 
             symbol_doc = SymbolIndex(
                 document_id=symbol_doc_id,
@@ -585,6 +588,7 @@ class FileProcessor:
                 end_line=symbol.end_line,
                 docstring=symbol.docstring,
                 methods=symbol.methods,
+                content_hash=make_content_hash(code_snippet),
                 parent_id=file_doc_id,
                 quality=QualityInfo(
                     enrichment_level=enrichment_level,
@@ -603,13 +607,62 @@ class FileProcessor:
             symbol_docs.append(symbol_doc)
             self.quality_tracker.record_symbol_processed()
 
+        # Build semantic_unit docs for the LLM-identified regions. Same treatment
+        # as symbols — summarised and embedded — but a separate type, keyed on the
+        # span rather than the label, so nothing here can be mistaken for a parsed
+        # symbol by a consumer.
+        file_doc_id = make_file_id(repo_id, relative_path)
+        semantic_docs = []
+        for chunk in llm_chunks:
+            code_snippet = self.get_code_snippet(content, chunk.start_line, chunk.end_line)
+            summary, enrichment_level = await self.generate_symbol_summary(
+                self.semantic_chunk_to_symbol_ref(chunk),
+                code_snippet,
+                relative_path,
+                language,
+            )
+            symbol_summaries.append(summary)
+
+            unit_doc = SemanticUnit(
+                document_id=make_semantic_unit_id(
+                    repo_id, relative_path, chunk.start_line, chunk.end_line
+                ),
+                repo_id=repo_id,
+                file_path=relative_path,
+                commit_hash=commit_hash,
+                label=chunk.name,
+                unit_type=chunk.chunk_type,
+                language=language or "",
+                content=summary,
+                start_line=chunk.start_line,
+                end_line=chunk.end_line,
+                purpose=chunk.purpose,
+                related_symbols=chunk.related_symbols,
+                tags=chunk.tags,
+                confidence=chunk.confidence,
+                content_hash=make_content_hash(code_snippet),
+                parent_id=file_doc_id,
+                quality=QualityInfo(
+                    enrichment_level=enrichment_level,
+                    llm_available=self.quality_tracker.llm_available,
+                    summary_source="llm_semantic_chunk",
+                ),
+                version=VersionInfo(
+                    schema_version=SCHEMA_VERSION,
+                    pipeline_version=datetime.now().strftime("%Y.%m.%d"),
+                    created_at=datetime.now().isoformat(),
+                ),
+            )
+            unit_doc._code_for_embedding = code_snippet[:2000]
+            semantic_docs.append(unit_doc)
+
         # Generate file summary from symbol summaries
         file_summary, file_enrichment = await self.generate_file_summary(
             relative_path, content, language, symbols, symbol_summaries
         )
 
         # Create file_index document
-        file_doc_id = make_file_id(repo_id, relative_path, commit_hash)
+        file_doc_id = make_file_id(repo_id, relative_path)
 
         file_doc = FileIndex(
             document_id=file_doc_id,
@@ -620,9 +673,10 @@ class FileProcessor:
             line_count=line_count,
             language=language,
             imports=imports,
-            symbols=symbols,  # ALL symbols listed
+            symbols=symbols,  # ALL parsed symbols listed
+            content_hash=make_content_hash(content),
             parent_id=parent_module_id,
-            children_ids=[s.document_id for s in symbol_docs],  # Only significant
+            children_ids=[d.document_id for d in (*symbol_docs, *semantic_docs)],
             quality=QualityInfo(
                 enrichment_level=file_enrichment,
                 llm_available=self.quality_tracker.llm_available,
@@ -643,12 +697,11 @@ class FileProcessor:
         self.quality_tracker.record_file_processed()
 
         # Log file processing summary
-        ts_symbols = len(symbols) - len(llm_chunks)
         logger.info(
             f"[FILE] {relative_path}: {line_count} lines, {language or 'unknown'}, "
-            f"{ts_symbols} tree-sitter + {len(llm_chunks)} LLM chunks, "
-            f"{len(symbol_docs)} symbol docs, "
+            f"{len(symbols)} tree-sitter symbols -> {len(symbol_docs)} symbol docs, "
+            f"{len(llm_chunks)} LLM regions -> {len(semantic_docs)} semantic units, "
             f"enrichment={file_enrichment.value}"
         )
 
-        return file_doc, symbol_docs
+        return file_doc, symbol_docs, semantic_docs

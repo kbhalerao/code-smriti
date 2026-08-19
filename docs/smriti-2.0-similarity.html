@@ -1,0 +1,607 @@
+<title>Fingerprints Over Vectors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF0F4;
+  --ink:#141A22; --ink-2:#59636F; --ink-3:#8A94A0;
+  --rule:#DDE3E9; --rule-2:#C8D0D9;
+  --accent:#3F3D8F; --accent-soft:#ECEBF7;
+  --clone:#2a78d6; --random:#eb6834;
+  --good:#127f57; --bad:#c23b3a; --warn:#9a6a00;
+  --good-bg:#E4F3EC; --bad-bg:#FBE9E8; --warn-bg:#F8EFDC;
+  --shadow:0 1px 2px rgba(20,26,34,.05),0 8px 24px -16px rgba(20,26,34,.28);
+  --measure:68ch;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F131A; --surface:#171C24; --surface-2:#1E242E;
+    --ink:#E7ECF2; --ink-2:#98A3B1; --ink-3:#6C7784;
+    --rule:#28303A; --rule-2:#39424E;
+    --accent:#A29BEF; --accent-soft:#221F3A;
+    --clone:#3987e5; --random:#d95926;
+    --good:#3fbb8b; --bad:#ec7574; --warn:#d0a03c;
+    --good-bg:#12271F; --bad-bg:#2B1918; --warn-bg:#2A2114;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F131A; --surface:#171C24; --surface-2:#1E242E;
+  --ink:#E7ECF2; --ink-2:#98A3B1; --ink-3:#6C7784;
+  --rule:#28303A; --rule-2:#39424E;
+  --accent:#A29BEF; --accent-soft:#221F3A;
+  --clone:#3987e5; --random:#d95926;
+  --good:#3fbb8b; --bad:#ec7574; --warn:#d0a03c;
+  --good-bg:#12271F; --bad-bg:#2B1918; --warn-bg:#2A2114;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif; font-size:17.5px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:var(--measure); margin:0 auto; padding:0 24px 96px;}
+.bleed{width:min(980px,calc(100vw - 48px)); margin-left:50%; transform:translateX(-50%);}
+
+h1,h2,h3,h4,.eyebrow,.mono,th,.chip,.verdict,.opt-name{font-family:"IBM Plex Sans",system-ui,sans-serif;}
+.mono,code,.num,td.n,.hash{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+
+/* ---------- masthead ---------- */
+header.mast{padding:76px 0 40px;}
+.eyebrow{font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.eyebrow .dot{width:3px;height:3px;border-radius:50%;background:var(--rule-2);}
+h1{font-size:clamp(38px,6.2vw,60px); line-height:1.02; letter-spacing:-.028em; font-weight:700;
+   margin:20px 0 0; text-wrap:balance;}
+.standfirst{font-size:20px; color:var(--ink-2); margin:20px 0 0; text-wrap:pretty; max-width:60ch;}
+
+/* ---------- answers ---------- */
+.answers{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
+  border-radius:10px; overflow:hidden; margin:44px 0 0;}
+.ans{background:var(--surface); padding:22px 24px; display:grid; gap:8px;}
+.ans .q{font-family:"IBM Plex Sans",sans-serif; font-size:14px; font-weight:600; color:var(--ink-2);
+  display:flex; gap:10px; align-items:baseline;}
+.ans .q b{font-family:"IBM Plex Mono",monospace; color:var(--accent); font-weight:500; font-size:12px;}
+.ans .a{font-size:18px; line-height:1.5; margin:0;}
+.ans .a strong{font-weight:600;}
+
+/* ---------- sections ---------- */
+section{margin-top:76px;}
+.sec-head{display:flex; gap:14px; align-items:baseline; border-top:2px solid var(--ink);
+  padding-top:14px; margin-bottom:8px;}
+.sec-num{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500;
+  color:var(--accent); letter-spacing:.06em; padding-top:6px;}
+h2{font-size:clamp(25px,3.4vw,32px); line-height:1.18; letter-spacing:-.02em;
+  font-weight:600; margin:0; text-wrap:balance;}
+h3{font-family:"IBM Plex Sans",sans-serif; font-size:19px; font-weight:600; letter-spacing:-.01em;
+  margin:44px 0 10px;}
+h4{font-size:15px; font-weight:600; margin:0; letter-spacing:-.005em;}
+p{margin:16px 0;}
+p.lede{font-size:19px; color:var(--ink-2);}
+a{color:var(--accent);}
+strong{font-weight:600;}
+em.term{font-style:normal; font-family:"IBM Plex Mono",monospace; font-size:.9em;
+  background:var(--surface-2); padding:1px 5px; border-radius:4px;}
+
+/* ---------- method note ---------- */
+.method{border-left:2px solid var(--rule-2); padding:2px 0 2px 18px; margin:24px 0;
+  font-size:15px; color:var(--ink-2);}
+.method b{font-family:"IBM Plex Sans",sans-serif; font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--ink-3); display:block; margin-bottom:4px; font-weight:600;}
+
+/* ---------- stat row ---------- */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:2px;
+  background:var(--rule); border:1px solid var(--rule); border-radius:10px; overflow:hidden; margin:28px 0;}
+.stat{background:var(--surface); padding:18px 20px;}
+.stat .v{font-family:"IBM Plex Mono",monospace; font-size:30px; font-weight:500;
+  letter-spacing:-.03em; line-height:1; font-variant-numeric:tabular-nums;}
+.stat .k{font-family:"IBM Plex Sans",sans-serif; font-size:12.5px; color:var(--ink-2);
+  margin-top:8px; line-height:1.35;}
+.stat.hi .v{color:var(--accent);}
+
+/* ---------- chart ---------- */
+.panels{display:grid; gap:22px; margin:32px 0 8px;}
+.panel{margin:0; background:var(--surface); border:1px solid var(--rule);
+  border-radius:10px; padding:20px 22px 16px; box-shadow:var(--shadow);}
+.panel-head{display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;}
+.panel-sub{margin:4px 0 0; font-size:13.5px; color:var(--ink-2); font-family:"IBM Plex Sans",sans-serif;}
+.verdict{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  padding:4px 9px; border-radius:100px; white-space:nowrap;}
+.verdict.bad{background:var(--bad-bg); color:var(--bad);}
+.verdict.ok{background:var(--warn-bg); color:var(--warn);}
+.verdict.good{background:var(--good-bg); color:var(--good);}
+.plot-wrap{overflow-x:auto; margin:14px 0 0;}
+.plot{display:block; width:100%; min-width:460px; height:120px; overflow:visible;}
+.ridge{stroke-width:1.5; }
+.r-clone{fill:color-mix(in srgb,var(--clone) 26%,transparent); stroke:var(--clone);}
+.r-random{fill:color-mix(in srgb,var(--random) 24%,transparent); stroke:var(--random);}
+.axis{stroke:var(--rule-2); stroke-width:1;}
+.ticks text{font-family:"IBM Plex Mono",monospace; font-size:10px; fill:var(--ink-3);
+  font-variant-numeric:tabular-nums;}
+.lead{stroke-width:1; stroke-dasharray:2 2;}
+.lead.c-clone{stroke:var(--clone);} .lead.c-random{stroke:var(--random);}
+.lab{font-family:"IBM Plex Mono",monospace; font-size:11px; font-variant-numeric:tabular-nums;}
+.lab.c-clone{fill:var(--clone);} .lab.c-random{fill:var(--random);}
+.panel-note{margin:12px 0 0; font-size:14.5px; color:var(--ink-2); line-height:1.55;}
+.legend{display:flex; gap:20px; flex-wrap:wrap; font-family:"IBM Plex Sans",sans-serif;
+  font-size:13px; color:var(--ink-2); margin:0 0 4px;}
+.legend span{display:flex; gap:8px; align-items:center;}
+.swatch{width:14px; height:10px; border-radius:2px; border:1.5px solid;}
+.sw-clone{background:color-mix(in srgb,var(--clone) 26%,transparent); border-color:var(--clone);}
+.sw-random{background:color-mix(in srgb,var(--random) 24%,transparent); border-color:var(--random);}
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow-x:auto; margin:26px 0; border:1px solid var(--rule); border-radius:10px;
+  background:var(--surface);}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px;}
+th{font-size:11.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-2); text-align:left; padding:13px 16px; border-bottom:1px solid var(--rule);
+  white-space:nowrap;}
+td{padding:12px 16px; border-bottom:1px solid var(--rule); vertical-align:top;
+  font-family:"Source Serif 4",serif;}
+tbody tr:last-child td{border-bottom:none;}
+td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-size:14px;}
+td.name{font-family:"IBM Plex Sans",sans-serif; font-weight:500; font-size:14px;}
+.pass{color:var(--good); font-weight:600;} .fail{color:var(--bad); font-weight:600;}
+tr.hl td{background:var(--accent-soft);}
+
+/* ---------- code / findings ---------- */
+.finding{background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:18px 20px; margin:22px 0; box-shadow:var(--shadow);}
+.finding h4{margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.chip{font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:500; padding:3px 8px;
+  border-radius:5px; background:var(--surface-2); color:var(--ink-2); white-space:nowrap;}
+.filelist{list-style:none; margin:10px 0 0; padding:0; display:grid; gap:5px;}
+.filelist li{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink-2);
+  overflow-x:auto; white-space:nowrap;}
+.filelist li b{color:var(--ink); font-weight:500;}
+
+/* ---------- schematic ---------- */
+.schema{display:grid; gap:14px; margin:30px 0;}
+.srow{display:grid; grid-template-columns:minmax(0,1fr); gap:12px;}
+@media(min-width:720px){ .srow.two{grid-template-columns:1fr 1fr;} }
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:18px 20px; box-shadow:var(--shadow);}
+.card.spine{border-left:3px solid var(--accent);}
+.card h4{margin-bottom:6px;}
+.card .role{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--accent);
+  letter-spacing:.06em; text-transform:uppercase; margin-bottom:9px;}
+.card p{margin:6px 0 0; font-size:14.5px; color:var(--ink-2); line-height:1.55;}
+.rec{background:var(--surface-2); border-radius:8px; padding:14px 16px; margin:12px 0 0;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; line-height:1.7; color:var(--ink-2);
+  overflow-x:auto;}
+.rec b{color:var(--ink); font-weight:500;}
+.rec .cmt{color:var(--ink-3);}
+.arrow{display:flex; justify-content:center; color:var(--rule-2); font-size:18px; line-height:1;}
+
+/* ---------- options ---------- */
+.opt{background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+  padding:22px 24px; margin:18px 0; box-shadow:var(--shadow);}
+.opt.pick{border-color:var(--accent); border-width:1.5px;}
+.opt-top{display:flex; gap:12px; align-items:baseline; justify-content:space-between; flex-wrap:wrap;}
+.opt-name{font-size:18px; font-weight:600; letter-spacing:-.01em;}
+.opt-name span{font-family:"IBM Plex Mono",monospace; color:var(--accent); font-size:13px; margin-right:8px;}
+.tag{font-family:"IBM Plex Sans",sans-serif; font-size:11px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; padding:4px 9px; border-radius:100px; background:var(--accent-soft);
+  color:var(--accent); white-space:nowrap;}
+.opt p{font-size:15.5px; margin:12px 0 0;}
+.tradeoff{display:grid; gap:2px; background:var(--rule); border:1px solid var(--rule);
+  border-radius:8px; overflow:hidden; margin:16px 0 0;}
+@media(min-width:640px){ .tradeoff{grid-template-columns:1fr 1fr;} }
+.tradeoff div{background:var(--surface); padding:12px 15px; font-size:14px; color:var(--ink-2);
+  font-family:"Source Serif 4",serif;}
+.tradeoff b{font-family:"IBM Plex Sans",sans-serif; font-size:11px; letter-spacing:.1em;
+  text-transform:uppercase; display:block; margin-bottom:5px; font-weight:600;}
+.tradeoff .up b{color:var(--good);} .tradeoff .down b{color:var(--bad);}
+
+ul.body{padding-left:20px; margin:16px 0;} ul.body li{margin:9px 0;}
+ol.body{padding-left:22px; margin:16px 0;} ol.body li{margin:11px 0;}
+
+footer{margin-top:80px; padding-top:26px; border-top:1px solid var(--rule);
+  font-size:13.5px; color:var(--ink-3); font-family:"IBM Plex Sans",sans-serif; line-height:1.6;}
+footer h4{color:var(--ink-2); margin-bottom:8px;}
+footer code{font-size:12px; background:var(--surface-2); padding:1px 5px; border-radius:4px;}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow"><span>Smriti 2.0</span><i class="dot"></i><span>Design note</span><i class="dot"></i><span>18 August 2026</span></div>
+  <h1>Fingerprints Over Vectors</h1>
+  <p class="standfirst">You asked whether Smriti can find code like a given function &mdash; to kill intra-repo duplication and to port fixes between repos. It can, but not with the signal it currently uses. Here is what the corpus measurements say, and three ways to build it.</p>
+</header>
+
+<div class="answers">
+  <div class="ans">
+    <div class="q"><b>Q1</b> Can we take a function and find that kind of function elsewhere?</div>
+    <p class="a"><strong>Yes &mdash; the mechanism already exists and already works.</strong> Seeded on one function, it found its two copy&#8209;pasted siblings in the same repo. But the ranking below the top three is noise.</p>
+  </div>
+  <div class="ans">
+    <div class="q"><b>Q2</b> Is the embedding model resolving enough for code?</div>
+    <p class="a"><strong>No, and not marginally.</strong> Rename a function&rsquo;s variables and the model can no longer tell a perfect structural clone from unrelated code. Its entire signal for code is identifier strings.</p>
+  </div>
+  <div class="ans">
+    <div class="q"><b>Q3</b> So what should 2.0 actually be built on?</div>
+    <p class="a"><strong>AST k&#8209;gram fingerprints, with the document tree as the partition.</strong> Zero false positives on the same test the embedding failed, no threshold to tune, and no LLM in the loop.</p>
+  </div>
+</div>
+
+<section>
+  <div class="sec-head"><span class="sec-num">01</span><h2>The search you have today finds the answer, then buries it</h2></div>
+  <p class="lede">Every symbol in Smriti already carries a 768&#8209;dimension vector. Finding similar functions needs no new infrastructure &mdash; pull a symbol&rsquo;s stored vector, search it back against the index.</p>
+  <p>Seeded on <em class="term">fetch_url</em> in <em class="term">kbhalerao/ssurgo</em> &mdash; an async fetch with retries and exponential backoff &mdash; that search returns exactly the right thing at the top:</p>
+
+  <div class="finding">
+    <h4>Genuine copy&#8209;paste triplication, correctly found <span class="chip">kbhalerao/ssurgo</span></h4>
+    <ul class="filelist">
+      <li><b>2.4491</b>&nbsp;&nbsp;fema/LOMRs.py &rarr; fetch_url</li>
+      <li><b>2.4426</b>&nbsp;&nbsp;fema/FIRMPanels.py &rarr; fetch_url</li>
+      <li><b>2.4354</b>&nbsp;&nbsp;fema/RegenFEMA.py &rarr; fetch_url</li>
+      <li style="color:var(--bad)">2.3555&nbsp;&nbsp;&hellip;then 20 unrelated &ldquo;fetch JSON from a URL&rdquo; functions, flat, at 2.35</li>
+    </ul>
+  </div>
+
+  <p>The three real clones score 2.449, 2.443 and 2.435. The first function with no retry logic at all scores 2.355. <strong>A 4% gap between a true clone and a merely topical neighbour</strong> &mdash; there is no threshold that keeps one and drops the other, and <em class="term">top&#8209;k</em> becomes an arbitrary guess.</p>
+  <p>That gap is the whole problem, so the next question is what causes it.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">02</span><h2>The embedding reads topic, not structure</h2></div>
+  <p class="lede">A symbol&rsquo;s vector is built from its LLM summary plus the first 2000 characters of code, encoded by nomic&#8209;embed&#8209;text&#8209;v1.5 &mdash; a general <em>text</em> model. The test below isolates whether anything about code structure survives that encoding.</p>
+
+  <div class="method">
+    <b>Method</b>
+    Harvest 20,175 distinct Python functions (8&ndash;60 lines) from the 296 local clones. Take a function and rename <em>every</em> identifier to meaningless names (<span class="mono">v7_0</span>, <span class="mono">v7_1</span>&hellip;). The AST is now identical in every respect except the strings. Ask each signal to separate those clone pairs from 300 random unrelated function pairs.
+  </div>
+
+  <div class="bleed">
+    <div class="legend">
+      <span><i class="swatch sw-clone"></i> renamed clone pairs &mdash; identical structure (n=113)</span>
+      <span><i class="swatch sw-random"></i> random unrelated pairs (n=300)</span>
+    </div>
+    <div class="panels">
+      <figure class="panel">
+        <figcaption>
+          <div class="panel-head">
+            <h4>nomic-embed-text-v1.5</h4>
+            <span class="verdict bad">85% false positives</span>
+          </div>
+          <p class="panel-sub">cosine between the two function texts</p>
+        </figcaption>
+        <div class="plot-wrap">
+          <svg class="plot" viewBox="0 0 560 120" role="img"
+               aria-label="nomic-embed-text-v1.5: renamed-clone pairs centre on 0.64, random pairs on 0.6113. The two distributions sit on top of each other. Tune the threshold to catch 95% of real clones and you also admit <strong>85% of completely unrelated pairs</strong>. There is no usable cut point anywhere on this axis.">
+            <g transform="translate(0,4)">
+              <path class="ridge r-random" d="M0,54 L0.0,54.0 L14.0,54.0 L14.0,54.0 L28.0,54.0 L28.0,54.0 L42.0,54.0 L42.0,54.0 L56.0,54.0 L56.0,54.0 L70.0,54.0 L70.0,54.0 L84.0,54.0 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,54.0 L210.0,54.0 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,54.0 L252.0,54.0 L252.0,53.2 L266.0,53.2 L266.0,50.1 L280.0,50.1 L280.0,48.6 L294.0,48.6 L294.0,40.9 L308.0,40.9 L308.0,27.8 L322.0,27.8 L322.0,17.0 L336.0,17.0 L336.0,0.0 L350.0,0.0 L350.0,7.7 L364.0,7.7 L364.0,26.2 L378.0,26.2 L378.0,43.2 L392.0,43.2 L392.0,49.4 L406.0,49.4 L406.0,54.0 L420.0,54.0 L420.0,53.2 L434.0,53.2 L434.0,53.2 L448.0,53.2 L448.0,54.0 L462.0,54.0 L462.0,54.0 L476.0,54.0 L476.0,54.0 L490.0,54.0 L490.0,54.0 L504.0,54.0 L504.0,54.0 L518.0,54.0 L518.0,54.0 L532.0,54.0 L532.0,54.0 L546.0,54.0 L546.0,54.0 L560.0,54.0 L560,54 Z"/>
+              <path class="ridge r-clone"  d="M0,54 L0.0,54.0 L14.0,54.0 L14.0,54.0 L28.0,54.0 L28.0,54.0 L42.0,54.0 L42.0,54.0 L56.0,54.0 L56.0,54.0 L70.0,54.0 L70.0,54.0 L84.0,54.0 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,54.0 L210.0,54.0 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,54.0 L252.0,54.0 L252.0,54.0 L266.0,54.0 L266.0,54.0 L280.0,54.0 L280.0,51.5 L294.0,51.5 L294.0,51.5 L308.0,51.5 L308.0,34.4 L322.0,34.4 L322.0,9.8 L336.0,9.8 L336.0,12.3 L350.0,12.3 L350.0,9.8 L364.0,9.8 L364.0,0.0 L378.0,0.0 L378.0,17.2 L392.0,17.2 L392.0,36.8 L406.0,36.8 L406.0,39.3 L420.0,39.3 L420.0,54.0 L434.0,54.0 L434.0,54.0 L448.0,54.0 L448.0,54.0 L462.0,54.0 L462.0,54.0 L476.0,54.0 L476.0,54.0 L490.0,54.0 L490.0,54.0 L504.0,54.0 L504.0,54.0 L518.0,54.0 L518.0,54.0 L532.0,54.0 L532.0,54.0 L546.0,54.0 L546.0,54.0 L560.0,54.0 L560,54 Z"/>
+            </g>
+            <line class="axis" x1="0" y1="62" x2="560" y2="62"/>
+            <g class="ticks">
+              <text x="0"   y="78" text-anchor="start">0.0</text>
+              <text x="140" y="78" text-anchor="middle">0.25</text>
+              <text x="280" y="78" text-anchor="middle">0.50</text>
+              <text x="420" y="78" text-anchor="middle">0.75</text>
+              <text x="560" y="78" text-anchor="end">1.0</text>
+            </g>
+            <g class="callout">
+              <line class="lead c-random" x1="342" y1="58" x2="342" y2="94"/>
+              <text class="lab c-random" x="342" y="107"
+                    text-anchor="end"
+                    dx="-6">random 0.61</text>
+              <line class="lead c-clone" x1="358" y1="58" x2="358" y2="94"/>
+              <text class="lab c-clone" x="358" y="107"
+                    text-anchor="end"
+                    dx="-6">clone 0.64</text>
+            </g>
+          </svg>
+        </div>
+        <p class="panel-note">The two distributions sit on top of each other. Tune the threshold to catch 95% of real clones and you also admit <strong>85% of completely unrelated pairs</strong>. There is no usable cut point anywhere on this axis.</p>
+      </figure>
+      <figure class="panel">
+        <figcaption>
+          <div class="panel-head">
+            <h4>AST node histogram</h4>
+            <span class="verdict ok">0% false positives</span>
+          </div>
+          <p class="panel-sub">cosine over ~120 structural counts</p>
+        </figcaption>
+        <div class="plot-wrap">
+          <svg class="plot" viewBox="0 0 560 120" role="img"
+               aria-label="AST node histogram: renamed-clone pairs centre on 1.0, random pairs on 0.8532. Separates cleanly here, but look at the range: random pairs already average 0.85 and reach 0.98. All Python functions have similar node mixes, so the headroom above noise is thin — real edited clones will fall into that tail.">
+            <g transform="translate(0,4)">
+              <path class="ridge r-random" d="M0,54 L0.0,54.0 L14.0,54.0 L14.0,54.0 L28.0,54.0 L28.0,54.0 L42.0,54.0 L42.0,54.0 L56.0,54.0 L56.0,54.0 L70.0,54.0 L70.0,54.0 L84.0,54.0 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,52.9 L210.0,52.9 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,52.9 L252.0,52.9 L252.0,54.0 L266.0,54.0 L266.0,54.0 L280.0,54.0 L280.0,54.0 L294.0,54.0 L294.0,54.0 L308.0,54.0 L308.0,54.0 L322.0,54.0 L322.0,52.9 L336.0,52.9 L336.0,52.9 L350.0,52.9 L350.0,51.9 L364.0,51.9 L364.0,51.9 L378.0,51.9 L378.0,54.0 L392.0,54.0 L392.0,50.8 L406.0,50.8 L406.0,44.5 L420.0,44.5 L420.0,37.1 L434.0,37.1 L434.0,28.6 L448.0,28.6 L448.0,26.5 L462.0,26.5 L462.0,18.0 L476.0,18.0 L476.0,0.0 L490.0,0.0 L490.0,4.2 L504.0,4.2 L504.0,8.5 L518.0,8.5 L518.0,26.5 L532.0,26.5 L532.0,42.4 L546.0,42.4 L546.0,51.9 L560.0,51.9 L560,54 Z"/>
+              <path class="ridge r-clone"  d="M0,54 L0.0,54.0 L14.0,54.0 L14.0,54.0 L28.0,54.0 L28.0,54.0 L42.0,54.0 L42.0,54.0 L56.0,54.0 L56.0,54.0 L70.0,54.0 L70.0,54.0 L84.0,54.0 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,54.0 L210.0,54.0 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,54.0 L252.0,54.0 L252.0,54.0 L266.0,54.0 L266.0,54.0 L280.0,54.0 L280.0,54.0 L294.0,54.0 L294.0,54.0 L308.0,54.0 L308.0,54.0 L322.0,54.0 L322.0,54.0 L336.0,54.0 L336.0,54.0 L350.0,54.0 L350.0,54.0 L364.0,54.0 L364.0,54.0 L378.0,54.0 L378.0,54.0 L392.0,54.0 L392.0,54.0 L406.0,54.0 L406.0,54.0 L420.0,54.0 L420.0,54.0 L434.0,54.0 L434.0,54.0 L448.0,54.0 L448.0,54.0 L462.0,54.0 L462.0,54.0 L476.0,54.0 L476.0,54.0 L490.0,54.0 L490.0,54.0 L504.0,54.0 L504.0,54.0 L518.0,54.0 L518.0,54.0 L532.0,54.0 L532.0,54.0 L546.0,54.0 L546.0,0.0 L560.0,0.0 L560,54 Z"/>
+            </g>
+            <line class="axis" x1="0" y1="62" x2="560" y2="62"/>
+            <g class="ticks">
+              <text x="0"   y="78" text-anchor="start">0.0</text>
+              <text x="140" y="78" text-anchor="middle">0.25</text>
+              <text x="280" y="78" text-anchor="middle">0.50</text>
+              <text x="420" y="78" text-anchor="middle">0.75</text>
+              <text x="560" y="78" text-anchor="end">1.0</text>
+            </g>
+            <g class="callout">
+              <line class="lead c-random" x1="478" y1="58" x2="478" y2="94"/>
+              <text class="lab c-random" x="478" y="107"
+                    text-anchor="end"
+                    dx="-6">random 0.85</text>
+              <line class="lead c-clone" x1="560" y1="58" x2="560" y2="94"/>
+              <text class="lab c-clone" x="560" y="107"
+                    text-anchor="end"
+                    dx="-6">clone 1.00</text>
+            </g>
+          </svg>
+        </div>
+        <p class="panel-note">Separates cleanly here, but look at the range: random pairs already average 0.85 and reach 0.98. All Python functions have similar node mixes, so the headroom above noise is thin — real edited clones will fall into that tail.</p>
+      </figure>
+      <figure class="panel">
+        <figcaption>
+          <div class="panel-head">
+            <h4>AST k-gram fingerprints</h4>
+            <span class="verdict good">0% false positives</span>
+          </div>
+          <p class="panel-sub">Jaccard overlap of normalised 5-gram hashes</p>
+        </figcaption>
+        <div class="plot-wrap">
+          <svg class="plot" viewBox="0 0 560 120" role="img"
+               aria-label="AST k-gram fingerprints: renamed-clone pairs centre on 1.0, random pairs on 0.0314. The classes do not touch. Clones sit at 1.00, unrelated code at 0.03 with a ceiling of 0.14. Nothing to tune — any threshold between 0.2 and 0.9 gives the same answer.">
+            <g transform="translate(0,4)">
+              <path class="ridge r-random" d="M0,54 L0.0,0.0 L14.0,0.0 L14.0,7.4 L28.0,7.4 L28.0,37.6 L42.0,37.6 L42.0,49.5 L56.0,49.5 L56.0,53.2 L70.0,53.2 L70.0,53.6 L84.0,53.6 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,54.0 L210.0,54.0 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,54.0 L252.0,54.0 L252.0,54.0 L266.0,54.0 L266.0,54.0 L280.0,54.0 L280.0,54.0 L294.0,54.0 L294.0,54.0 L308.0,54.0 L308.0,54.0 L322.0,54.0 L322.0,54.0 L336.0,54.0 L336.0,54.0 L350.0,54.0 L350.0,54.0 L364.0,54.0 L364.0,54.0 L378.0,54.0 L378.0,54.0 L392.0,54.0 L392.0,54.0 L406.0,54.0 L406.0,54.0 L420.0,54.0 L420.0,54.0 L434.0,54.0 L434.0,54.0 L448.0,54.0 L448.0,54.0 L462.0,54.0 L462.0,54.0 L476.0,54.0 L476.0,54.0 L490.0,54.0 L490.0,54.0 L504.0,54.0 L504.0,54.0 L518.0,54.0 L518.0,54.0 L532.0,54.0 L532.0,54.0 L546.0,54.0 L546.0,54.0 L560.0,54.0 L560,54 Z"/>
+              <path class="ridge r-clone"  d="M0,54 L0.0,54.0 L14.0,54.0 L14.0,54.0 L28.0,54.0 L28.0,54.0 L42.0,54.0 L42.0,54.0 L56.0,54.0 L56.0,54.0 L70.0,54.0 L70.0,54.0 L84.0,54.0 L84.0,54.0 L98.0,54.0 L98.0,54.0 L112.0,54.0 L112.0,54.0 L126.0,54.0 L126.0,54.0 L140.0,54.0 L140.0,54.0 L154.0,54.0 L154.0,54.0 L168.0,54.0 L168.0,54.0 L182.0,54.0 L182.0,54.0 L196.0,54.0 L196.0,54.0 L210.0,54.0 L210.0,54.0 L224.0,54.0 L224.0,54.0 L238.0,54.0 L238.0,54.0 L252.0,54.0 L252.0,54.0 L266.0,54.0 L266.0,54.0 L280.0,54.0 L280.0,54.0 L294.0,54.0 L294.0,54.0 L308.0,54.0 L308.0,54.0 L322.0,54.0 L322.0,54.0 L336.0,54.0 L336.0,54.0 L350.0,54.0 L350.0,54.0 L364.0,54.0 L364.0,54.0 L378.0,54.0 L378.0,54.0 L392.0,54.0 L392.0,54.0 L406.0,54.0 L406.0,54.0 L420.0,54.0 L420.0,54.0 L434.0,54.0 L434.0,54.0 L448.0,54.0 L448.0,54.0 L462.0,54.0 L462.0,54.0 L476.0,54.0 L476.0,54.0 L490.0,54.0 L490.0,54.0 L504.0,54.0 L504.0,54.0 L518.0,54.0 L518.0,54.0 L532.0,54.0 L532.0,54.0 L546.0,54.0 L546.0,0.0 L560.0,0.0 L560,54 Z"/>
+            </g>
+            <line class="axis" x1="0" y1="62" x2="560" y2="62"/>
+            <g class="ticks">
+              <text x="0"   y="78" text-anchor="start">0.0</text>
+              <text x="140" y="78" text-anchor="middle">0.25</text>
+              <text x="280" y="78" text-anchor="middle">0.50</text>
+              <text x="420" y="78" text-anchor="middle">0.75</text>
+              <text x="560" y="78" text-anchor="end">1.0</text>
+            </g>
+            <g class="callout">
+              <line class="lead c-random" x1="18" y1="58" x2="18" y2="94"/>
+              <text class="lab c-random" x="18" y="107"
+                    text-anchor="start"
+                    dx="6">random 0.03</text>
+              <line class="lead c-clone" x1="560" y1="58" x2="560" y2="94"/>
+              <text class="lab c-clone" x="560" y="107"
+                    text-anchor="end"
+                    dx="-6">clone 1.00</text>
+            </g>
+          </svg>
+        </div>
+        <p class="panel-note">The classes do not touch. Clones sit at 1.00, unrelated code at 0.03 with a ceiling of 0.14. Nothing to tune — any threshold between 0.2 and 0.9 gives the same answer.</p>
+      </figure></div>
+  </div>
+
+  <div class="tbl-wrap bleed">
+    <table>
+      <thead><tr><th>Signal</th><th style="text-align:right">Clone mean</th><th style="text-align:right">Random mean</th><th style="text-align:right">Random max</th><th style="text-align:right">False positives at 95% recall</th></tr></thead>
+      <tbody>
+        <tr><td class="name">nomic embedding (cosine)</td><td class="n">0.640</td><td class="n">0.611</td><td class="n">0.783</td><td class="n fail">85.0%</td></tr>
+        <tr><td class="name">AST node histogram (cosine)</td><td class="n">1.000</td><td class="n">0.853</td><td class="n">0.984</td><td class="n pass">0.0%</td></tr>
+        <tr class="hl"><td class="name">AST k&#8209;gram fingerprints (Jaccard)</td><td class="n">1.000</td><td class="n">0.031</td><td class="n">0.144</td><td class="n pass">0.0%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Confirmed a second way</h3>
+  <p>Twelve hand&#8209;written specimens &mdash; four domains &times; three control&#8209;flow shapes, matched for length &mdash; ask the same question from the other side. If the model encodes structure, two retry loops in different domains should embed closer than a retry loop and a one&#8209;shot fetch in the same domain.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Pairing</th><th style="text-align:right">Mean cosine</th></tr></thead>
+      <tbody>
+        <tr><td class="name">Same <strong>domain</strong>, different structure</td><td class="n">0.801</td></tr>
+        <tr><td class="name">Same <strong>structure</strong>, different domain</td><td class="n">0.763</td></tr>
+        <tr><td class="name">Different in both</td><td class="n">0.657</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Topic wins. The four closest pairs in the whole set are all same&#8209;domain, different&#8209;structure: a retry&#8209;with&#8209;backoff and a plain one&#8209;shot fetch over HTTP embed at <span class="mono">0.92</span>, closer than two identical retry loops in different domains. And unrelated real code averages 0.61 and never drops below 0.50 &mdash; <strong>the entire working range for code is roughly [0.5, 1.0]</strong>.</p>
+
+  <div class="method">
+    <b>Caveat, stated plainly</b>
+    Renaming to <em>meaningless</em> names is the worst case. Real clones keep meaningful names, so the embedding would score better in practice &mdash; but only because the names carry the meaning it is reading. That is the diagnosis, not a reprieve. This is also not a nomic defect: code&#8209;trained embedders lean on identifiers too, so swapping models moves the numbers, not the architecture.
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">03</span><h2>Your corpus is clone&#8209;and&#8209;own, which makes porting a join, not a search</h2></div>
+  <p class="lede">Cross&#8209;repo duplication is not the obstacle you called it. It is the calibration data &mdash; and for porting, it is the mechanism.</p>
+
+  <div class="stats bleed">
+    <div class="stat"><div class="v">21,135</div><div class="k">distinct source paths across 296 repos</div></div>
+    <div class="stat hi"><div class="v">13%</div><div class="k">of paths appear in two or more repos</div></div>
+    <div class="stat hi"><div class="v">67.6%</div><div class="k">of shared-path file pairs are byte-identical</div></div>
+    <div class="stat"><div class="v">5.5%</div><div class="k">are genuinely different files that merely collide on a path</div></div>
+  </div>
+
+  <p>That third number is the one to build on. <strong>Same relative path is a high&#8209;precision predictor of correspondence.</strong> For porting a fix you mostly do not need to <em>find</em> the counterpart &mdash; you already know where it is.</p>
+  <p>Repo&#8209;level clustering finds 14 families over 35 repos; the archetypal diverged fork is <em class="term">topsoil2.0</em> &harr; <em class="term">labcore</em> at Jaccard 0.78 with 1315 shared files. But keep the join at <strong>file</strong> granularity &mdash; <em class="term">src/lib/js/auth.js</em> recurs across repos with no repo&#8209;level kinship at all, and that is the larger surface.</p>
+
+  <h3>Why inter-repo duplication is the thing that makes intra-repo dedup work</h3>
+  <p>A block appearing three times in one repo and forty times across the corpus is framework boilerplate. A block appearing three times in one repo and nowhere else is a refactoring target. <strong>Same intra&#8209;repo count, opposite verdict</strong> &mdash; and the only discriminator is corpus frequency. You cannot do good intra&#8209;repo dedup without the cross&#8209;repo index.</p>
+
+  <div class="method">
+    <b>Hygiene warning</b>
+    Several repo pairs sit at Jaccard 1.00 &mdash; the same repo ingested under two orgs (<span class="mono">jayp-eci_labcoredemo</span> &harr; <span class="mono">kbhalerao_labcoredemo</span>, <span class="mono">ecinfosolutions_kernel_backend</span> &harr; <span class="mono">kbhalerao_kernel_backend</span> at 0.99). They are not port targets. They inflate every count and will generate useless suggestions. Collapse them before ranking anything.
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">04</span><h2>Built as a prototype, it returns real work</h2></div>
+  <p class="lede">Arguments about signal quality are cheap. I fingerprinted the whole corpus with tree&#8209;sitter and ran both target queries.</p>
+
+  <h3>Goal 1 &mdash; intra&#8209;repo duplication</h3>
+  <div class="stats">
+    <div class="stat"><div class="v">23,870</div><div class="k">first-party functions fingerprinted (py / js / ts / svelte)</div></div>
+    <div class="stat hi"><div class="v">887</div><div class="k">intra-repo clone clusters at Jaccard &ge; 0.70</div></div>
+    <div class="stat hi"><div class="v">1,550</div><div class="k">redundant copies, across 100 repos</div></div>
+  </div>
+
+  <div class="finding">
+    <h4>The textbook target <span class="chip">rarity 0.79</span> <span class="chip">14 copies &times; ~34 lines</span></h4>
+    <p style="margin:2px 0 0;font-size:15px;color:var(--ink-2)"><span class="mono">create_client_farm_field</span> &mdash; the same function, fourteen times, in one repo:</p>
+    <ul class="filelist">
+      <li>utils/management/commands/<b>import_bm_crop_consulting.py</b>:122</li>
+      <li>utils/management/commands/<b>import_johnny_barnes.py</b>:107</li>
+      <li>utils/management/commands/<b>migrate_GetterBdy.py</b>:109</li>
+      <li>utils/management/commands/<b>migrate_JnC.py</b>:109</li>
+      <li>utils/management/commands/<b>migrate_chrisgaesser.py</b>:117</li>
+      <li style="color:var(--ink-3)">&hellip;+9 more</li>
+    </ul>
+  </div>
+
+  <div class="finding">
+    <h4>Structural scaffolding worth a base class <span class="chip">PeoplesCompany/peoples-core</span> <span class="chip">8 copies &times; ~140 lines</span></h4>
+    <ul class="filelist">
+      <li>src/app/http/routes/<b>AssetRouter.js</b> &middot; <b>BoundaryRouter.js</b> &middot; <b>CategoryRouter.js</b></li>
+      <li>src/app/http/routes/<b>ReportRouter.js</b> &middot; <b>SnapshotRouter.js</b> &middot; <b>EmbeddedRouter.js</b> &hellip;</li>
+    </ul>
+  </div>
+
+  <p><strong>The hard part is not detection &mdash; it is exclusion.</strong> My first run was swamped by vendored jQuery, Angular i18n locales and DataTables sitting under <em class="term">Scripts/</em> and <em class="term">static/</em>. Filtering vendored, minified and generated code cut the unit count from 76,843 to 23,870: <strong>69% of what looks like code in this corpus is not yours.</strong> Corpus rarity does not save you here &mdash; a vendored library present in only one repo scores as &ldquo;rare&rdquo;. This needs a real vendored&#8209;code classifier, and it is the main engineering cost of the feature.</p>
+
+  <h3>Goal 2 &mdash; porting fixes across repos</h3>
+  <p>Run the last 120 non&#8209;merge commits of <em class="term">topsoil2.0</em> against its two <em class="term">labcore</em> siblings. For each changed file, take the hunk&rsquo;s <strong>pre&#8209;image</strong> &mdash; the exact lines being replaced &mdash; and ask what state the sibling is in:</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>State</th><th>Meaning</th><th style="text-align:right">Count</th></tr></thead>
+      <tbody>
+        <tr><td class="name">File absent</td><td>target has diverged past this file</td><td class="n">361</td></tr>
+        <tr class="hl"><td class="name">Applies clean</td><td>pre-image present verbatim &mdash; this is a <code>git apply</code></td><td class="n">14</td></tr>
+        <tr><td class="name">Already fixed</td><td>post-image already there, skip</td><td class="n">1</td></tr>
+        <tr><td class="name">No correspondence</td><td>path matches, code does not</td><td class="n">6</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Fourteen real port candidates out of 120 commits &mdash; for example <span class="mono">65e0baba &ldquo;Fix FDCIC NaN CI saves&hellip;&rdquo;</span> touching <em class="term">common/loginbackend.py</em>, whose pre&#8209;image is <strong>94% present in both</strong> sibling repos. The 4% hit rate is honest: these forks have diverged a lot, and most changed files no longer exist downstream. But every one of those fourteen is a fix currently sitting unported.</p>
+  <p>Note what did <em>not</em> happen: zero &ldquo;drifted&rdquo; results. Reality is bimodal &mdash; the file is either effectively identical or gone &mdash; which matches the 67.6% byte&#8209;identical figure from section 03. <strong>None of this classification needs an LLM.</strong> It is a path join, a hash match, and patch semantics.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">05</span><h2>What is in the way</h2></div>
+  <p class="lede">One prerequisite has to be fixed regardless of which design you pick. The <em class="term">symbol_index</em> layer is not currently a trustworthy symbol table.</p>
+  <ol class="body">
+    <li><strong>Stale generations accumulate.</strong> <em class="term">document_id</em> hashes the commit, so re&#8209;ingesting a changed file mints new documents and never deletes the old ones. <em class="term">fema/LOMRs.py</em> has 12 functions on disk and <strong>26 symbol documents across 6 commit hashes</strong>. <em class="term">farmworthdb</em> carries 47 distinct commit hashes. Any similarity query returns ghosts of the query itself in the top slots.</li>
+    <li><strong>The LLM chunker invents symbol names</strong> and they land in <em class="term">symbol_index</em> beside real tree&#8209;sitter symbols. One function appears as <span class="mono">fetch_url</span>, <span class="mono">fema_api_response_validation</span> and <span class="mono">fema_response_validation</span> across three runs. Names like <span class="mono">&ldquo;PC Listing to Realstack Data Transform&rdquo;</span> are labels, not identifiers.</li>
+    <li><strong>Summaries are misattributed.</strong> <em class="term">listings/tests/test_realistack_helper.py</em> is a <em>test</em> file, yet it is indexed under symbols named <span class="mono">RealstackAPI.get_clients</span> / <span class="mono">get_users</span> / <span class="mono">get_cities</span> &mdash; the client methods <em>under test</em>, which do not exist in that file. <span class="mono">get_cities</span> points at lines 134&ndash;157 (actually <span class="mono">test_get_users_with_params</span>) and carries a summary describing <span class="mono">get_users</span>.</li>
+  </ol>
+  <p>The fix is the same in every option below: <strong>re&#8209;key identity on <span class="mono">(repo, path, symbol_name)</span> with content hash as a field rather than part of the key</strong>, so re&#8209;ingest becomes an upsert; and split parser&#8209;derived symbols from LLM semantic units into separate document types instead of mixing identifiers with labels in one namespace.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">06</span><h2>Three signals and a tree &mdash; the corrected model</h2></div>
+  <p class="lede">A fingerprint is a <strong>set of hashes</strong>, not a vector. You do not take cosine of it; you take set overlap. So this is not one object with two relationships &mdash; it is three separate signals answering three different questions, plus a tree that supplies context rather than distance.</p>
+
+  <div class="schema bleed">
+    <div class="srow two">
+      <div class="card spine">
+        <div class="role">Signal 1 &middot; primary</div>
+        <h4>Fingerprint overlap</h4>
+        <p><em>&ldquo;Is this the same code?&rdquo;</em> Set of k&#8209;gram hashes per symbol, compared by Jaccard. Needs no threshold tuning because the classes do not touch, and degrades gracefully &mdash; edit 20% of a function and it still shares roughly 65% of its k&#8209;grams, far above the 0.14 random ceiling.</p>
+      </div>
+      <div class="card">
+        <div class="role">Signal 2 &middot; demoted</div>
+        <h4>Embedding cosine</h4>
+        <p><em>&ldquo;Is this about the same thing?&rdquo;</em> Keep it, but only for the one question fingerprints cannot answer: someone reimplemented this from scratch sharing no tokens. That is a real question &mdash; and the only place this model earns its keep.</p>
+      </div>
+    </div>
+    <div class="srow two">
+      <div class="card">
+        <div class="role">Signal 3 &middot; cheap filter</div>
+        <h4>AST shape metrics</h4>
+        <p>Loop depth, branch count, parameter arity, call fan&#8209;out. Too coarse to lead &mdash; random pairs already average 0.85 &mdash; but a nearly free pre&#8209;filter and rerank feature once candidates exist.</p>
+      </div>
+      <div class="card spine">
+        <div class="role">Not a distance</div>
+        <h4>Tree position</h4>
+        <p>The document tree is the <strong>partition</strong> that turns a score into a verdict. The same fingerprint match means <em>refactor this</em> inside one repo, <em>port candidate</em> across two, and <em>framework boilerplate</em> across forty. One number, three meanings &mdash; only the tree tells you which.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>The record, and the two queries</h3>
+  <div class="rec bleed"><b>fingerprint_unit</b>  <span class="cmt">// one per outermost function/class, first-party only</span>
+  unit_id       <span class="cmt">= hash(repo_id, file_path, symbol_name)   // STABLE across commits</span>
+  repo_id, file_path, symbol_name, lang, start_line, end_line
+  content_hash  <span class="cmt">// a field, never part of the key -> re-ingest is an upsert</span>
+  fp[]          <span class="cmt">// k-gram hashes of the normalised token stream (ids -&gt; ID, literals -&gt; LIT)</span>
+  shape{}       <span class="cmt">// loop_depth, branches, params, calls, nesting</span>
+  is_vendored   <span class="cmt">// the classifier that does 69% of the work</span>
+
+<b>fingerprint_df</b>   <span class="cmt">// the corpus-frequency table that makes results rankable</span>
+  fp_hash -&gt; n_repos, n_families
+
+<b>Query A &mdash; intra-repo duplication</b>
+  seed rare fp (df &le; 3) -&gt; candidates in same repo -&gt; Jaccard &ge; 0.7 -&gt; union-find
+  rank by (copies - 1) &times; median_lines &times; corpus_rarity
+
+<b>Query B &mdash; port a fix</b>
+  commit hunks -&gt; path join into sibling repos -&gt; match hunk pre-image
+  classify: already-fixed | applies-clean | drifted | absent</div>
+
+  <p>Both queries read the same store. Neither touches the summary pipeline that drives your existing search.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">07</span><h2>Three ways to build it</h2></div>
+  <p class="lede">These differ in where the structural index lives and how much of V4 they disturb. They are genuinely different bets, not a good/better/best ladder.</p>
+
+  <div class="opt">
+    <div class="opt-top"><div class="opt-name"><span>A</span>Query&#8209;time, no index</div><span class="tag">Smallest bet</span></div>
+    <p>Store nothing. Fingerprint on demand from the 296 clones already on disk, driven by a CLI and an MCP tool. The full corpus pass takes minutes, and the clones are already kept current by incremental ingestion.</p>
+    <div class="tradeoff">
+      <div class="up"><b>Buys you</b>Working answers in days. No schema change, no migration, no new storage, nothing to keep in sync. Easy to delete if the feature does not earn its place.</div>
+      <div class="down"><b>Costs you</b>No corpus&#8209;frequency table without a full pass, so ranking is slow or approximate. No incremental updates. Nothing the RAG pipeline or the KPI dashboard can query.</div>
+    </div>
+  </div>
+
+  <div class="opt pick">
+    <div class="opt-top"><div class="opt-name"><span>B</span>Sibling structural store</div><span class="tag">Recommended</span></div>
+    <p>A separate content&#8209;addressed store holding the two records above, built by an offline pass and refreshed by the existing incremental hook. V4 keeps doing summaries and semantic search, untouched. The two systems join on <span class="mono">(repo_id, file_path)</span>.</p>
+    <div class="tradeoff">
+      <div class="up"><b>Buys you</b>Both queries at full speed, incrementally maintained, with the frequency table that makes ranking meaningful. Zero risk to search that already works. The symbol&#8209;identity fix can land here first and migrate into V4 later.</div>
+      <div class="down"><b>Costs you</b>Two stores to keep coherent, and a second definition of &ldquo;what is a symbol&rdquo; until they converge. Needs the vendored&#8209;code classifier before results are usable.</div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-top"><div class="opt-name"><span>C</span>Unified symbol spine</div><span class="tag">Largest bet</span></div>
+    <p>Fix <em class="term">symbol_index</em> properly: stable identity, parser symbols split from LLM units, and fingerprint plus shape plus embedding all carried on one document. One record, one truth, every signal co&#8209;located.</p>
+    <div class="tradeoff">
+      <div class="up"><b>Buys you</b>The cleanest end state. Hybrid ranking becomes trivial, the identity rot in section 05 is fixed at the root, and there is no second store to reconcile.</div>
+      <div class="down"><b>Costs you</b>A full re&#8209;ingest of 94K symbols and an FTS schema change, with search degraded while it lands. It couples a feature that is unproven to a pipeline that currently works.</div>
+    </div>
+  </div>
+
+  <p>I would take <strong>B</strong>. Not because A is wrong &mdash; it is genuinely the fastest way to see whether the intra&#8209;repo results are worth acting on &mdash; but because the corpus&#8209;frequency table is what separates a refactoring target from boilerplate, and that table wants to be persistent. C is the right end state and the wrong starting move: it bets a working search pipeline on a feature nobody has used yet. B reaches C incrementally, and the identity work is the same work either way.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">08</span><h2>Where I would start</h2></div>
+  <ol class="body">
+    <li><strong>The vendored&#8209;code classifier.</strong> Unglamorous, and it does 69% of the work. Path heuristics plus minification detection plus known&#8209;library fingerprints. Everything downstream is noise without it.</li>
+    <li><strong>Collapse the mirror repos.</strong> Jaccard&#8209;1.00 pairs under two orgs are one repo. Cheap, and it stops both features producing nonsense.</li>
+    <li><strong>The fingerprint pass and frequency table</strong> &mdash; the prototype behind section 04 already does this; it needs productionising, not inventing.</li>
+    <li><strong>Ship intra&#8209;repo duplication first.</strong> It is self&#8209;contained, it proves the fingerprinting, and there are 887 clusters waiting.</li>
+    <li><strong>Then porting</strong>, which adds only the path map and the four&#8209;state classifier on top of the same store.</li>
+  </ol>
+  <p>Symbol identity (section 05) is a prerequisite for all of it and should land alongside step 3.</p>
+</section>
+
+<footer>
+  <h4>Method &amp; caveats</h4>
+  <p>All figures measured 18 August 2026 against the 296 clones in <code>$REPOS_PATH</code> and the live <code>code_kosha</code> bucket. Embedding figures use nomic&#8209;embed&#8209;text&#8209;v1.5 with the <code>search_document:</code> prefix, matching the ingestion path. Fingerprints are 5&#8209;grams (Python benchmark) and 6&#8209;grams (corpus prototype) over a token stream with identifiers and literals collapsed to placeholders.</p>
+  <p>Two limits worth carrying forward. The near&#8209;clone bucket in section 03 used <code>difflib.quick_ratio</code>, an upper bound, so treat 20% as optimistic &mdash; the 67.6% byte&#8209;identical figure is exact and solid. And the clone benchmark alpha&#8209;renames identifiers to meaningless names, which is the worst case for the embedding rather than the typical one.</p>
+  <p>Prototype sources: <code>dedup.py</code> (corpus fingerprinting), <code>cluster.py</code> (intra&#8209;repo clustering with rarity weighting), <code>port.py</code> (cross&#8209;repo patch classification), <code>discrim.py</code> and <code>realcorpus.py</code> (signal benchmark).</p>
+</footer>
+
+</div>

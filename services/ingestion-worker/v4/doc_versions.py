@@ -1,20 +1,27 @@
 """
 Identifying the current version of a per-path document.
 
-Couchbase keys `file_index` and `symbol_index` docs by commit, and superseded
-versions are only cleaned up along one narrow path: `updater._delete_old_file_docs`
-runs per *changed* file, so a file that is not touched by a given run keeps its
-old doc. That is correct for incremental runs, but a full reingest writes a fresh
-doc for every file under a new commit without purging the previous set, so each
-reingest leaves another complete generation behind.
+Historical: documents used to be keyed by commit, which made a re-ingest an
+insert rather than an upsert. Superseded versions were cleaned up along one
+narrow path only — a per-changed-file delete on the incremental route — so every
+full reingest left a complete generation behind, and reading `file_index` back
+for a repo yielded the same path many times over.
 
-The result is that reading `file_index` back for a repo yields several versions of
-the same path. Anything that aggregates those rows sees one file many times over.
+That is fixed at the source. `v4/schemas.py` now derives identity from location
+alone, so re-processing a file overwrites its documents in place and generations
+cannot accumulate. `scripts/migrate_stable_document_ids.py` moved the existing
+corpus across.
 
-Unlike module/repo summaries, these docs cannot be anchored to a single "current
-commit" per repo: a file doc carries the commit at which that file was last
-processed, so unchanged files legitimately sit at older commits than HEAD. The
-only sound definition of current is per path — newest `version.created_at` wins.
+These helpers remain for two jobs:
+
+  - the migration itself, and any backfill that has to rank versions;
+  - a cheap read-side guard in `doc_loader`, which is now a no-op against clean
+    data but keeps aggregation correct if duplicates ever reappear.
+
+The definition of "current" is unchanged and still per path, not per repo: a file
+doc carries the commit at which that file was last processed, so unchanged files
+legitimately sit at older commits than HEAD. Newest `version.created_at` wins,
+ties broken on `document_id`.
 """
 
 from typing import Callable, Dict, Iterable, List, Tuple
