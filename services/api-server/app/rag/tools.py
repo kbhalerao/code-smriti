@@ -7,6 +7,7 @@ Core tool logic shared between MCP and LLM modes.
 import os
 import fnmatch
 from pathlib import Path
+from .embedding import embed_query
 from typing import List, Optional
 
 from loguru import logger
@@ -298,12 +299,9 @@ async def search_code(
         doc_type = doc_types[0]  # fallback label when a hit carries no own type
 
         # Generate query embedding
-        # Use search_query prefix for queries (bi-encoder expects different prefixes)
-        query_with_prefix = f"search_query: {query}"
-        query_embedding = embedding_model.encode(
-            query_with_prefix,
-            normalize_embeddings=True  # Must match DB embeddings (normalized)
-        ).tolist()
+        # Prefixing and Matryoshka truncation live in one module shared with
+        # the ingestion worker's convention; doing either here would drift.
+        query_embedding = embed_query(embedding_model, query)
 
         # Oversample so the cosine re-rank below has a real candidate pool.
         # Kept <= 100: on 7.6.2 larger k values break the type filter.

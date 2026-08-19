@@ -154,7 +154,7 @@ def cmd_sample(args):
             "file_path": r["file_path"],
             "language": r.get("lang"),
             "summary": summary,
-            "code": code[:CODE_CHARS],
+            "code": code[:args.code_chars],
         })
 
     queries = random.sample(range(len(haystack)), min(args.queries, len(haystack)))
@@ -162,7 +162,7 @@ def cmd_sample(args):
         "haystack": haystack,
         "query_idx": queries,
         "seed": args.seed,
-        "code_chars": CODE_CHARS,
+        "code_chars": args.code_chars,
     }
     (OUT / "sample.json").write_text(json.dumps(payload))
     langs = {}
@@ -171,6 +171,23 @@ def cmd_sample(args):
     logger.info(f"haystack {len(haystack)} docs, {len(queries)} queries, "
                 f"{len(seen_repo)} repos")
     logger.info(f"languages: {dict(sorted(langs.items(), key=lambda kv: -kv[1])[:8])}")
+
+
+def mrl_truncate(a: np.ndarray, dims: int | None) -> np.ndarray:
+    """
+    Matryoshka truncation: keep the leading `dims` components and renormalise.
+
+    Applied to queries and documents alike — truncating only one side compares
+    vectors that no longer live in the same space. Renormalising matters because
+    a truncated vector is no longer unit length, and the scoring below is a dot
+    product that assumes it is.
+    """
+    if not dims or dims >= a.shape[1]:
+        return a
+    t = a[:, :dims]
+    n = np.linalg.norm(t, axis=-1, keepdims=True)
+    n[n == 0] = 1.0
+    return t / n
 
 
 def embed_all(model: str, texts: list, batch: int) -> np.ndarray:
@@ -205,17 +222,23 @@ def cmd_run(args):
     for style in args.styles:
         qs = [query_styles(hay[i]["summary"])[style] for i in qidx]
         logger.info(f"[{model}] embedding {len(qs)} queries ({style})")
-        query_vecs[style] = embed_all(
-            model, [prefixed(model, q, is_query=True) for q in qs], args.batch
+        query_vecs[style] = mrl_truncate(
+            embed_all(model, [prefixed(model, q, is_query=True) for q in qs], args.batch),
+            args.truncate_dims,
         )
 
     for doc_mode in args.doc_modes:
+        cap = args.code_chars
         docs = [
-            (f"{h['summary']}\n\nCode:\n{h['code']}" if doc_mode == "prod" else h["code"])
+            (f"{h['summary']}\n\nCode:\n{h['code'][:cap] if cap else h['code']}"
+             if doc_mode == "prod" else (h["code"][:cap] if cap else h["code"]))
             for h in hay
         ]
         logger.info(f"[{model}] embedding {len(docs)} documents ({doc_mode})")
-        D = embed_all(model, [prefixed(model, d, is_query=False) for d in docs], args.batch)
+        D = mrl_truncate(
+            embed_all(model, [prefixed(model, d, is_query=False) for d in docs], args.batch),
+            args.truncate_dims,
+        )
 
         for style in args.styles:
             Q = query_vecs[style]
@@ -240,7 +263,9 @@ def cmd_run(args):
                         f"R@1 {results[f'{doc_mode}/{style}']['recall@1']:.3f} "
                         f"R@10 {results[f'{doc_mode}/{style}']['recall@10']:.3f}")
 
-    path = OUT / f"result_{model.replace(':', '_').replace('/', '_')}.json"
+    suffix = f"_mrl{args.truncate_dims}" if args.truncate_dims else ""
+    suffix += f"_cc{args.code_chars}" if args.code_chars else ""
+    path = OUT / f"result_{model.replace(':', '_').replace('/', '_')}{suffix}.json"
     path.write_text(json.dumps({"model": model, "results": results}, indent=2))
     logger.info(f"wrote {path}")
 
@@ -276,6 +301,8 @@ def main():
     s.add_argument("--queries", type=int, default=300)
     s.add_argument("--per-repo", type=int, default=60)
     s.add_argument("--seed", type=int, default=13)
+    s.add_argument("--code-chars", type=int, default=CODE_CHARS,
+                   help="how much source to keep per symbol when sampling")
     s.set_defaults(func=cmd_sample)
 
     r = sub.add_parser("run")
@@ -283,6 +310,10 @@ def main():
     r.add_argument("--batch", type=int, default=32)
     r.add_argument("--styles", nargs="+", default=["lead", "keywords"])
     r.add_argument("--doc-modes", nargs="+", default=["prod", "code"])
+    r.add_argument("--code-chars", type=int, default=None,
+                   help="slice each document's source to this many chars before embedding")
+    r.add_argument("--truncate-dims", type=int, default=None,
+                   help="Matryoshka-truncate embeddings to this many dims, then renormalise")
     r.set_defaults(func=cmd_run)
 
     p = sub.add_parser("report")

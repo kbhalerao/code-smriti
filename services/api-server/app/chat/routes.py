@@ -6,6 +6,7 @@ Exposes shared RAG tools as REST endpoints for both MCP and LLM modes.
 
 import os
 from typing import Optional, List, Literal
+from ..rag.embedding import embed_query
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -650,11 +651,7 @@ Output only the keywords, one per line. Include:
     search_query = f"{request.query} {expanded_terms}"
 
     # Step 2: Vector search on repo_bdr and document types
-    query_with_prefix = f"search_query: {search_query}"
-    query_embedding = embedding_model.encode(
-        query_with_prefix,
-        normalize_embeddings=True
-    ).tolist()
+    query_embedding = embed_query(embedding_model, search_query)
 
     # Search both repo_bdr and document types
     contexts = []

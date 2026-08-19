@@ -22,6 +22,15 @@ class EmbeddingGenerator:
     """
 
     def __init__(self):
+
+        raise RuntimeError(
+            "EmbeddingGenerator is retired. It embeds via Ollama with "
+            "nomic's `search_document:` prefix at 768 native dimensions, which "
+            "is a different vector space from the corpus. Mixing spaces in one "
+            "index produces similarity scores that are numbers but not "
+            "measurements, and nothing raises. Use LocalEmbeddingGenerator, "
+            "which follows embeddings.convention."
+        )
         """Initialize connection to Ollama"""
         # Use localhost for native execution, docker will use host.docker.internal
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")

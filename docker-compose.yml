@@ -48,7 +48,7 @@ services:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-general}
       - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-none}
-      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-nomic-ai/nomic-embed-text-v1.5}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-Qwen/Qwen3-Embedding-0.6B}
       - JWT_SECRET=${JWT_SECRET}
       - AES_ENCRYPTION_KEY=${AES_ENCRYPTION_KEY}
       - API_USERNAME=${API_USERNAME}
@@ -91,7 +91,7 @@ services:
       - COUCHBASE_USERNAME=${COUCHBASE_USERNAME:-Administrator}
       - COUCHBASE_PASSWORD=${COUCHBASE_PASSWORD}
       - COUCHBASE_BUCKET=${COUCHBASE_BUCKET:-code_memory}
-      - EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+      - EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_REPOS=${GITHUB_REPOS}  # Comma-separated list
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

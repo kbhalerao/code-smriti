@@ -695,8 +695,12 @@ class IncrementalUpdater:
             # Generate embeddings
             if self.pipeline.embedding_generator:
                 for commit in commits:
-                    text = f"search_document: {commit['content']}"
-                    commit['embedding'] = self.pipeline.embedding_generator.generate_embedding(text)
+                    # No prefix here: `embeddings.convention` applies whatever
+                    # the model expects. Prepending one manually double-prefixed
+                    # every commit embedding in the corpus under the old model.
+                    commit['embedding'] = self.pipeline.embedding_generator.generate_embedding(
+                        commit['content']
+                    )
 
             # Store
             for commit in commits:

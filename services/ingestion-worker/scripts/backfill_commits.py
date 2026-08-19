@@ -321,8 +321,9 @@ def main():
             logger.info(f"  Generating embeddings...")
             for commit in commits:
                 # Embed commit message
-                text = f"search_document: {commit.content}"
-                commit.embedding = embedding_generator.generate_embedding(text)
+                # Prefixing belongs to `embeddings.convention`; doing it here
+                # too is what double-prefixed the commit embeddings.
+                commit.embedding = embedding_generator.generate_embedding(commit.content)
 
         # Store
         if cb_client and not args.dry_run:

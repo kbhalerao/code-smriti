@@ -36,6 +36,8 @@ class Settings(BaseSettings):
 
     # Ollama Configuration
     ollama_host: str = "http://localhost:11434"
+    # Unused for embeddings — the embedding model is loaded in-process via
+    # sentence-transformers (see app/rag/embedding.py). Kept for the LLM host.
     ollama_model: str = "nomic-embed-text"
 
     # LLM and Embedding Models
@@ -46,7 +48,7 @@ class Settings(BaseSettings):
     # ingestion share one resident model. Supports tools + thinking; we send
     # reasoning_effort=none for clean output.
     llm_model_name: str = "general"
-    embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5"
+    embedding_model_name: str = "Qwen/Qwen3-Embedding-0.6B"
 
     # Application
     app_name: str = "CodeSmriti API"

@@ -23,13 +23,48 @@ Credentials are in `.env` at project root. The bucket is `code_kosha` (not `code
 
 ## Embedding Pipeline
 
-All embeddings must be **normalized to unit length** (L2 norm = 1.0) for the FTS vector index which uses `dot_product` similarity.
+The model is **`Qwen/Qwen3-Embedding-0.6B`**, stored **Matryoshka-truncated to 768
+dimensions**, loaded in-process via sentence-transformers on both sides. It
+replaced `nomic-embed-text-v1.5` on 2026-08-19 on measured retrieval: over 5,000
+documents and 300 natural-language queries, nomic scored MRR 0.752 / recall@1
+0.667 against 0.886 / 0.817 — a 7.7-sigma difference. Larger Qwen variants add
+nothing measurable (4B 0.885, 8B 0.888, under one sigma), so the smallest is used.
 
-Key files:
-- `services/ingestion-worker/embeddings/local_generator.py` - Core embedding generation
-- `services/api-server/app/rag/tools.py` - Search query embeddings
+**Do not hand-write prefixes.** Model, prefixing, dimensionality and batching all
+live in one module, and every producer must go through it:
 
-Use `search_document:` prefix for indexed documents and `search_query:` prefix for search queries.
+- `services/ingestion-worker/embeddings/convention.py` — the definition
+- `services/api-server/app/rag/embedding.py` — the query-side mirror
+
+They are separate files because the services cannot share code. The agreement
+between them is enforced at runtime by `assert_corpus_matches()`, which reads an
+`embedding_manifest` document the re-embed writes into the corpus and logs loudly
+on mismatch.
+
+That check exists because **the obvious guard does not work**: a dimension check
+passes while the space changes underneath it, since 768 truncated from Qwen is
+the same shape nomic produced and a completely different space. Vectors from two
+models still yield a dot product — a number, not a measurement — and nothing
+raises. Prefixing is asymmetric and model-specific: nomic took literal
+`search_query:` / `search_document:` on both sides; Qwen3-Embedding takes an
+instruction on the query side only. Getting it wrong cost 0.11 AUC when measured.
+
+All embeddings are **normalized to unit length** (L2 norm = 1.0) for the FTS
+vector index, which uses `dot_product` — that is the cosine only for unit
+vectors, and Matryoshka truncation denormalises, so truncation always
+renormalises.
+
+Symbol embeddings carry the summary plus up to `CODE_CHARS_FOR_EMBEDDING` (8,000)
+characters of source. Batching is bounded by both a token budget and an
+**attention** budget (`B x L^2`), because attention is quadratic and a single
+token budget once asked for a 182 GiB buffer. Budgets are tunable via
+`EMBED_MAX_TOKENS_PER_BATCH`, `EMBED_MAX_ATTENTION_PER_BATCH`,
+`EMBED_MAX_ITEMS_PER_BATCH`.
+
+Changing any of this means re-embedding the whole corpus
+(`scripts/reembed_corpus.py`, ~3.5h for 180K documents) **and** CoS, whose
+`cos_vector_index` runs on the same model. Park the incremental LaunchAgent while
+that runs or it writes vectors in the new space into a corpus still in the old one.
 
 ## Couchbase FTS Testing
 

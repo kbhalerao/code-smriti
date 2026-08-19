@@ -60,6 +60,20 @@ async def lifespan(app: FastAPI):
     get_http_client()
     logger.info("✓ Embedding model and HTTP client ready")
 
+    # Loud, not fatal: a mismatch means results are wrong while the service is
+    # otherwise healthy, and a dimension check cannot catch it — 768 truncated
+    # from Qwen is the same shape nomic produced and a different space.
+    try:
+        from .rag.embedding import assert_corpus_matches
+        from .dependencies import get_db
+        problem = await assert_corpus_matches(get_db())
+        if problem:
+            logger.error(f"EMBEDDING MISMATCH: {problem}")
+        else:
+            logger.info("✓ Embedding convention matches the corpus manifest")
+    except Exception as e:
+        logger.warning(f"Could not verify embedding manifest: {e}")
+
     yield
 
     # Shutdown

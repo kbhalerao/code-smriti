@@ -103,7 +103,7 @@ class DocumentIngester:
     def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
         self.cb_client: Optional[CouchbaseClient] = None
-        self.embedder: Optional[EmbeddingGenerator] = None
+        self.embedder: Optional[LocalEmbeddingGenerator] = None
         self.md_splitter = MarkdownSplitter(capacity=CHUNK_CAPACITY)
         self.text_splitter = TextSplitter(capacity=CHUNK_CAPACITY)
         self.stats = {

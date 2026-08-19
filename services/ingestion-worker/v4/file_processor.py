@@ -28,6 +28,7 @@ from .schemas import (
     make_file_id, assign_symbol_ids, make_semantic_unit_id, make_content_hash,
 )
 from .quality import QualityTracker
+from embeddings.convention import CODE_CHARS_FOR_EMBEDDING
 
 # Import LLM chunker
 import sys
@@ -611,7 +612,7 @@ class FileProcessor:
                 ),
             )
             # Store code snippet for embedding generation (not persisted)
-            symbol_doc._code_for_embedding = code_snippet[:2000]
+            symbol_doc._code_for_embedding = code_snippet[:CODE_CHARS_FOR_EMBEDDING]
 
             symbol_docs.append(symbol_doc)
             self.quality_tracker.record_symbol_processed()
@@ -662,7 +663,7 @@ class FileProcessor:
                     created_at=datetime.now().isoformat(),
                 ),
             )
-            unit_doc._code_for_embedding = code_snippet[:2000]
+            unit_doc._code_for_embedding = code_snippet[:CODE_CHARS_FOR_EMBEDDING]
             semantic_docs.append(unit_doc)
 
         # Generate file summary from symbol summaries
@@ -701,7 +702,9 @@ class FileProcessor:
             ),
         )
         # Store embedding text (summary + code preview, not persisted)
-        file_doc._embedding_text = f"{file_summary}\n\nCode Preview:\n{content[:3000]}"
+        file_doc._embedding_text = (
+            f"{file_summary}\n\nCode Preview:\n{content[:CODE_CHARS_FOR_EMBEDDING]}"
+        )
 
         self.quality_tracker.record_file_processed()
 

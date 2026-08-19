@@ -1,7 +1,11 @@
 """
 Local Embedding Generator using sentence-transformers
 Provides fast batch processing with GPU/MPS acceleration
-Uses same model as Ollama for compatibility
+
+Which model, which prefixes and which dimensionality are not decided here —
+`embeddings.convention` owns all three, because the query side lives in another
+service and a disagreement between them produces meaningless similarity scores
+without raising anything.
 """
 
 from typing import List, Union
@@ -11,6 +15,7 @@ from loguru import logger
 from sentence_transformers import SentenceTransformer
 
 from config import WorkerConfig
+from embeddings import convention
 from parsers.code_parser import CodeChunk
 from parsers.document_parser import DocumentChunk
 from parsers.commit_parser import CommitChunk
@@ -31,10 +36,7 @@ class LocalEmbeddingGenerator:
         # Disable tokenizer parallelism to avoid warnings when forking git processes
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-        # Use nomic-ai model optimized for code/text retrieval
-        # nomic-embed-text-v1.5 (768 dimensions)
-        # Better semantic understanding for code compared to all-mpnet-base-v2
-        model_name = "nomic-ai/nomic-embed-text-v1.5"
+        model_name = convention.EMBEDDING_MODEL
 
         try:
             self.model = SentenceTransformer(
@@ -42,11 +44,20 @@ class LocalEmbeddingGenerator:
                 trust_remote_code=True
             )
 
+            # Match the model's sequence limit to the character cap we actually
+            # feed it. Leaving it at 32,768 lets one pathological document
+            # dominate a batch and blow out attention memory.
+            self.model.max_seq_length = min(
+                self.model.max_seq_length,
+                convention.CODE_CHARS_FOR_EMBEDDING // 4 + 512,
+            )
+
             # Log device being used (CPU, CUDA, or MPS for Apple Silicon)
             device = self.model.device
             logger.info(f"✓ Local embedding model loaded: {model_name}")
             logger.info(f"  Device: {device}")
-            logger.info(f"  Dimensions: {config.embedding_dimensions}")
+            logger.info(f"  Dimensions: {convention.EMBEDDING_DIMS} "
+                        f"(truncated from {convention.convention()['native_dims']})")
 
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
@@ -63,20 +74,10 @@ class LocalEmbeddingGenerator:
             List of floats representing the embedding vector
         """
         try:
-            # Add task instruction prefix for document embedding
-            text_with_prefix = f"search_document: {text}"
-
-            embedding = self.model.encode(
-                text_with_prefix,
-                convert_to_tensor=False,
-                show_progress_bar=False,
-                normalize_embeddings=True  # Normalize for dot_product similarity
-            )
-
-            return embedding.tolist()
+            return convention.encode_documents(self.model, [text])[0]
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
-            return [0.0] * config.embedding_dimensions
+            return [0.0] * convention.EMBEDDING_DIMS
 
     def prepare_text_for_embedding(
         self,
@@ -168,21 +169,16 @@ class LocalEmbeddingGenerator:
                 # Prepare texts for this batch only
                 batch_texts = [self.prepare_text_for_embedding(chunk) for chunk in batch_chunks]
 
-                # Add task instruction prefix for document embedding
-                prefixed_batch = [f"search_document: {text}" for text in batch_texts]
-
-                # Generate embeddings for the batch (GPU/MPS accelerated)
-                batch_embeddings = self.model.encode(
-                    prefixed_batch,
-                    convert_to_tensor=False,
-                    show_progress_bar=False,
-                    batch_size=batch_size,
-                    normalize_embeddings=True  # Normalize for dot_product similarity
+                # Prefixing and Matryoshka truncation live in `convention` so
+                # this path cannot drift from the single-text one above — which
+                # is precisely what happened when they were written separately.
+                batch_embeddings = convention.encode_documents(
+                    self.model, batch_texts, batch_size=batch_size
                 )
 
                 # Assign embeddings immediately to free memory
                 for chunk, embedding in zip(batch_chunks, batch_embeddings):
-                    chunk.embedding = embedding.tolist()
+                    chunk.embedding = embedding
 
                 # Stream write to database if callback provided
                 if batch_callback:
