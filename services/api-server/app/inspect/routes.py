@@ -33,6 +33,11 @@ from pydantic import BaseModel, Field
 
 from ..database.couchbase_client import CouchbaseClient
 from ..dependencies import get_current_user, get_db
+from .annotations import (
+    Annotation, AnnotationCreate, VerdictStats,
+    annotations_for_repo, annotations_for_target, consistent, create_annotation,
+    verdict_stats,
+)
 
 router = APIRouter()
 
@@ -622,3 +627,174 @@ async def nearest_neighbors(
 
     scored.sort(key=lambda n: n.similarity, reverse=True)
     return NeighborsResponse(document_id=document_id, neighbors=scored[:k])
+
+
+class SampleItem(BaseModel):
+    document_id: str
+    repo_id: str
+    file_path: str
+    name: str
+    type: Optional[str] = None
+    start_line: int = 0
+    end_line: int = 0
+    summary: str = ""
+    summary_source: Optional[str] = None
+
+
+class SampleResponse(BaseModel):
+    items: List[SampleItem]
+    next_cursor: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Judgments
+# ---------------------------------------------------------------------------
+
+@router.post("/annotations", response_model=Annotation, status_code=201)
+async def add_annotation(
+    payload: AnnotationCreate,
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[CouchbaseClient, Depends(get_db)],
+):
+    """
+    Record a verdict on one document's summary.
+
+    The client sends only the target and the judgment; the summary being judged
+    and its provenance are read from the document here. A snapshot supplied by
+    the client would let a stale tab record a verdict against text that had
+    already been replaced.
+    """
+    return await create_annotation(
+        db,
+        _bucket(current_user),
+        payload,
+        author=current_user.get("email") or current_user.get("user_id") or "unknown",
+        author_id=current_user.get("user_id") or "unknown",
+    )
+
+
+@router.get("/annotations", response_model=List[Annotation])
+async def list_annotations(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[CouchbaseClient, Depends(get_db)],
+    target_id: Optional[str] = Query(None, description="Judgments on one document"),
+    repo_id: Optional[str] = Query(None, description="Judgments across one repository"),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    """
+    Judgments, newest first, for one document or one repository.
+
+    Each carries a `status`: whether the document it judged still exists, and
+    whether its content has changed since. Reported, never repaired — guessing
+    which symbol a moved judgment now refers to would put invented data into the
+    one dataset whose whole value is being trustworthy.
+    """
+    bucket = _bucket(current_user)
+    if target_id:
+        return await annotations_for_target(db, bucket, target_id)
+    if repo_id:
+        return await annotations_for_repo(db, bucket, repo_id, limit)
+    raise HTTPException(status_code=400, detail="Pass target_id or repo_id")
+
+
+@router.get("/annotations/stats", response_model=VerdictStats)
+async def annotation_stats(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[CouchbaseClient, Depends(get_db)],
+    repo_id: Optional[str] = Query(None),
+):
+    """The evaluation set as it stands, split by verdict and by summary_source."""
+    return await verdict_stats(db, _bucket(current_user), repo_id)
+
+
+@router.get("/sample", response_model=SampleResponse)
+async def sample_unjudged(
+    current_user: Annotated[dict, Depends(get_current_user)],
+    db: Annotated[CouchbaseClient, Depends(get_db)],
+    repo_id: str = Query(..., description="owner/name"),
+    doc_type: str = Query("symbol_index"),
+    summary_source: Optional[str] = Query(
+        None, description="Restrict to one generation, e.g. reconcile_span_identity_llm"
+    ),
+    limit: int = Query(20, ge=1, le=100),
+    after: Optional[str] = Query(None, description="next_cursor from a previous page"),
+):
+    """
+    Documents in this repository that carry no judgment yet.
+
+    Ordered by `document_id`, which is a hash of the symbol's location and so is
+    effectively random with respect to its content — the ordering is arbitrary in
+    exactly the way a sample should be, while staying deterministic enough to
+    page through with a cursor and to reproduce later.
+
+    That matters more than it looks. Judging only what you happen to click on
+    produces an evaluation set biased toward whatever you were curious about, and
+    a biased eval set is worse than none: it will report improvements that are
+    artefacts of where you were looking.
+
+    Scoped to one repository because that is what the indexes cover; a
+    corpus-wide ordered scan has no index behind it and would time out.
+    """
+    if doc_type not in ("symbol_index", "semantic_unit", "file_index"):
+        raise HTTPException(status_code=422, detail="Unsupported doc_type")
+
+    bucket = _bucket(current_user)
+    conditions = ["d.repo_id = $r", "d.type = $t"]
+    params: Dict[str, object] = {"r": repo_id, "t": doc_type}
+    if summary_source:
+        conditions.append("d.quality.summary_source = $src")
+        params["src"] = summary_source
+    if after:
+        conditions.append("d.document_id > $after")
+        params["after"] = after
+
+    # Over-fetched because judged documents are removed afterwards; without the
+    # margin a page would come back short whenever judgments cluster.
+    params["lim"] = limit * 4
+    rows, judged = await asyncio.gather(
+        db.query(
+            f"""
+            SELECT d.document_id, d.repo_id, d.file_path, d.symbol_name, d.label,
+                   d.symbol_type, d.unit_type, d.content,
+                   d.metadata.start_line AS start_line,
+                   d.metadata.end_line AS end_line,
+                   d.quality.summary_source AS summary_source
+            FROM `{bucket}` d
+            WHERE {' AND '.join(conditions)}
+            ORDER BY d.document_id
+            LIMIT $lim
+            """,
+            QueryOptions(named_parameters=params),
+        ),
+        db.query(
+            f"""
+            SELECT RAW d.target_id FROM `{bucket}` d
+            WHERE d.type = 'annotation' AND d.anchor.repo_id = $r
+            """,
+            # Consistent read: a document judged a moment ago must not come back
+            # in the very next page of things still to judge.
+            consistent({"r": repo_id}),
+        ),
+    )
+
+    already = set(judged)
+    items = [
+        SampleItem(
+            document_id=row["document_id"],
+            repo_id=row.get("repo_id") or "",
+            file_path=row.get("file_path") or "",
+            name=row.get("symbol_name") or row.get("label") or "",
+            type=row.get("symbol_type") or row.get("unit_type"),
+            start_line=row.get("start_line") or 0,
+            end_line=row.get("end_line") or 0,
+            summary=row.get("content") or "",
+            summary_source=row.get("summary_source"),
+        )
+        for row in rows
+        if row["document_id"] not in already
+    ][:limit]
+
+    # The cursor tracks the last row *examined*, not the last returned, or a page
+    # whose tail was all judged would hand back a cursor that repeats them.
+    next_cursor = rows[-1]["document_id"] if len(rows) >= params["lim"] else None
+    return SampleResponse(items=items, next_cursor=next_cursor)
