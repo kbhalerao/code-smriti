@@ -680,6 +680,7 @@ async def list_annotations(
     db: Annotated[CouchbaseClient, Depends(get_db)],
     target_id: Optional[str] = Query(None, description="Judgments on one document"),
     repo_id: Optional[str] = Query(None, description="Judgments across one repository"),
+    file_path: Optional[str] = Query(None, description="With repo_id, narrow to one file"),
     limit: int = Query(200, ge=1, le=1000),
 ):
     """
@@ -694,7 +695,7 @@ async def list_annotations(
     if target_id:
         return await annotations_for_target(db, bucket, target_id)
     if repo_id:
-        return await annotations_for_repo(db, bucket, repo_id, limit)
+        return await annotations_for_repo(db, bucket, repo_id, limit, file_path)
     raise HTTPException(status_code=400, detail="Pass target_id or repo_id")
 
 

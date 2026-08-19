@@ -213,16 +213,32 @@ async def annotations_for_target(
 
 
 async def annotations_for_repo(
-    db: CouchbaseClient, bucket: str, repo_id: str, limit: int
+    db: CouchbaseClient,
+    bucket: str,
+    repo_id: str,
+    limit: int,
+    file_path: Optional[str] = None,
 ) -> List[Annotation]:
+    """
+    Judgments across a repository, or within one file.
+
+    The file filter exists for the gutter: colouring every document's rail by its
+    verdict needs the whole file's judgments in one call, and asking per document
+    would be one request per symbol on every file open.
+    """
+    where = "d.type = 'annotation' AND d.anchor.repo_id = $r"
+    params: Dict[str, object] = {"r": repo_id, "lim": limit}
+    if file_path is not None:
+        where += " AND d.anchor.file_path = $f"
+        params["f"] = file_path
     rows = await db.query(
         f"""
         SELECT d.* FROM `{bucket}` d
-        WHERE d.type = 'annotation' AND d.anchor.repo_id = $r
+        WHERE {where}
         ORDER BY d.created_at DESC
         LIMIT $lim
         """,
-        consistent({"r": repo_id, "lim": limit}),
+        consistent(params),
     )
     return [Annotation(**r) for r in rows]
 
