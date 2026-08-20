@@ -102,50 +102,123 @@ Auth is always `Administrator` + `COUCHBASE_PASSWORD` from `.env`.
 
 See `docs/FTS_VECTOR_SEARCH.md` for hybrid search strategies and troubleshooting.
 
-## Local LLM Setup (LM Studio)
+## Local LLM Setup (Ollama)
 
-LM Studio provides local LLM inference on port 1234, proxied via nginx at `/llm/*`.
+Ollama provides local LLM inference on port **11434**, proxied via nginx at
+`/llm/*` (`upstream llm { server host.docker.internal:11434; }` in
+`services/api-gateway/nginx.conf`).
+
+**LM Studio is no longer used.** It previously served this role on port 1234, and
+the leftovers are misleading: the `lms` CLI is still on PATH and
+`~/.lmstudio/startup.sh` still exists, but `com.lmstudio.server.plist` is gone and
+nothing listens on 1234. If a doc or script tells you to run `lms server start`,
+it is stale.
 
 ### Auto-start Configuration
 
-**LaunchAgent**: `~/Library/LaunchAgents/com.lmstudio.server.plist`
-**Startup script**: `~/.lmstudio/startup.sh`
+| LaunchAgent | Purpose |
+|---|---|
+| `com.ollama.server` | The server itself. All operative config is in its `EnvironmentVariables`. |
+| `com.ollama.warmup` | Runs `~/.ollama/warmup.sh` after boot: waits for `/api/version`, rotates logs, and asserts exactly one `ollama serve` is running. |
 
-The startup script:
-1. Starts LM Studio server with `--bind 0.0.0.0 --cors`
-2. Loads models with specified context lengths (skips if already loaded)
+That split-server assertion matters. Two `ollama serve` processes will both answer,
+each with its own runners and its own copy of the weights, and the only symptom is
+memory pressure plus inconsistent behaviour depending on which one a caller hit.
 
-### Models & Context Lengths
+Current server environment:
 
-| Model | Context | Size |
-|-------|---------|------|
-| qwen/qwen3-30b-a3b-2507 | 128K | 17 GB |
-| qwen/qwen3-next-80b | 128K | 45 GB |
-| ibm/granite-4-h-tiny | 16K | 4 GB |
-| text-embedding-nomic-embed-text-v1.5 | default | 84 MB |
+```
+OLLAMA_HOST=0.0.0.0:11434     OLLAMA_NUM_PARALLEL=4
+OLLAMA_CONTEXT_LENGTH=16384   OLLAMA_MAX_LOADED_MODELS=6
+OLLAMA_FLASH_ATTENTION=1      OLLAMA_KV_CACHE_TYPE=q8_0
+OLLAMA_KEEP_ALIVE=30m
+```
 
-### Troubleshooting After Power Failure
+`OLLAMA_CONTEXT_LENGTH` and `OLLAMA_NUM_PARALLEL` are load-bearing for ingestion
+throughput and are explained in **Ingestion LLM Serving** below. Do not change
+either without reading it.
 
-If LLM proxy returns 502:
-1. Check LM Studio is running: `lms status`
-2. Start if needed: `lms server start --port 1234 --bind 0.0.0.0 --cors`
-3. Load models via GUI (CLI `lms load` may fail if LM Studio app isn't open)
+**Editing this plist:** `plutil -lint` is not a sufficient check. It accepts `--`
+inside an XML comment, which is illegal XML and is rejected by stricter parsers.
+Validate with both:
+
+```bash
+plutil -lint ~/Library/LaunchAgents/com.ollama.server.plist
+python3 -c "import plistlib;plistlib.load(open('$HOME/Library/LaunchAgents/com.ollama.server.plist','rb'))"
+```
+
+### Models
+
+Models are addressed by **role alias**, never by raw tag — `general`, `structured`,
+`class-30b`, `class-80b`, `code`, `embed`, `ocr`, `translate`. Aliases are defined
+in `~/code/ollama/aliases/*.Modelfile` and swapped with
+`make repoint NAME=<role> MODEL=<tag>`, so the git diff records the change.
+
+Two roles matter to this project:
+
+| Role | Backing model | Engine | Used by |
+|---|---|---|---|
+| `general` | gemma4:26b-nvfp4 | MLX (safetensors) | enrichment/summaries — **cannot batch** |
+| `structured` | gemma4:26b-a4b-it-q8_0 | GGUF | LLM chunker; also Listings AI extraction |
+
+The engine is not cosmetic: constrained decoding (`json_schema`) is enforced only
+on GGUF. The MLX runner accepts a schema and silently ignores it. Check before
+pointing anything schema-dependent at a role — note that `ollama show` does **not**
+report the format, so grepping its output returns nothing whether or not the model
+is GGUF. Use the API, which is what `llm_chunker.py` itself checks:
+
+```bash
+curl -s localhost:11434/api/show -d '{"model":"structured"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['details']['format'])"
+```
+
+Port **11435** is a separate homebrew `llama-server` serving the reranker, started
+with `-m` against an ollama *blob*. It does not appear in `ollama ps`, but
+`ollama rm` on the tag that owns that blob will break it at next restart.
+
+`/opt/homebrew/bin/ollama` is a symlink to
+`/Applications/Ollama.app/Contents/Resources/ollama`. That is deliberate — a real
+brew-installed ollama binary ships without `llama-server` and returns 500 on GGUF
+and embedding calls. Keep the symlink; do not `brew install ollama` over it.
+
+### Troubleshooting
+
+If the LLM proxy returns 502:
+
+1. Check the server is up: `curl -s localhost:11434/api/version`
+2. Check exactly one is running: `pgrep -fl "ollama serve"` — more than one is a bug
+3. Reload if needed:
+   `launchctl unload ~/Library/LaunchAgents/com.ollama.server.plist && launchctl load ~/Library/LaunchAgents/com.ollama.server.plist`
 4. If Colima's `host.docker.internal` is stale, restart Colima: `colima stop && colima start`
+
+A reload drops every in-flight request. Check for a live ingestion first
+(`cd services/ingestion-worker && ./.venv/bin/python incremental_v4.py --status`);
+a reload mid-run kills its LLM calls.
+
+Killing `ollama serve` can leave its model runners orphaned on `ppid 1`, still
+holding their weights. After any restart:
+
+```bash
+ps -ax -o pid,ppid,rss,command | grep -E "[o]llama runner|[l]lama-server"
+# anything with ppid 1 that is not the :11435 reranker is an orphan — kill it
+```
 
 ### Manual Commands
 
 ```bash
-# Check status
-lms status
+# Server status and what is resident (format, context, VRAM)
+curl -s localhost:11434/api/version
+curl -s localhost:11434/api/ps | python3 -m json.tool
 
-# Start server
-lms server start --port 1234 --bind 0.0.0.0 --cors
+# What actually loaded — slot count is decided at load time, not by the env var
+pgrep -fl llama-server        # look for the real -c and -np
 
-# Load model with context
-lms load qwen/qwen3-30b-a3b-2507 --context-length 131072 --yes
+# Models
+ollama list
+ollama show structured --modelfile
 
 # Test from host
-curl http://localhost:1234/v1/models
+curl -s localhost:11434/v1/models
 
 # Test via nginx proxy.
 # /llm/* is restricted to LAN/VLAN sources (the `geo $llm_allowed` block in

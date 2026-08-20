@@ -43,7 +43,11 @@ class WorkerConfig(BaseSettings):
     # 1. It must be a **GGUF** build. Constrained decoding (`json_schema` response
     #    format) is implemented only by ollama's GGUF engine; the MLX/safetensors
     #    runner accepts the schema and silently ignores it, returning fenced prose
-    #    that then fails to parse. Verify with: ollama show <model> | grep -i format
+    #    that then fails to parse. `ollama show` does NOT report the format, so
+    #    grepping it returns nothing either way; ask the API, as
+    #    _warn_if_schema_unsupported does:
+    #      curl -s localhost:11434/api/show -d '{"model":"structured"}' \\
+    #        | python3 -c "import sys,json;print(json.load(sys.stdin)['details']['format'])"
     # 2. It must not be a low-precision quant. Q4_0 costs ~18% of extractions
     #    against the same weights at higher precision — a bigger loss than the
     #    schema itself imposes (~15%).
