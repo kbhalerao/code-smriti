@@ -92,8 +92,40 @@ elif [[ ! -x "$OLLAMA_BIN" ]]; then
     log "ollama: WARN — official binary not found at $OLLAMA_BIN (install from ollama.com/download); NOT falling back to brew (it may lack llama-server)"
 else
     log "ollama: not running, starting headless from official build"
-    OLLAMA_HOST=0.0.0.0:11434 OLLAMA_ORIGINS='*' \
-    OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_CONTEXT_LENGTH=65536 \
+    # The serving environment is READ FROM the com.ollama.server LaunchAgent
+    # rather than duplicated here. These values are load-bearing for ingestion
+    # throughput: OLLAMA_NUM_PARALLEL decides whether the GGUF chunker gets 4
+    # slots or 1, and at 1 slot it serialises at ~20 tok/s and costs ~5x wall
+    # clock. This path runs on a headless boot, where nothing would notice the
+    # regression. A second hardcoded copy is exactly how the two drift: this
+    # block previously pinned CONTEXT_LENGTH=65536 and omitted NUM_PARALLEL
+    # entirely, silently undoing the tuning after any unattended reboot.
+    OLLAMA_PLIST="$HOME/Library/LaunchAgents/com.ollama.server.plist"
+    OLLAMA_ENV=()
+    while IFS= read -r kv; do
+        [[ -n "$kv" ]] && OLLAMA_ENV+=("$kv")
+    done < <(/usr/bin/python3 - "$OLLAMA_PLIST" 2>/dev/null <<'PLIST_ENV'
+import plistlib, sys
+try:
+    d = plistlib.load(open(sys.argv[1], 'rb'))
+    for k, v in sorted((d.get('EnvironmentVariables') or {}).items()):
+        if k.startswith('OLLAMA_') and ' ' not in str(v):
+            print(f'{k}={v}')
+except Exception:
+    pass
+PLIST_ENV
+    )
+    if [[ ${#OLLAMA_ENV[@]} -eq 0 ]]; then
+        log "ollama: WARN - could not read env from $OLLAMA_PLIST; using fallback literals (keep in sync with the plist)"
+        OLLAMA_ENV=(OLLAMA_HOST=0.0.0.0:11434 OLLAMA_FLASH_ATTENTION=1
+                    OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_CONTEXT_LENGTH=16384
+                    OLLAMA_NUM_PARALLEL=4 OLLAMA_KEEP_ALIVE=30m
+                    OLLAMA_MAX_LOADED_MODELS=6)
+    fi
+    log "ollama: env ${OLLAMA_ENV[*]}"
+    # OLLAMA_ORIGINS is not in the plist (the Aqua agent does not need it) but
+    # Docker and the nginx /llm proxy do, so it is set only on this path.
+    env "${OLLAMA_ENV[@]}" OLLAMA_ORIGINS='*' \
         nohup "$OLLAMA_BIN" serve >>"$LOG" 2>&1 &
     for i in $(seq 1 15); do
         curl -sf -o /dev/null "http://localhost:11434/api/version" 2>/dev/null \
