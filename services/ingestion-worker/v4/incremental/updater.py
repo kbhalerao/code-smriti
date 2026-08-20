@@ -29,7 +29,8 @@ class IncrementalUpdater:
     1. Get canonical repo list (GitHub API or config file)
     2. Clone new repos not on disk
     3. Delete docs for repos no longer in canonical list
-    4. For each repo: fetch, compare commits, update incrementally or full re-ingest
+    4. For each repo: fetch, sync worktree to the default branch, compare
+       commits, update incrementally or full re-ingest
     """
 
     def __init__(
@@ -188,8 +189,15 @@ class IncrementalUpdater:
         if not self.git.fetch(repo_path):
             return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git fetch failed')
 
-        # 2. Get commits
-        local_head = self.git.get_head_commit(repo_path)
+        # 2. Put the worktree on origin's default branch before anything reads
+        #    it. Done here rather than beside each ingestion call below, so that
+        #    local_head is always the default branch's head and step 3 compares
+        #    like with like. See GitOperations.sync_to_default_branch.
+        local_head = self.git.sync_to_default_branch(repo_path)
+        if local_head is None:
+            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git sync failed')
+
+        # 3. Get commits
         origin_head = self.git.get_origin_head(repo_path)
         stored_commit = self.repo_lifecycle.get_stored_commit(repo_id)
 
@@ -197,7 +205,7 @@ class IncrementalUpdater:
             logger.info(f"  Empty repo - no branches found")
             return UpdateResult(repo_id=repo_id, status=STATUS_EMPTY, reason='no_origin_head')
 
-        # 3. Check if update needed
+        # 4. Check if update needed
         if stored_commit and local_head == origin_head == stored_commit:
             logger.info(f"  Skipping - no changes (commit: {stored_commit[:8]})")
             return UpdateResult(
@@ -208,11 +216,10 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 4. New repo - full ingestion
+        # 5. New repo - full ingestion
         if not stored_commit:
             logger.info(f"  New repo - full ingestion")
             if not self.dry_run:
-                self.git.pull(repo_path)
                 owns_loop = loop is None
                 if owns_loop:
                     loop = asyncio.new_event_loop()
@@ -232,7 +239,7 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 5. Get changed files
+        # 6. Get changed files
         base_commit = stored_commit
         changes = self.git.get_changed_files(repo_path, base_commit, origin_head)
 
@@ -246,14 +253,13 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 6. Check threshold
+        # 7. Check threshold
         total_files = self.repo_lifecycle.get_repo_file_count(repo_id) or 1
         change_ratio = changes.total_changed / total_files
 
         if change_ratio > self.threshold:
             logger.info(f"  {changes.total_changed} files changed ({change_ratio:.1%}) > {self.threshold:.0%} threshold - full re-ingestion")
             if not self.dry_run:
-                self.git.pull(repo_path)
                 owns_loop = loop is None
                 if owns_loop:
                     loop = asyncio.new_event_loop()
@@ -274,11 +280,8 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 7. Surgical incremental update
+        # 8. Surgical incremental update
         logger.info(f"  Incremental: +{len(changes.added)} ~{len(changes.modified)} -{len(changes.deleted)}")
-
-        if not self.dry_run:
-            self.git.pull(repo_path)
 
         # Filter to supported files
         code_to_process, docs_to_process = self.filter_supported_files(changes.files_to_process, repo_path)

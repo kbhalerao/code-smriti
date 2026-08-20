@@ -15,36 +15,127 @@ class GitOperations:
     """Git operations helper for incremental updates."""
 
     @staticmethod
+    def _run(repo_path: Path, args: list, timeout: int = 60) -> subprocess.CompletedProcess:
+        """Run a git command in repo_path. Callers handle failure."""
+        return subprocess.run(
+            args,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=timeout
+        )
+
+    @staticmethod
     def fetch(repo_path: Path) -> bool:
-        """Fetch latest from origin"""
+        """Fetch latest from origin, and re-point origin/HEAD at the remote's
+        current default branch.
+
+        `git fetch` never updates origin/HEAD — it is written once at clone time
+        and then frozen. When a project retires a branch (labcore2024 ->
+        labcore2026), every consumer of get_default_branch() keeps naming the
+        dead one until someone runs set-head by hand. Refreshing it here costs
+        one ls-remote per repo on a call that already talks to the network.
+        """
         try:
-            result = subprocess.run(
-                ['git', 'fetch', 'origin'],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            return result.returncode == 0
+            result = GitOperations._run(repo_path, ['git', 'fetch', 'origin'])
+            if result.returncode != 0:
+                logger.warning(f"Git fetch failed: {result.stderr.strip()}")
+                return False
+
+            # Non-fatal: a repo with no default branch on the remote still fetches.
+            head = GitOperations._run(repo_path, ['git', 'remote', 'set-head', 'origin', '-a'])
+            if head.returncode != 0:
+                logger.debug(f"Could not refresh origin/HEAD: {head.stderr.strip()}")
+
+            return True
         except Exception as e:
             logger.warning(f"Git fetch failed: {e}")
             return False
 
     @staticmethod
-    def pull(repo_path: Path) -> bool:
-        """Pull latest changes (fast-forward only)"""
+    def sync_to_default_branch(repo_path: Path) -> Optional[str]:
+        """Put the worktree on origin's default branch at origin's tip.
+
+        Returns the resulting HEAD commit, or None if the sync failed.
+
+        Replaces `git pull --ff-only`, which was not sufficient: pull acts on
+        whichever branch happens to be checked out, while get_origin_head()
+        reads the *default* branch named by origin/HEAD. A clone parked on a
+        stale branch therefore had its change list diffed from the default
+        branch and its file contents read from the stale one, and the run then
+        recorded the default branch's commit — so the next run compared equal
+        and never looked again. Self-sealing, and silent.
+
+        Found 2026-08-20 in three clones. labcore had been serving a January
+        branch of a repo whose trunk was 336 commits and 264K deleted lines
+        ahead, under an August commit hash. Two more (gmslab, ListingsAISearch)
+        had drifted the same way.
+
+        `checkout --force -B` creates-or-resets the local branch onto the remote
+        ref and switches to it in one step; `reset --hard` then discards any
+        in-place modification the checkout had no reason to rewrite.
+        That is safe here because these clones are a machine-managed cache: a
+        reflog sweep over all 297 found zero locally-authored commits — every
+        entry was `clone:` or `pull:`. It is deliberately unconditional rather
+        than dry_run-gated, because a worktree on the wrong branch makes a dry
+        run's report wrong too, and the worktree is derived state, not input.
+        """
+        branch = GitOperations.get_default_branch(repo_path)
+        remote_ref = f'origin/{branch}'
+
         try:
-            result = subprocess.run(
-                ['git', 'pull', '--ff-only'],
-                cwd=repo_path,
-                capture_output=True,
-                text=True,
+            # Single-branch and shallow clones carry a narrow refspec, so the
+            # default branch may not be present locally at all once origin/HEAD
+            # moves outside it. Fetch it by name before reaching for it.
+            if GitOperations.get_head_commit(repo_path, remote_ref) is None:
+                GitOperations._run(repo_path, ['git', 'fetch', 'origin', branch], timeout=120)
+
+            if GitOperations.get_head_commit(repo_path, remote_ref) is None:
+                logger.error(f"Cannot sync {repo_path.name}: {remote_ref} does not resolve")
+                return None
+
+            before_branch = GitOperations._run(
+                repo_path, ['git', 'branch', '--show-current']
+            ).stdout.strip() or '(detached)'
+            before = GitOperations.get_head_commit(repo_path)
+
+            result = GitOperations._run(
+                repo_path,
+                ['git', 'checkout', '--force', '-B', branch, remote_ref],
                 timeout=120
             )
-            return result.returncode == 0
+            if result.returncode != 0:
+                logger.error(f"Cannot sync {repo_path.name} to {remote_ref}: {result.stderr.strip()}")
+                return None
+
+            # checkout --force only rewrites files that differ between the two
+            # branches, so a tracked file modified in place while already on the
+            # target branch survives it. reset --hard makes the invariant real:
+            # the worktree matches the commit this run is about to record.
+            reset = GitOperations._run(
+                repo_path, ['git', 'reset', '--hard', remote_ref], timeout=120
+            )
+            if reset.returncode != 0:
+                logger.error(f"Cannot reset {repo_path.name} to {remote_ref}: {reset.stderr.strip()}")
+                return None
+
+            after = GitOperations.get_head_commit(repo_path)
+
+            # Loud on purpose: drift is invisible otherwise, which is how it
+            # survived from January to August.
+            if before_branch != branch:
+                logger.warning(
+                    f"  Worktree re-anchored: {before_branch}@{(before or '?')[:8]} "
+                    f"-> {branch}@{(after or '?')[:8]}"
+                )
+            elif before != after:
+                logger.info(f"  Advanced {branch}: {(before or '?')[:8]} -> {(after or '?')[:8]}")
+
+            return after
+
         except Exception as e:
-            logger.warning(f"Git pull failed: {e}")
-            return False
+            logger.error(f"Git sync failed for {repo_path.name}: {e}")
+            return None
 
     @staticmethod
     def get_head_commit(repo_path: Path, ref: str = 'HEAD') -> Optional[str]:
