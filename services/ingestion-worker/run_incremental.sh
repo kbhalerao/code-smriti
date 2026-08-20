@@ -55,6 +55,13 @@ ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m
 # Exit code used to signal "killed by the watchdog", matching GNU timeout(1).
 TIMEOUT_RC=124
 
+# incremental_v4.py exits 2 when it cannot take the run lock because another
+# ingestion is already live (v4/incremental/runner.py raises LockError). That is
+# the lock doing its job, not a failure: a long manual run legitimately overlaps
+# the schedule. Treated as a clean skip so it neither pages anyone nor refreshes
+# the dashboard and digest off a run that never happened.
+LOCK_BUSY_RC=2
+
 # The cos CLI lives in ~/.local/bin, which is not on the minimal PATH launchd
 # hands us, so it has to be added explicitly. Resolved once, up front, so a
 # missing CLI is reported rather than discovered mid-failure.
@@ -173,7 +180,11 @@ run_with_timeout "$INGEST_TIMEOUT_SECS" ingest \
 EXIT_CODE=$?
 set -e
 
-if [[ $EXIT_CODE -eq $TIMEOUT_RC ]]; then
+if [[ $EXIT_CODE -eq $LOCK_BUSY_RC ]]; then
+    echo "Another ingestion holds the run lock; skipping this scheduled run." >> "$LOG_FILE"
+    echo "=== $(date) Skipped (lock held by a live run) ===" >> "$LOG_FILE"
+    exit 0
+elif [[ $EXIT_CODE -eq $TIMEOUT_RC ]]; then
     echo "Ingestion timed out after ${INGEST_TIMEOUT_SECS}s and was killed." >> "$LOG_FILE"
     post_cos_alert \
         "ingestion timed out after ${INGEST_TIMEOUT_SECS}s" \
