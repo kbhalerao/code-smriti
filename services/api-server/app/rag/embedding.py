@@ -85,7 +85,10 @@ def embed_query(model, text: str) -> List[float]:
     return truncate(np.asarray(vec, dtype=np.float32))[0].tolist()
 
 
-async def assert_corpus_matches(db, bucket: str = "code_kosha") -> Optional[str]:
+async def assert_corpus_matches(
+    db, bucket: str = "code_kosha", loaded_model_name: Optional[str] = None,
+    model=None,
+) -> Optional[str]:
     """
     Compare this service's convention against how the corpus was actually built.
 
@@ -107,8 +110,31 @@ async def assert_corpus_matches(db, bucket: str = "code_kosha") -> Optional[str]
     if doc.get("model") != EMBEDDING_MODEL or doc.get("dims") != EMBEDDING_DIMS:
         return (
             f"Embedding mismatch: corpus built with {doc.get('model')} at "
-            f"{doc.get('dims')} dims, this service queries with "
+            f"{doc.get('dims')} dims, this service is configured for "
             f"{EMBEDDING_MODEL} at {EMBEDDING_DIMS}. Search results are "
             f"meaningless until one side is re-run."
         )
+
+    # Comparing this module's constants against the manifest proves only that two
+    # pieces of configuration agree. It said "matches" while the service had
+    # nomic loaded, because EMBEDDING_MODEL_NAME in .env overrode the compose
+    # default and nothing checked what was actually in memory.
+    if loaded_model_name and loaded_model_name != EMBEDDING_MODEL:
+        return (
+            f"Loaded model is {loaded_model_name}, but this service embeds "
+            f"queries as {EMBEDDING_MODEL}. Check EMBEDDING_MODEL_NAME — a "
+            f"value in .env overrides the docker-compose default."
+        )
+
+    # And prove it by using it: a name can be right while the object is not.
+    if model is not None:
+        try:
+            probe = truncate(np.asarray(model.encode("probe"), dtype=np.float32))
+            if probe.shape[1] != EMBEDDING_DIMS:
+                return (
+                    f"Loaded model emits {probe.shape[1]} dimensions after "
+                    f"truncation, expected {EMBEDDING_DIMS}."
+                )
+        except Exception as e:
+            logger.warning(f"Could not probe the embedding model: {e}")
     return None

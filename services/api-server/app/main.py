@@ -66,7 +66,11 @@ async def lifespan(app: FastAPI):
     try:
         from .rag.embedding import assert_corpus_matches
         from .dependencies import get_db
-        problem = await assert_corpus_matches(get_db())
+        problem = await assert_corpus_matches(
+            get_db(),
+            loaded_model_name=settings.embedding_model_name,
+            model=get_embedding_model(settings.embedding_model_name),
+        )
         if problem:
             logger.error(f"EMBEDDING MISMATCH: {problem}")
         else:
