@@ -202,6 +202,53 @@ Four traps:
   into a log with a far wider readership than the config. The gateway also
   strips the header before proxying upstream, so Ollama never sees it.
 
+## Landing Page and the KPI Dashboard
+
+`landing/` is served unauthenticated at `location /` on the smriti.agsci.com
+vhost, which is public.
+
+`index.html` is the technical brief. It was scrubbed for public release
+(`d294bb19`) and its only external references are to this project's own public
+repository. Keep it that way.
+
+`kpi.html` is generated into the same directory by `scripts/generate_kpi.py` and
+was never part of that review. It tabulates repository names against commit
+counts — client identities and their relative activity. As of 2026-08-19 it is
+restricted to the LAN by an exact-match location in the gateway:
+
+```nginx
+location = /kpi.html {
+    if ($lan_only = 0) { return 404; }
+    root /usr/share/nginx/html;
+}
+```
+
+Two things about that guard:
+
+- It uses `$lan_only`, **not** `$llm_allowed`. The latter includes
+  `allowlist.conf`, which names third-party production infrastructure, and pairs
+  with a shared secret. Both are correct for inference endpoints and wrong for a
+  page listing client repositories.
+- It returns 404 rather than 403, so an off-LAN caller does not learn the page
+  exists.
+
+The dashboard regenerates on every incremental run, so deleting the file does not
+keep it deleted — the gateway rule is what holds. If a genuinely public metrics
+page is ever wanted, `generate_kpi.py` needs to emit aliases or hashes instead of
+repository names; the restriction is a containment, not a fix.
+
+Testing it needs a LAN address, because requests from the host arrive NAT'd
+through the Docker bridge as 172.28.0.1 and are correctly refused:
+
+```bash
+curl -o /dev/null -w '%{http_code}\n' -H 'Host: smriti.agsci.com' http://localhost/kpi.html          # 404
+curl -o /dev/null -w '%{http_code}\n' -H 'Host: smriti.agsci.com' \
+     -H 'X-Forwarded-For: 192.168.11.29' http://localhost/kpi.html                                    # 200
+```
+
+Editing `nginx.conf` requires `docker-compose restart api-gateway`, never just a
+reload — see the single-file bind mount note above.
+
 ## Scheduled Ingestion (LaunchAgents)
 
 Code ingestion runs automatically via macOS LaunchAgents. Both must remain loaded for the system to stay current.
