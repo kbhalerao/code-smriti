@@ -193,11 +193,15 @@ class RepoLifecycle:
 
         try:
             from couchbase.options import QueryOptions
+            # semantic_unit belongs here too. It was added after this function was
+            # written, and omitting it means a deleted or renamed file leaves its
+            # chunker regions behind with no parent — the same class of miss as
+            # any type list that is not updated when a type is introduced.
             query = """
                 DELETE FROM `code_kosha`
                 WHERE repo_id = $repo_id
                   AND file_path = $file_path
-                  AND type IN ['file_index', 'symbol_index']
+                  AND type IN ['file_index', 'symbol_index', 'semantic_unit']
             """
             result = self.cb_client.cluster.query(
                 query,
