@@ -175,10 +175,17 @@ class IngestionRunner:
         - Non-blocking with LOCK_NB flag
         """
         try:
-            self._lock_fd = open(self.LOCK_FILE, 'w')
+            # Opened 'a+', not 'w', and locked BEFORE truncating. 'w' truncates at
+            # open() — before flock() is even attempted — so a process that LOSES
+            # the race still wipes the winner's pid/started on its way out, and
+            # every later `--status` then reports the live run as absent. Routine
+            # now that run_incremental.sh treats contention as a silent skip.
+            self._lock_fd = open(self.LOCK_FILE, 'a+')
             fcntl.flock(self._lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
-            # Write PID and start time to lock file for debugging
+            # Lock is ours: now it is safe to replace the contents.
+            self._lock_fd.seek(0)
+            self._lock_fd.truncate(0)
             self._lock_fd.write(f"pid={os.getpid()}\n")
             self._lock_fd.write(f"started={datetime.now().isoformat()}\n")
             self._lock_fd.flush()
@@ -374,14 +381,18 @@ def check_running() -> Optional[dict]:
         fd.close()
         return None
     except (IOError, OSError):
-        # Lock is held - read info
+        # Lock is held. Callers test this result for truthiness, so it must never
+        # come back as an empty dict — an unreadable or empty lock file means
+        # "running, details unknown", not "not running".
+        info = {}
         try:
             content = lock_file.read_text()
-            info = {}
             for line in content.strip().split('\n'):
                 if '=' in line:
                     key, value = line.split('=', 1)
                     info[key] = value
-            return info
-        except:
-            return {"status": "running", "details": "unknown"}
+        except OSError:
+            pass
+        info.setdefault("pid", "unknown")
+        info.setdefault("started", "unknown")
+        return info
