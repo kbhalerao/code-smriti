@@ -336,3 +336,60 @@ To reload an agent after editing its plist:
 launchctl unload ~/Library/LaunchAgents/com.codesmriti.incremental.plist
 launchctl load ~/Library/LaunchAgents/com.codesmriti.incremental.plist
 ```
+
+## Ingestion LLM Serving
+
+Ingestion's wall clock is dominated by the **LLM chunker**, not the enricher.
+Profiled 2026-08-20: the "last resort" chunker fired on **65% of files** at ~1.8
+passes each, which is essentially the whole per-file cost.
+
+The chunker model is therefore the highest-leverage knob in the pipeline, and it
+is set in code — `llm_chunker_model` in `services/ingestion-worker/config.py`,
+default `structured`. That file carries the full decision record and the seeded
+yield harness; read it before changing the model. The short version:
+
+| chunker | arch | slots | aggregate | same 67 files |
+|---|---|---|---|---|
+| `class-30b` | qwen35 dense 27.3B | 1 | 20.8 tok/s at any concurrency | 55m17s, 199 chunks |
+| `structured` | gemma4 26b-a4b **MoE** | 4 | 118.6 tok/s at 4 concurrent | **11m00s**, 185 chunks |
+
+5.03x wall clock for ~7% fewer chunks (~16% on the seeded harness). A dense model
+cannot batch its way out of this — it is pinned near 20.8 tok/s regardless of how
+many files the pipeline sends.
+
+Two facts about the serving layer that are **not** in this repo and will be lost
+in a rebuild:
+
+- `OLLAMA_CONTEXT_LENGTH=16384` in `~/Library/LaunchAgents/com.ollama.server.plist`.
+  ollama sizes KV as slots x context and decides the slot count **at model load
+  time against free memory**, silently, so a large context can cost the `-np 4`
+  grant. `class-30b` was stuck at `-np 1` this way for entire runs. Sizing floor:
+  `MAX_OUTPUT_TOKENS` is 8000 and prompts reach ~4,038 tokens, so 8192 would
+  overflow — and ollama passes `--context-shift`, which drops the *head* of the
+  context (instructions and JSON schema) without erroring.
+- Model roles are **aliases** in `~/code/ollama/aliases/`, swapped with
+  `make repoint NAME=... MODEL=...` so the git diff documents the change. Address
+  the alias (`structured`), never the raw tag — calling both loads the weights
+  twice.
+
+Never trust the env var for slot count. Check what actually loaded:
+
+```bash
+pgrep -fl llama-server        # look for the real -c and -np on the loaded blob
+curl -s localhost:11434/api/ps | python3 -m json.tool   # format must be gguf
+```
+
+The chunker requires a **GGUF** target: constrained decoding (`json_schema`) is
+enforced only by ollama's GGUF engine, and the MLX/safetensors runner accepts the
+schema and silently ignores it. `llm_chunker.py::_warn_if_schema_unsupported`
+guards this at the first call.
+
+`structured` is shared with Listings AI, which is experimental and lower priority
+than ingestion — it queues. A dedicated runner is not available by tagging: two
+tags on one blob cannot coexist (ollama evicts one), and a second `ollama serve`
+instance costs a full ~28.9GB weight copy for queue isolation with no throughput
+gain, since one GPU means instances split bandwidth.
+
+Benchmark **only on an idle box**. A probe run during ingestion showed what looked
+like a 2.5x win from a config change; the idle A/B showed zero difference. It was
+measuring the queue.

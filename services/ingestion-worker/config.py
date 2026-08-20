@@ -63,11 +63,13 @@ class WorkerConfig(BaseSettings):
     # avoids ollama's duplicate-weight trap: runners are keyed by tag, so an alias
     # and its underlying tag load the same weights twice if both are called.
     #
-    # Moved off `structured` to `class-30b` on 2026-08-18. Two reasons:
+    # Moved BACK to `structured` on 2026-08-20, reversing the 2026-08-18 switch to
+    # `class-30b`. This is a deliberate speed-for-yield trade; read both halves
+    # before changing it again.
     #
-    # a) Yield. `class-30b` (qwen3.8:27b-q8_0, dense ~27B active) beat `structured`
-    #    (gemma4 26B-A4B, ~4B active) on all three seeds of the 20x3 harness —
-    #    scripts/eval_chunker_models.py, same seeded file sample per arm:
+    # a) Why it was on `class-30b`. That model (qwen3.8:27b-q8_0, dense ~27B
+    #    active) beat `structured` (gemma4 26B-A4B, ~4B active) on yield across
+    #    all three seeds of the 20x3 harness — scripts/eval_chunker_models.py:
     #
     #      seed  structured  class-30b  delta
     #        0      153         164      +11
@@ -76,26 +78,66 @@ class WorkerConfig(BaseSettings):
     #      total    343         398      +55  (+16.0%)
     #
     #    Per-file 31 better / 14 equal / 15 worse over 60 files — broad, not a few
-    #    spikes. Zero parse failures, truncations, wrong-shape or fences in 360
-    #    calls. Costs ~3x wall clock (~41s/call vs ~12s); this path is batch, so
-    #    that is latency, not correctness. Re-check with:
+    #    spikes. That result still stands and is the cost of this default.
+    #
+    # b) Why it moved back anyway. The chunker is the single largest cost in a
+    #    run, and `class-30b` was far slower than the note above assumed. Profiled
+    #    2026-08-20 on run_20260820_083610: the "last resort" chunker fired on
+    #    **65% of files** at ~1.8 passes each (55 of 84 files, 99 invocations),
+    #    which is essentially the entire 31-49 s/file wall clock. Idle benchmarks,
+    #    identical prompts, aggregate tokens/sec:
+    #
+    #      class-30b  dense, 1 slot   20.7 / 20.8 / 20.8  at 1 / 2 / 4 concurrent
+    #      structured MoE,   4 slots  61.9 / 90.2 / 118.6 at 1 / 2 / 4 concurrent
+    #
+    #    A dense model cannot batch its way out: `class-30b` is pinned near
+    #    20.8 tok/s at ANY concurrency, so the pipeline's concurrent files just
+    #    queue. Confirmed end-to-end on identical work (PeoplesCompany/aca-portal,
+    #    same 67 files, back to back):
+    #
+    #      class-30b   55m17s   49.5 s/file   199 chunks   398 semantic units
+    #      structured  11m00s    9.9 s/file   185 chunks   370 semantic units
+    #
+    #    5.03x wall clock for ~7% fewer chunks on that repo (~16% on the seeded
+    #    harness). Accepted because a full labcore re-ingest is ~1,710 files: the
+    #    difference is a ~5h run versus a ~23h one, and a run that does not finish
+    #    inside its window is worth far less than one with 7% fewer chunks.
+    #
+    #    If yield matters more than latency for some future corpus, revert this
+    #    default rather than tuning around it — and consider spending the 5x on a
+    #    second `structured` pass instead, which would still beat `class-30b` on
+    #    wall clock. Re-measure with:
     #      uv run python scripts/eval_chunker_models.py --models structured class-30b
     #
-    # b) Tenancy. `structured` is also Listings AI's extraction role
-    #    (LLM_MODEL_EXTRACT in its provider.ts) and that app is realtime. This
-    #    chunker fires max_concurrent_files (10) at OLLAMA_NUM_PARALLEL=4, so
-    #    during ingestion its queue sat in front of a latency-sensitive tenant on
-    #    the same runner. Separate models mean separate runners; that decoupling
-    #    is worth more than the +16%.
+    # c) Tenancy, which the 2026-08-18 note gave as the other reason to split.
+    #    `structured` is also Listings AI's extraction role (LLM_MODEL_EXTRACT in
+    #    its provider.ts), so ingestion shares a runner with it again. Accepted
+    #    deliberately: Listings AI is experimental and lower priority than
+    #    ingestion, and it queues. The split did not really buy isolation anyway —
+    #    ollama had `class-30b` at `-np 1`, so it serialised everything regardless.
     #
-    # `class-30b` must stay a GGUF target. It was repointed off qwen3.8:27b-mlx on
-    # 2026-08-18 for exactly requirement (1) above — the mlx build is safetensors
-    # and silently ignored the schema.
+    #    A dedicated runner is NOT available by tagging. Two tags on the same
+    #    weights cannot coexist: ollama evicts one (verified 2026-08-20 with only
+    #    two models resident, so it is not OLLAMA_MAX_LOADED_MODELS). A second
+    #    `ollama serve` instance does work and yields two runners on one blob, but
+    #    costs a full ~28.9GB weight copy for queue isolation only — no throughput
+    #    gain, since one GPU means instances split bandwidth.
+    #
+    # Slot grants are decided at MODEL LOAD time against free memory and ollama is
+    # silent when it declines, so a model can sit at one slot for a whole run by
+    # accident. `OLLAMA_CONTEXT_LENGTH=16384` in ~/Library/LaunchAgents/
+    # com.ollama.server.plist keeps the KV estimate small enough that `-np 4` is
+    # granted reliably. Never trust the env var — check the real value with:
+    #   pgrep -fl llama-server   # look for the actual -np on the loaded blob
+    #
+    # `structured` is a ROLE ALIAS (~/code/ollama/aliases/structured.Modelfile,
+    # `make repoint NAME=structured MODEL=...`). Address the alias, never the raw
+    # `gemma4:26b-a4b-it-q8_0` tag — calling both loads the same weights twice.
     #
     # Not pinned in ~/.ollama/warmup.sh, so the first chunker call of a run pays a
-    # ~29GB cold load. That, plus the 3x per-call cost, is why llm_timeout_seconds
-    # carries the headroom it does.
-    llm_chunker_model: str = os.getenv("LLM_CHUNKER_MODEL", "class-30b")
+    # ~29GB cold load. That is now paid on every run rather than occasionally, but
+    # it is one load amortised over hours of batch work.
+    llm_chunker_model: str = os.getenv("LLM_CHUNKER_MODEL", "structured")
 
     # Per-request LLM timeout. This has to cover *queue* time, not just generation:
     # max_concurrent_files (10) exceeds the server's per-model concurrency
