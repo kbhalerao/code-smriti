@@ -24,6 +24,7 @@ from sentence_transformers import SentenceTransformer
 from app.database.couchbase_client import CouchbaseClient
 from app.rag.models import SearchLevel, SearchResult, FileContent
 from app.rag import tools as rag_tools
+from app.rag.reranker import get_reranker
 
 
 # =============================================================================
@@ -244,7 +245,8 @@ def create_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]
             repo_filter=repo_filter,
             limit=min(limit, 10),
             tenant_id=ctx.deps.tenant_id,
-            preview=preview
+            preview=preview,
+            reranker=get_reranker()
         )
 
         # Convert to CodeChunk for LLM consumption

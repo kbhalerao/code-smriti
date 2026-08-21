@@ -15,6 +15,7 @@ from sentence_transformers import SentenceTransformer
 from couchbase.options import QueryOptions
 
 from app.database.couchbase_client import CouchbaseClient
+from app.rag.reranker import CrossEncoderReranker
 from app.rag.models import (
     RepoInfo,
     FileInfo,
@@ -272,7 +273,8 @@ async def search_code(
     repo_filter: str = None,
     limit: int = 5,
     tenant_id: str = "code_kosha",
-    preview: bool = False
+    preview: bool = False,
+    reranker: Optional[CrossEncoderReranker] = None
 ) -> List[SearchResult]:
     """
     Semantic search across indexed documents at specified granularity.
@@ -286,6 +288,8 @@ async def search_code(
         limit: Maximum results to return
         tenant_id: Tenant bucket name
         preview: If True, return only metadata without full content (for peek/preview)
+        reranker: Optional cross-encoder. When given, it decides the final order
+            of the oversampled pool; when None, cosine similarity does.
 
     Returns:
         List of SearchResult sorted by relevance
@@ -392,10 +396,11 @@ async def search_code(
 
                 metadata = doc.get('metadata', {})
 
-                # In preview mode, only return first ~200 chars of content
+                # Full content even in preview mode: the cross-encoder scores
+                # against it below, and cutting to 200 chars first would rerank
+                # on a fragment. Preview truncation happens after ranking, on
+                # the results actually returned.
                 content = doc.get('content', '')
-                if preview and len(content) > 200:
-                    content = content[:200] + "..."
 
                 # True cosine similarity against the stored embedding. Both
                 # sides are L2-normalised at write time, so the dot product is
@@ -446,7 +451,20 @@ async def search_code(
                 continue
 
         results.sort(key=lambda r: r.score, reverse=True)
+
+        # Cross-encoder rerank BEFORE the cut to `limit`. Cosine ordering only
+        # decides which candidates are worth scoring; the cross-encoder decides
+        # which survive. Cutting first would discard on the same bi-encoder
+        # signal the pool was oversampled to improve on.
+        if reranker is not None:
+            results = await reranker.rerank(query, results)
+
         results = results[:limit]
+
+        if preview:
+            for r in results:
+                if len(r.content) > 200:
+                    r.content = r.content[:200] + "..."
 
         logger.info(f"search_code: query='{query[:50]}' level={level.value} preview={preview} found {len(results)} results")
         return results

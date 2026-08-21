@@ -27,6 +27,7 @@ from app.rag.models import (
     SearchLevel,
 )
 from app.rag import tools as rag_tools
+from app.rag.reranker import get_reranker
 from app.rag import graph_tools
 
 # For LLM mode (ask_codebase) - legacy
@@ -257,7 +258,8 @@ async def search_code_endpoint(
         repo_filter=request.repo_filter,
         limit=request.limit,
         tenant_id=tenant_id,
-        preview=request.preview
+        preview=request.preview,
+        reranker=get_reranker()
     )
 
     return SearchResponse(
