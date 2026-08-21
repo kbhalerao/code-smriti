@@ -172,14 +172,93 @@ curl -s localhost:11434/api/show -d '{"model":"structured"}' \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['details']['format'])"
 ```
 
-Port **11435** is a separate homebrew `llama-server` serving the reranker, started
-with `-m` against an ollama *blob*. It does not appear in `ollama ps`, but
-`ollama rm` on the tag that owns that blob will break it at next restart.
-
 `/opt/homebrew/bin/ollama` is a symlink to
 `/Applications/Ollama.app/Contents/Resources/ollama`. That is deliberate — a real
 brew-installed ollama binary ships without `llama-server` and returns 500 on GGUF
 and embedding calls. Keep the symlink; do not `brew install ollama` over it.
+
+### The reranker on 11435
+
+Port **11435** is a separate homebrew `llama-server` serving the cross-encoder,
+under `~/Library/LaunchAgents/com.smriti.reranker.plist`. It is not ollama and
+does not appear in `ollama ps` or `ollama list`:
+
+```
+/opt/homebrew/bin/llama-server \
+  -m ~/.local/share/llm-infra/models/qwen3-reranker-0.6b-q8_0.gguf \
+  --alias qwen3-reranker-0.6b --reranking --host 0.0.0.0 --port 11435
+```
+
+It served `bge-reranker-v2-m3` from an ollama *blob* until 2026-08-21, which made
+`ollama rm` on the tag owning that blob able to break it at next restart. The
+model is a standalone file now and that hazard is retired.
+
+`46669075` moved the api-server onto this service (from an in-process
+`ms-marco-MiniLM-L-6-v2`) and wired it into **both** call sites — `search_code`
+and the RAG agent — gated by `RAG_RERANK_ENABLED`. Reranking now decides the
+final order of `search_codebase` results, over `content` at
+`max_candidates=20`. The gateway also exposes it at `location = /llm/rerank`
+for off-box callers; being an exact-match sibling of `/llm/` it inherits none of
+that block's guards and carries its own `$llm_pass`.
+
+Two properties of the current model that a caller has to respect:
+
+- Scores arrive **already normalised to 0-1** (llama.cpp softmax over the 2-way
+  classifier), so do not sigmoid them. `app/rag/reranker.py` carries the
+  calibration note: the distribution is bimodal, confident judgements pin to the
+  rails, and a cutoff belongs on held-out queries rather than a round number.
+- No `-b`/`-ub` is passed, so the physical batch is the **512-token default**,
+  and llama-server scores each (query, document) pair as one input. A single pair
+  over 512 tokens fails the *whole request* with `input (N tokens) is too large
+  to process`. Restart with `-ub 2048 -b 2048` to lift it. Slots and context are
+  already adequate (4 slots, 40960 total).
+
+**That 512-token ceiling is currently biting production.** Measured 2026-08-21
+against the live corpus, in exactly the shape `search_code` sends (20 documents,
+`content_max_chars=1500`):
+
+| level | result |
+|---|---|
+| `symbol_index`, `file_index` | 200 OK — summaries are ~250-550 chars |
+| `document`, `spec` | **500** — chunks are 1,867-3,837 chars; even truncated to 1,500 they reach 531-1,164 tokens |
+
+`CrossEncoderReranker.rerank` catches and returns bi-encoder order on any error,
+so `doc` and `spec` searches silently receive **no reranking at all** while
+`RAG_RERANK_ENABLED` reports otherwise. Graceful degradation is the right
+behaviour; not knowing it is degraded is the problem. Either raise `-ub` or drop
+`content_max_chars` below ~1,200.
+
+**And where it does work, it measurably hurts.** `scripts/benchmark_retrieval.py
+rerank` (300 queries, 5,000-document haystack, the harness that decided the
+embedding migration) against the shipped configuration — K=20, scoring
+`content`, head reordered and tail appended:
+
+| config | MRR | R@1 |
+|---|---|---|
+| Qwen3-Embedding-0.6B alone | 0.967 | 0.950 |
+| + rerank K=20 | 0.950 | **0.917** |
+| + rerank K=20, query instruction | 0.947 | 0.910 |
+| + rerank K=50 | 0.953 | 0.920 |
+| + rerank K=20, keyword-style queries | 0.941 | 0.907 |
+
+Perfect reordering of the same pool would score 1.000, so the headroom was there
+and the reranker spent it. This is **not noise, but only the paired test shows
+that**: unpaired, 0.950 vs 0.917 on n=300 gives p ~ 0.10, because 273 of 300
+queries never move and inflate the variance. Paired — McNemar broke 14 rank-1
+hits and rescued 4, p = 0.031; Wilcoxon on reciprocal rank p = 0.036; bootstrap
+95% CI on the R@1 delta [-0.060, -0.007], excluding zero.
+
+The likely cause is that the bi-encoder baseline is already at R@1 0.950 and the
+reranker reads `content`, which holds the **summary** — the same text the vector
+was built from, since the pipeline embeds summary+code but persists only the
+summary. It is stronger scoring of identical evidence, with far more ways to
+break a correct top hit than to fix a wrong one. Reranking source code, which
+the bi-encoder genuinely has not seen at query time, is the untested variant and
+needs the `-ub` fix first.
+
+Re-measure before trusting any timing here: the numbers above were taken while
+ingestion was running, so quality figures are sound (contention does not move
+MRR) but the 708-1798 ms/query is not.
 
 ### Troubleshooting
 
