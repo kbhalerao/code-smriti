@@ -313,6 +313,14 @@ class CodeParser:
             ".ex": "elixir",
             ".exs": "elixir",
             ".rs": "rust",
+            # No tree-sitter grammar for shell, so these yield no symbols
+            # and reach the corpus through the LLM chunker — the same route
+            # .sql, .vue and .kt already take. Mapping them anyway matters:
+            # detect_language returning None makes parse_file bail before it
+            # reads the file, and leaves metadata.language unset.
+            ".sh": "shell",
+            ".bash": "shell",
+            ".zsh": "shell",
         }
 
         return extension_map.get(file_path.suffix)

@@ -193,6 +193,7 @@ class WorkerConfig(BaseSettings):
         ".swift",                              # iOS / macOS
         ".erl", ".hrl", ".ex", ".exs",         # BEAM
         ".rs",                                 # Rust
+        ".sh", ".bash", ".zsh",                # Shell
     ]
     supported_doc_extensions: list = [
         ".md", ".rst",                    # Markdown, reStructuredText (Sphinx)

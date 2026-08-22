@@ -580,6 +580,43 @@ ratio is the wrong axis for it. There is no periodic rebuild yet;
 `scripts/reconcile_symbol_documents.py` and `newest_per_key` in
 `_regenerate_summaries` are what currently hold the line.
 
+### Shell scripts, and why a new extension needs a backfill
+
+`.sh`, `.bash` and `.zsh` became indexable on 2026-08-22. Adding an extension
+takes **two** edits, and the second is easy to miss:
+
+- `supported_code_extensions` in `config.py` — gates discovery in
+  `pipeline.discover_files` and the incremental filter in
+  `updater.filter_supported_files`.
+- the map in `CodeParser.detect_language` — without it `detect_language` returns
+  `None`, `parse_file` bails at `if not language: return []` before it reads the
+  file, and `metadata.language` is never set.
+
+There is no tree-sitter grammar for shell, so these files yield no parser symbols
+and reach the corpus through the LLM chunker. That is not a special case: `.sql`,
+`.vue` and `.kt` are already listed with no grammar behind them. Adding
+`tree-sitter-bash` would buy real function extraction and is the only reason to
+take a new dependency here.
+
+**The extension change on its own reaches almost nothing.** Incremental ingestion
+is change-driven, so a shell script is indexed only if someone happens to edit it;
+every other one stays invisible. This is the same trap the class-extraction parser
+fix hit — correct for weeks while the corpus knew nothing about it. Raising
+`DEFAULT_REINGEST_THRESHOLD` to 0.5 the same day made it worse, because accidental
+full re-ingests were the only thing that would have swept them in.
+
+`scripts/backfill_shell_files.py` closes it: 393 files across 95 repos at the time
+of writing. It processes only the missing files, through the same
+`file_processor.process` the incremental path uses, and deliberately does **not**
+move the commits index — the repo is still indexed at the same commit, it just
+gains files it should have had. It takes the ingestion lock while applying, since
+ingestion is GPU-bound at ~94% and the 15:05 LaunchAgent would otherwise start
+midway; `run_incremental.sh` treats a held lock as a clean skip. `--dry-run` is
+the default and needs neither the lock nor the embedding model.
+
+Scale of what was missing: `soilaction307/soilaction-platform` is a deployment
+repo whose substance is 43 shell scripts, and its corpus held **9** documents.
+
 ## Ingestion LLM Serving
 
 Ingestion's wall clock is dominated by the **LLM chunker**, not the enricher.
