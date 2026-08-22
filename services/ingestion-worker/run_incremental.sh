@@ -50,7 +50,15 @@ export TOKENIZERS_PARALLELISM=false
 INGEST_TIMEOUT_SECS="${INGEST_TIMEOUT_SECS:-36000}"   # 10h
 KPI_TIMEOUT_SECS="${KPI_TIMEOUT_SECS:-900}"           # 15m
 DIGEST_TIMEOUT_SECS="${DIGEST_TIMEOUT_SECS:-1800}"    # 30m
-ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m
+ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m, per attempt
+
+# The alert path gets more than one shot, because it is used at the exact
+# moment the box is least able to answer. See deliver_cos_alert below.
+ALERT_ATTEMPTS="${ALERT_ATTEMPTS:-3}"
+# Space-separated in the environment so .env can retune it like the rest;
+# the last value repeats if ALERT_ATTEMPTS is raised beyond the list.
+ALERT_BACKOFF_SECS=( ${ALERT_BACKOFF_SECS:-60 300} )   # before attempts 2 and 3
+ALERT_SPOOL_MAX="${ALERT_SPOOL_MAX:-20}"
 
 # Exit code used to signal "killed by the watchdog", matching GNU timeout(1).
 TIMEOUT_RC=124
@@ -69,21 +77,127 @@ export PATH="$PATH:$HOME/.local/bin"
 COS_BIN="$(command -v cos || true)"
 COS_DIGEST_PROJECT_ID="${COS_DIGEST_PROJECT_ID:-7e3aaaab-5b4c-43d9-ac52-2bcb88c8bd49}"
 
+# Alerts that could not be delivered are written here for the next run to send.
+ALERT_SPOOL_DIR="$SCRIPT_DIR/logs/alert-spool"
+
+# One attempt at handing a note to cos, bounded by the watchdog like every other
+# step: an alert that hangs would recreate exactly the failure it exists to
+# report.
+_cos_post() {
+    local content=$1
+    run_with_timeout "$ALERT_TIMEOUT_SECS" alert \
+        "$COS_BIN" doc create "$content" \
+            --type note \
+            --status inbox \
+            --priority high \
+            --tag updates \
+            --tag alert \
+            --project "$COS_DIGEST_PROJECT_ID"
+}
+
+# Write an undelivered alert to the spool, oldest-first by filename.
+spool_alert() {
+    local content=$1
+    mkdir -p "$ALERT_SPOOL_DIR"
+    local path="$ALERT_SPOOL_DIR/alert-$(date '+%Y%m%d-%H%M%S')-$$.md"
+    printf '%s\n' "$content" > "$path"
+    echo "Spooled undelivered alert: $path" >> "$LOG_FILE"
+    prune_alert_spool
+}
+
+# Bound the spool. If cos has been unreachable for weeks the oldest notices are
+# redundant with the newest, and draining a hundred of them at the head of a run
+# would be its own outage. Filenames are timestamped, so lexicographic order is
+# chronological order.
+prune_alert_spool() {
+    local files=("$ALERT_SPOOL_DIR"/alert-*.md)
+    [[ -e "${files[0]}" ]] || return 0
+    local excess=$(( ${#files[@]} - ALERT_SPOOL_MAX ))
+    (( excess > 0 )) || return 0
+    echo "Pruning $excess alert(s) over the $ALERT_SPOOL_MAX spool cap." >> "$LOG_FILE"
+    rm -f "${files[@]:0:excess}"
+    return 0
+}
+
+# Deliver anything a previous run could not. Called before ingestion starts,
+# which is the quietest the box gets and so the point at which cos is most
+# likely to answer — the opposite of the conditions that caused the spooling.
+drain_alert_spool() {
+    [[ -d "$ALERT_SPOOL_DIR" && -n "$COS_BIN" ]] || return 0
+
+    local path rc
+    set +e
+    for path in "$ALERT_SPOOL_DIR"/alert-*.md; do
+        [[ -e "$path" ]] || continue
+        echo "Delivering spooled alert $path..." >> "$LOG_FILE"
+        _cos_post "$(printf '_Delayed delivery — this alert could not be posted when it fired._\n\n%s' "$(cat "$path")")"
+        rc=$?
+        if (( rc == 0 )); then
+            rm -f "$path"
+        else
+            # Stop on the first failure: cos is still unreachable, the rest will
+            # fail identically, and each one burns a full watchdog budget before
+            # the run that actually matters has started.
+            echo "Spooled alert still undeliverable (exit $rc); leaving it for the next run." >> "$LOG_FILE"
+            break
+        fi
+    done
+    set -e
+    return 0
+}
+
+# Hand one alert body to cos, retrying and then spooling rather than dropping it.
+#
+# On 2026-08-21 a 10h ingestion timeout went completely unreported: the single
+# attempt this used to make died on its own 120s watchdog. `cos doc create`
+# embeds the note for vector search, and the alert fires immediately after the
+# ingestion tree is SIGTERMed, while its abandoned chunker requests are still
+# draining off the GPU. The identical call takes ~1s on an idle box. So the
+# failure mode is contention at precisely the moment this path is used, and one
+# attempt on a fixed budget cannot survive it — an alerter that only reports
+# outages which left the machine healthy is not an alerter.
+deliver_cos_alert() {
+    local content=$1
+
+    if [[ -z "$COS_BIN" ]]; then
+        echo "cos CLI not found on PATH; spooling failure alert." >> "$LOG_FILE"
+        spool_alert "$content"
+        return 0
+    fi
+
+    local attempt rc=1 backoff
+    set +e
+    for (( attempt = 1; attempt <= ALERT_ATTEMPTS; attempt++ )); do
+        if (( attempt > 1 )); then
+            # Back off rather than retry straight away: what we are competing
+            # with is the dying run's own GPU work, and that needs wall-clock to
+            # clear, not another request on top of it.
+            backoff=${ALERT_BACKOFF_SECS[$(( attempt - 2 ))]:-300}
+            echo "Retrying cos alert in ${backoff}s (attempt $attempt/$ALERT_ATTEMPTS)..." >> "$LOG_FILE"
+            sleep "$backoff"
+        fi
+        echo "Posting failure alert to cos (attempt $attempt/$ALERT_ATTEMPTS)..." >> "$LOG_FILE"
+        _cos_post "$content"
+        rc=$?
+        (( rc == 0 )) && break
+        echo "cos alert attempt $attempt failed (exit $rc)." >> "$LOG_FILE"
+    done
+    set -e
+
+    if (( rc != 0 )); then
+        echo "Failure alert did not post after $ALERT_ATTEMPTS attempts; spooling for the next run." >> "$LOG_FILE"
+        spool_alert "$content"
+    fi
+    return 0
+}
+
 # Post a high-priority failure note to the Chief of Staff inbox via the cos CLI,
 # which owns the endpoint, schema and its own credentials (~/.config/cos/env) —
 # so this script never hand-rolls a payload or carries a second copy of the
 # token. cos runs on its own uv tool interpreter, independent of this repo's
 # venv, so a broken ingestion venv does not take the alert path down with it.
-#
-# Bounded by the watchdog like every other step: an alert that hangs would
-# recreate exactly the failure it exists to report.
 post_cos_alert() {
     local reason=$1 detail=$2
-
-    if [[ -z "$COS_BIN" ]]; then
-        echo "cos CLI not found on PATH; cannot post failure alert." >> "$LOG_FILE"
-        return 0
-    fi
 
     local content
     content="# ⚠️ Ingestion run failed — $(date '+%Y-%m-%d %H:%M %Z')
@@ -97,21 +211,7 @@ Log: \`services/ingestion-worker/logs/launchd.out.log\`
 
 _The schedule has been released — the next run will start on time._"
 
-    echo "Posting failure alert to cos..." >> "$LOG_FILE"
-    set +e
-    run_with_timeout "$ALERT_TIMEOUT_SECS" alert \
-        "$COS_BIN" doc create "$content" \
-            --type note \
-            --status inbox \
-            --priority high \
-            --tag updates \
-            --tag alert \
-            --project "$COS_DIGEST_PROJECT_ID"
-    local alert_rc=$?
-    set -e
-    if [[ $alert_rc -ne 0 ]]; then
-        echo "Failure alert did not post (cos exit $alert_rc)." >> "$LOG_FILE"
-    fi
+    deliver_cos_alert "$content"
 }
 
 # Run a command with a hard wall-clock timeout, appending its output to LOG_FILE.
@@ -169,6 +269,11 @@ run_with_timeout() {
     rm -f "$marker"
     return $rc
 }
+
+# --- Deferred alerts -------------------------------------------------------
+# Anything a previous run could not deliver goes out now, before ingestion
+# takes the GPU. This is what stops a failed alert from being a lost alert.
+drain_alert_spool
 
 PYTHON="$SCRIPT_DIR/.venv/bin/python"
 echo "Using: $PYTHON" >> "$LOG_FILE"
