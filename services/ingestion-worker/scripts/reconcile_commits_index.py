@@ -49,6 +49,8 @@ from couchbase.cluster import Cluster
 from couchbase.options import ClusterOptions
 
 from v4.incremental.repo_lifecycle import REPO_COMMITS_INDEX_DOC_ID
+from v4.incremental.updater import IncrementalUpdater
+from config import WorkerConfig
 
 
 def git(repo_path, *args):
@@ -63,11 +65,30 @@ def git(repo_path, *args):
     return out.stdout.strip() if out.returncode == 0 else None
 
 
-def corpus_is_ahead(repo_path, indexed, corpus):
+def only_unindexable_between(repo_path, older, newer, updater):
     """
-    Is `corpus` a commit the index should be moved forward to?
+    Do `older` and `newer` differ solely in files the pipeline never ingests?
 
-    Returns (True, reason) or (False, reason).
+    This is the normal, healthy state whenever a repo's only recent changes are
+    Terraform, Nim, images or lock files: process_repo advances the commits index
+    and correctly ingests nothing, so the index legitimately runs ahead of
+    repo_summary. Without this check that shape reads as corruption — it was
+    reported as an anomaly for agkit.io-erosion (3 .tf files) and
+    sam_platform_identity (2 .nim files), neither of which has anything wrong.
+    """
+    out = git(repo_path, "diff", "--name-only", older, newer)
+    if out is None:
+        return False
+    paths = [q for q in out.split("\n") if q]
+    code, docs = updater.filter_supported_files(paths, repo_path)
+    return not code and not docs
+
+
+def corpus_is_ahead(repo_path, indexed, corpus, updater):
+    """
+    Classify the index against the commit the corpus was actually built at.
+
+    Returns (should_bank, reason).
     """
     if not repo_path.exists():
         return False, "clone missing"
@@ -78,6 +99,14 @@ def corpus_is_ahead(repo_path, indexed, corpus):
 
     if indexed and git(repo_path, "merge-base", "--is-ancestor", indexed, corpus) is not None:
         return True, "indexed commit is an ancestor of the corpus commit"
+
+    # Index ahead of the corpus. Benign when everything between them is
+    # unindexable; genuinely stale otherwise, because the repo then skips every
+    # run and never catches up.
+    if indexed and git(repo_path, "merge-base", "--is-ancestor", corpus, indexed) is not None:
+        if only_unindexable_between(repo_path, corpus, indexed, updater):
+            return False, "index ahead, only unindexable files differ - expected"
+        return False, "STALE: index ahead with indexable files never ingested"
 
     return False, "corpus commit is neither origin/HEAD nor a descendant of the index"
 
@@ -100,6 +129,11 @@ def main():
     )
     cluster.wait_until_ready(timedelta(seconds=20))
     coll = cluster.bucket("code_kosha").default_collection()
+
+    # Only filter_supported_files is needed, so skip __init__ and the
+    # Couchbase/LLM/embedding setup it does.
+    updater = IncrementalUpdater.__new__(IncrementalUpdater)
+    updater.config = WorkerConfig()
 
     index_doc = coll.get(REPO_COMMITS_INDEX_DOC_ID).content_as[dict]
     indexed = index_doc.get("repos", {})
@@ -141,7 +175,7 @@ def main():
             continue
 
         repo_path = repos_root / repo_id.replace("/", "_")
-        ok, reason = corpus_is_ahead(repo_path, index_commit, corpus_commit)
+        ok, reason = corpus_is_ahead(repo_path, index_commit, corpus_commit, updater)
         if ok:
             updates[repo_id] = corpus_commit
             print(f"  BANK  {repo_id:40s} {str(index_commit)[:8]} -> {corpus_commit[:8]}  "
