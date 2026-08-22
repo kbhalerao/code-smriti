@@ -49,7 +49,13 @@ services:
       # Qwen3-Reranker-0.6B on llama-server (com.smriti.reranker LaunchAgent).
       # Ollama cannot serve this model — see app/rag/reranker.py.
       - RERANK_URL=${RERANK_URL:-http://host.docker.internal:11435/rerank}
-      - RAG_RERANK_ENABLED=${RAG_RERANK_ENABLED:-1}
+      # Defaults OFF on measurement: reranking the stored summaries costs
+      # 0.033 R@1 (0.950 -> 0.917, McNemar p=0.031), and reranking source is
+      # worse still (0.833). The full table and method are in
+      # services/ingestion-worker/scripts/benchmark_retrieval.py. Turning this
+      # on should be a deliberate act backed by a re-measure, so the default
+      # lives here in a tracked file rather than in an untracked .env.
+      - RAG_RERANK_ENABLED=${RAG_RERANK_ENABLED:-0}
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-general}
       - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-none}
       - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-Qwen/Qwen3-Embedding-0.6B}
