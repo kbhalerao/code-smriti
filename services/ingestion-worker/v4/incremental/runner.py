@@ -9,6 +9,7 @@ Wraps IncrementalUpdater with:
 
 import fcntl
 import os
+import signal
 import sys
 import uuid
 from datetime import datetime
@@ -18,7 +19,7 @@ from dataclasses import dataclass, field, asdict
 
 from loguru import logger
 
-from .updater import IncrementalUpdater
+from .updater import DEFAULT_REINGEST_THRESHOLD, IncrementalUpdater
 from .models import UpdateResult
 
 
@@ -93,6 +94,17 @@ class LockError(Exception):
     pass
 
 
+class TerminationRequested(BaseException):
+    """
+    Raised in place of a bare SIGTERM so the run can unwind cleanly.
+
+    Deliberately a BaseException, not an Exception: the pipeline catches broad
+    `except Exception` in several places, and a watchdog kill must not be
+    swallowed by one of them and mistaken for a recoverable per-file error.
+    """
+    pass
+
+
 class IngestionRunner:
     """
     Runs incremental ingestion with proper locking and logging.
@@ -107,7 +119,7 @@ class IngestionRunner:
 
     def __init__(
         self,
-        threshold: float = 0.05,
+        threshold: float = DEFAULT_REINGEST_THRESHOLD,
         dry_run: bool = False,
         enable_llm: bool = True,
         llm_config=None,
@@ -291,6 +303,22 @@ class IngestionRunner:
         cb_client = None
         repo_lifecycle = None
 
+        # run_incremental.sh's watchdog kills a wedged run with SIGTERM, whose
+        # default disposition terminates the interpreter outright — `finally`
+        # blocks do not run, so the run record is never written and the lock file
+        # is left behind. Converting it to an exception lets the unwinding below
+        # do its job. SIGINT already arrives as KeyboardInterrupt; this gives
+        # SIGTERM the same shape.
+        def _on_sigterm(signum, frame):
+            logger.warning("SIGTERM received — unwinding so the run record is saved")
+            raise TerminationRequested()
+
+        try:
+            previous_sigterm = signal.signal(signal.SIGTERM, _on_sigterm)
+        except ValueError:
+            # Not the main thread; nothing to install and nothing to restore.
+            previous_sigterm = None
+
         try:
             # Initialize updater
             updater = IncrementalUpdater(
@@ -341,6 +369,11 @@ class IngestionRunner:
             self._run_record.status = "interrupted"
             raise
 
+        except TerminationRequested:
+            logger.warning("Ingestion terminated by the watchdog")
+            self._run_record.status = "terminated"
+            raise
+
         except Exception as e:
             logger.exception(f"Ingestion failed: {e}")
             self._run_record.status = "failed"
@@ -358,6 +391,9 @@ class IngestionRunner:
 
             # Release lock
             self._release_lock()
+
+            if previous_sigterm is not None:
+                signal.signal(signal.SIGTERM, previous_sigterm)
 
             # Log summary
             logger.info(f"Run {run_id} {self._run_record.status} in {self._run_record.duration_seconds:.1f}s")

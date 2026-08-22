@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from llm_enricher import LLM_CONFIG
 from v4.incremental.runner import IngestionRunner, LockError, check_running
+from v4.incremental.updater import DEFAULT_REINGEST_THRESHOLD
 
 
 def main():
@@ -68,8 +69,11 @@ def main():
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.05,
-        help="Change threshold for full re-ingestion (default: 0.05 = 5%%)"
+        default=DEFAULT_REINGEST_THRESHOLD,
+        # argparse %-expands help strings, so a literal percent must be doubled.
+        help="Fraction of a repo's indexable files that must change before a "
+             "full rebuild replaces a surgical update "
+             f"(default: {DEFAULT_REINGEST_THRESHOLD} = {DEFAULT_REINGEST_THRESHOLD * 100:.0f}%%)"
     )
     parser.add_argument(
         "--no-llm",

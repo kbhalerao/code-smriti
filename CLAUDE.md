@@ -480,6 +480,48 @@ drop that and the alert silently no-ops. KPI regeneration and the digest are
 both skipped when ingestion fails, so a stale dashboard or a digest of
 yesterday's run is never passed off as fresh.
 
+**The alert is retried and spooled, because one attempt is not enough.** `cos
+doc create` embeds the note for vector search, and the alert fires immediately
+after the ingestion tree is SIGTERMed, while its abandoned chunker requests are
+still draining off the GPU. On 2026-08-21 that cost a 10h ingestion timeout its
+notification entirely: the alert blew its own 120s watchdog (exit 124) and the
+outage existed only in `launchd.out.log`. The identical call takes ~1s on an idle
+box, so the failure mode is contention at exactly the moment the alert path is
+used. `deliver_cos_alert` now makes `ALERT_ATTEMPTS` tries (default 3) spaced by
+`ALERT_BACKOFF_SECS` (default `"60 300"`, space-separated in `.env`), each still
+bounded by `ALERT_TIMEOUT_SECS`; if all fail it writes the note to
+`logs/alert-spool/`. Every run calls `drain_alert_spool` **before** ingestion
+starts — the quietest the box gets — so an alert that could not be sent is sent
+late rather than lost. Draining stops at the first failure instead of burning a
+watchdog budget per file, and the spool is capped at `ALERT_SPOOL_MAX` (20,
+oldest dropped). If an alert seems to be missing, look in `logs/alert-spool/`.
+
+**A killed run banks the repos it finished.** It did not used to. The commits
+index (`repo_commits_index`) is what decides whether a repo has changed, and
+`IngestionRunner._save_run_record` writes it from a results list that only exists
+once the whole repo loop returns — so a watchdog kill discarded every completed
+repo, and the watchdog is how a wedged run is *supposed* to end. Compounding it,
+Python's default SIGTERM disposition terminates without running `finally`, so the
+run record was not written either. On 2026-08-21 that cost six fully ingested
+repos (their documents were in the corpus, the index still pointed at the previous
+day); Aug 20 alone lost three more runs the same way, re-ingesting `chief-of-staff`
+four times in two days. Left alone it is a livelock: once the backlog exceeds
+`INGEST_TIMEOUT_SECS` the run restarts from zero every night and never drains.
+
+Two changes: `updater._checkpoint_commit` writes each repo's commit to the index
+as that repo completes (best-effort — a failure there costs a re-ingest, not the
+loop), and `runner` converts SIGTERM into `TerminationRequested`, a **BaseException**
+so the pipeline's broad `except Exception` handlers cannot swallow a watchdog kill
+and mistake it for a per-file error.
+
+`scripts/reconcile_commits_index.py` repairs an index that has already drifted,
+moving entries forward from each repo's `repo_summary`. Note the two records read
+different refs — the index stores `origin/HEAD`, `repo_summary.commit_hash` stores
+the worktree's `git rev-parse HEAD` — so they diverge whenever a clone is not
+anchored to origin/HEAD. The script only moves an entry forward, only on proof
+(ancestry, or the corpus commit being current `origin/HEAD`), and only for repos
+that actually have `file_index` documents; use `--only` rather than a blanket run.
+
 Known precedent: on 2026-07-24 the ingestion Python wedged during interpreter
 startup (blocked in `open()` inside `_PyConfig_InitPathConfig`), which cost four
 days of runs before it was noticed. The venv and TCC permissions were fine — the
@@ -490,6 +532,53 @@ To reload an agent after editing its plist:
 launchctl unload ~/Library/LaunchAgents/com.codesmriti.incremental.plist
 launchctl load ~/Library/LaunchAgents/com.codesmriti.incremental.plist
 ```
+
+## Incremental vs Full Re-ingestion
+
+The goal is narrow: the corpus should match the repo at `origin/HEAD`, with no
+work beyond what that requires. `process_repo` step 7 decides, and until
+2026-08-22 it decided badly in three separate ways.
+
+**The change ratio compared two different populations.** The numerator,
+`changes.total_changed`, counts every path `git diff --name-status` reports —
+images, lock files, `.po` catalogues, CSV fixtures. The denominator counts
+`file_index` documents, which exist only for files the pipeline ingests.
+affiliate-sites logged `1064 files changed (765.5%)` against a corpus of 488.
+Both sides are now filtered through `filter_supported_files`, which step 8
+needed anyway and used to recompute — so the fix costs nothing.
+
+**A repo where nothing indexable changed is now a skip.** It advances the stored
+commit and does no work. Previously 40 changed PNGs against a 300-file corpus
+read as 13.3% and rebuilt the entire repo.
+
+**An absent corpus is an explicit branch**, not a `or 1` divide-by-zero guard.
+That guard reached the right answer by accident and logged nonsense doing it
+(`3 files changed (150.0%)`).
+
+`DEFAULT_REINGEST_THRESHOLD` is **0.5**, raised from 0.05. The threshold is not a
+cost trade-off and treating it as one is what kept it low: a full re-ingest
+processes every file in the repo, an incremental only the changed ones, and both
+regenerate module and repo summaries afterwards — so full is a strict superset of
+incremental's work below 100%. There is no crossover to tune toward, only the
+point where a bulk delete-and-rebuild earns its cost in drift cleared. At 5% that
+point was set absurdly early: 41% of change-bearing repos were rebuilt whole, 58%
+of those for a change under 20%. Of 308 historical rebuilds, 207 (67%) become
+incrementals at 0.5, before the numerator fix moves more.
+
+**A rebuild is also an availability hole, which is the part that is easy to
+miss.** `ingest_repository` deletes the repo's documents before it writes new
+ones, so for the hours it runs the repo is not in the corpus at all —
+farmworthdb spent ~3 hours rebuilding 622 files to absorb 39 changed ones, and
+was absent from search throughout. A run killed inside that window loses the repo
+outright, which is exactly what happened to wanderers-return on 2026-08-21.
+Raising the threshold reduces how often that window is entered; it does not close
+it. Closing it means writing the new generation and swapping, and is still open.
+
+Drift is what full re-ingestion legitimately clears, and it accumulates with the
+*number* of incremental updates, not the size of any one of them — so a churn
+ratio is the wrong axis for it. There is no periodic rebuild yet;
+`scripts/reconcile_symbol_documents.py` and `newest_per_key` in
+`_regenerate_summaries` are what currently hold the line.
 
 ## Ingestion LLM Serving
 

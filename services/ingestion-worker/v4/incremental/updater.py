@@ -15,6 +15,24 @@ from .models import (
     STATUS_FULL_REINGEST, STATUS_EMPTY, STATUS_ERROR, STATUS_DELETED
 )
 from .git_utils import GitOperations
+
+# Fraction of a repo's *indexable* files that must change before a surgical
+# update is abandoned for a full rebuild.
+#
+# This is not a cost trade-off, and treating it as one is what kept it at 5%. A
+# full re-ingest processes every file in the repo; an incremental processes only
+# the ones that changed, and both regenerate the module and repo summaries
+# afterwards. Full is therefore a strict superset of incremental's work at any
+# ratio below 100% — there is no crossover to tune toward, only a point at which
+# a bulk delete-and-rebuild is worth its own cost for the drift it clears.
+#
+# At 5% that point was set absurdly early: 41% of all change-bearing repos were
+# rebuilt whole, 58% of them for a change under 20%. farmworthdb spent ~3 hours
+# rebuilding 622 files to absorb 39 changed ones. And because a rebuild deletes
+# the repo's documents before it writes new ones, each of those hours is time the
+# repo does not exist in the corpus — the same window that lost wanderers-return
+# entirely when a run was killed inside it.
+DEFAULT_REINGEST_THRESHOLD = 0.5
 from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
 from ..doc_versions import file_key, newest_per_key
@@ -35,7 +53,7 @@ class IncrementalUpdater:
 
     def __init__(
         self,
-        threshold: float = 0.05,
+        threshold: float = DEFAULT_REINGEST_THRESHOLD,
         dry_run: bool = False,
         enable_llm: bool = True,
         llm_config=None
@@ -195,6 +213,15 @@ class IncrementalUpdater:
         #    like with like. See GitOperations.sync_to_default_branch.
         local_head = self.git.sync_to_default_branch(repo_path)
         if local_head is None:
+            # A remote nobody has pushed to yet is not a broken sync. The
+            # STATUS_EMPTY branch below is unreachable for these repos, because
+            # origin/<branch> cannot resolve without a branch to resolve to, so
+            # the distinction has to be made here or six never-populated repos
+            # report as errors on every run.
+            if self.git.remote_has_branches(repo_path) is False:
+                return UpdateResult(
+                    repo_id=repo_id, status=STATUS_EMPTY, reason='no_origin_head'
+                )
             return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git sync failed')
 
         # 3. Get commits
@@ -253,12 +280,58 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 7. Check threshold
-        total_files = self.repo_lifecycle.get_repo_file_count(repo_id) or 1
-        change_ratio = changes.total_changed / total_files
+        # 7. Decide between a surgical update and a rebuild.
+        #
+        # The comparison has to be between like and like, and for a long time it
+        # was not. `changes.total_changed` counts every path git reports —
+        # images, lock files, .po catalogues, CSV fixtures — while the denominator
+        # counts `file_index` documents, which exist only for files the pipeline
+        # actually ingests. affiliate-sites logged "1064 files changed (765.5%)"
+        # against a corpus of 488: a ratio over a population the corpus never
+        # contained. Filtering first is also free, because step 8 needs these
+        # exact lists anyway and used to recompute them.
+        code_to_process, docs_to_process = self.filter_supported_files(changes.files_to_process, repo_path)
+        code_deleted, docs_deleted = self.filter_supported_files(changes.deleted, repo_path)
+        indexable_changed = (
+            len(code_to_process) + len(docs_to_process) + len(code_deleted) + len(docs_deleted)
+        )
 
-        if change_ratio > self.threshold:
-            logger.info(f"  {changes.total_changed} files changed ({change_ratio:.1%}) > {self.threshold:.0%} threshold - full re-ingestion")
+        # Nothing the corpus holds has moved. The repo is at a new commit, so the
+        # pointer has to advance or this is re-evaluated on every run, but there
+        # is no work to do: the embeddings already match the repo state.
+        if indexable_changed == 0:
+            logger.info(
+                f"  Skipping - {changes.total_changed} changed file(s), none indexable "
+                f"(commit: {origin_head[:8]})"
+            )
+            return UpdateResult(
+                repo_id=repo_id,
+                status=STATUS_SKIPPED,
+                reason='no_indexable_changes',
+                commit=origin_head,
+                duration_seconds=(datetime.now() - start_time).total_seconds()
+            )
+
+        corpus_files = self.repo_lifecycle.get_repo_file_count(repo_id)
+
+        # An absent corpus is a rebuild, not a ratio. This used to fall out of a
+        # `or 1` divide-by-zero guard, which reached the right answer by accident
+        # and made every such repo log an absurd percentage (3 files changed,
+        # "150.0%"). Say it directly.
+        if corpus_files == 0:
+            logger.info(f"  No documents in corpus - full ingestion ({indexable_changed} indexable changes)")
+            rebuild_reason = 'empty_corpus'
+        else:
+            change_ratio = indexable_changed / corpus_files
+            if change_ratio > self.threshold:
+                logger.info(f"  {indexable_changed} indexable of {changes.total_changed} changed files "
+                            f"({change_ratio:.1%} of {corpus_files}) > {self.threshold:.0%} threshold "
+                            f"- full re-ingestion")
+                rebuild_reason = f'threshold_exceeded ({change_ratio:.1%})'
+            else:
+                rebuild_reason = None
+
+        if rebuild_reason:
             if not self.dry_run:
                 owns_loop = loop is None
                 if owns_loop:
@@ -274,18 +347,18 @@ class IncrementalUpdater:
             return UpdateResult(
                 repo_id=repo_id,
                 status=STATUS_FULL_REINGEST,
-                reason=f'threshold_exceeded ({change_ratio:.1%})',
+                reason=rebuild_reason,
                 commit=origin_head,
                 files_processed=changes.total_changed,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 8. Surgical incremental update
-        logger.info(f"  Incremental: +{len(changes.added)} ~{len(changes.modified)} -{len(changes.deleted)}")
-
-        # Filter to supported files
-        code_to_process, docs_to_process = self.filter_supported_files(changes.files_to_process, repo_path)
-        code_deleted, docs_deleted = self.filter_supported_files(changes.deleted, repo_path)
+        # 8. Surgical incremental update. The filtered lists come from step 7,
+        # which needed them to make the decision in the first place.
+        logger.info(
+            f"  Incremental: +{len(changes.added)} ~{len(changes.modified)} -{len(changes.deleted)} "
+            f"({indexable_changed} indexable of {changes.total_changed})"
+        )
 
         files_deleted = 0
         files_processed = 0
@@ -750,6 +823,47 @@ class IncrementalUpdater:
             if owns_loop:
                 loop.close()
 
+    # Statuses that mean "this repo's corpus now reflects `result.commit`".
+    # An error or an empty repo has nothing to record.
+    _CHECKPOINTABLE = (STATUS_UPDATED, STATUS_FULL_REINGEST)
+
+    # Skips are usually a no-op for the index — 'no_changes' means the stored
+    # commit is already the right one. These two are not: the repo moved to a
+    # new commit and we decided there was nothing to ingest, so the pointer still
+    # has to advance or the same decision is re-made, and re-logged, every run.
+    _CHECKPOINTABLE_SKIPS = ('no_file_changes', 'no_indexable_changes')
+
+    def _checkpoint_commit(self, result: UpdateResult) -> None:
+        """
+        Record one repo's new commit as soon as that repo finishes.
+
+        The run-level write in IngestionRunner._save_run_record is not enough on
+        its own. It runs off `results`, which only exists once this whole loop
+        has returned, so a run killed mid-loop banks nothing — and the watchdog
+        kills runs by design. On 2026-08-21 a 10h timeout discarded six fully
+        ingested repos that way: their documents were in the corpus, their
+        repo_summary docs carried the right commit, and the index still pointed
+        at the previous day. The next run would have redone all six, timed out in
+        the same place, and banked nothing again — a backlog that can never
+        drain. Checkpointing here is what makes the run resumable.
+
+        Deliberately best-effort: a repo that is ingested but not checkpointed
+        is merely re-done next time, whereas an exception raised here would lose
+        the whole remaining loop.
+        """
+        if self.dry_run or not result.commit:
+            return
+        banks = (
+            result.status in self._CHECKPOINTABLE
+            or (result.status == STATUS_SKIPPED and result.reason in self._CHECKPOINTABLE_SKIPS)
+        )
+        if not banks:
+            return
+        try:
+            self.repo_lifecycle.update_commits_index({result.repo_id: result.commit})
+        except Exception as e:
+            logger.warning(f"Could not checkpoint {result.repo_id}@{result.commit[:8]}: {e}")
+
     def run(self, repo_filter: Optional[str] = None) -> List[UpdateResult]:
         """Run incremental update for all repos."""
         logger.info("=" * 70)
@@ -825,6 +939,7 @@ class IncrementalUpdater:
                 result = self.process_repo(repo_id, repo_path)
                 results.append(result)
                 stats[result.status] = stats.get(result.status, 0) + 1
+                self._checkpoint_commit(result)
             except Exception as e:
                 logger.error(f"Failed to process {repo_id}: {e}")
                 results.append(UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error=str(e)))
