@@ -62,6 +62,54 @@ class GitOperations:
         )
 
     @staticmethod
+    def _ensure_fetch_refspec(repo_path: Path) -> None:
+        """Guarantee origin carries a fetch refspec.
+
+        `git clone` of an *empty* repository writes a [remote "origin"] stanza
+        holding a url and no `fetch` line at all — with no branches advertised
+        there is nothing for a single-branch refspec to name. Fetches in such a
+        clone then download objects and write FETCH_HEAD without creating any
+        remote-tracking ref, so origin/<branch> never resolves however many
+        times they run, and the repo stays unindexable even after the remote
+        gains commits.
+
+        Found 2026-08-22 in four clones. Five of the six repos failing to sync
+        were simply still empty upstream, but kbhalerao/agkit.io-romex had since
+        received 71 files and was re-downloading them into an unreferenced
+        object store on every run while holding zero documents in the corpus.
+        """
+        existing = GitOperations._run(
+            repo_path, ['git', 'config', '--get', 'remote.origin.fetch']
+        )
+        if existing.returncode == 0 and existing.stdout.strip():
+            return
+
+        result = GitOperations._run(
+            repo_path,
+            ['git', 'config', 'remote.origin.fetch',
+             '+refs/heads/*:refs/remotes/origin/*']
+        )
+        if result.returncode == 0:
+            logger.warning(
+                f"  Repaired missing fetch refspec on {repo_path.name} "
+                f"(cloned while the remote was empty)"
+            )
+
+    @staticmethod
+    def remote_has_branches(repo_path: Path) -> Optional[bool]:
+        """Whether origin advertises any branch. None if origin is unreachable.
+
+        A local ref lookup cannot tell "nothing has been pushed yet" apart from
+        "the sync is broken", and the two deserve different log levels.
+        """
+        result = GitOperations._run(
+            repo_path, ['git', 'ls-remote', '--heads', 'origin'], timeout=60
+        )
+        if result.returncode != 0:
+            return None
+        return bool(result.stdout.strip())
+
+    @staticmethod
     def fetch(repo_path: Path) -> bool:
         """Fetch latest from origin, and re-point origin/HEAD at the remote's
         current default branch.
@@ -73,6 +121,8 @@ class GitOperations:
         one ls-remote per repo on a call that already talks to the network.
         """
         try:
+            GitOperations._ensure_fetch_refspec(repo_path)
+
             result = GitOperations._run(repo_path, ['git', 'fetch', 'origin'])
             if result.returncode != 0:
                 logger.warning(f"Git fetch failed: {result.stderr.strip()}")
@@ -122,12 +172,24 @@ class GitOperations:
         try:
             # Single-branch and shallow clones carry a narrow refspec, so the
             # default branch may not be present locally at all once origin/HEAD
-            # moves outside it. Fetch it by name before reaching for it.
+            # moves outside it. Fetch it by name before reaching for it, naming
+            # the destination explicitly: `git fetch origin <branch>` relies on
+            # remote.origin.fetch to decide where the ref lands, and a clone
+            # taken while the remote was empty has no such setting.
             if GitOperations.get_head_commit(repo_path, remote_ref) is None:
-                GitOperations._run(repo_path, ['git', 'fetch', 'origin', branch], timeout=120)
+                GitOperations._ensure_fetch_refspec(repo_path)
+                GitOperations._run(
+                    repo_path,
+                    ['git', 'fetch', 'origin',
+                     f'+refs/heads/{branch}:refs/remotes/origin/{branch}'],
+                    timeout=120
+                )
 
             if GitOperations.get_head_commit(repo_path, remote_ref) is None:
-                logger.error(f"Cannot sync {repo_path.name}: {remote_ref} does not resolve")
+                if GitOperations.remote_has_branches(repo_path) is False:
+                    logger.info(f"  Skipping {repo_path.name}: remote has no branches yet")
+                else:
+                    logger.error(f"Cannot sync {repo_path.name}: {remote_ref} does not resolve")
                 return None
 
             before_branch = GitOperations._run(
@@ -316,6 +378,11 @@ class GitOperations:
             if result.returncode != 0:
                 logger.error(f"Clone failed for {repo_id}: {result.stderr}")
                 return False
+
+            # An empty remote yields a clone with no fetch refspec at all;
+            # write one now rather than leaving the repo unfetchable until some
+            # later run notices. See _ensure_fetch_refspec.
+            GitOperations._ensure_fetch_refspec(target_path)
 
             logger.info(f"Cloned {repo_id} to {target_path}")
             return True
