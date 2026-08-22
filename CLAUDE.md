@@ -252,9 +252,11 @@ The likely cause is that the bi-encoder baseline is already at R@1 0.950 and the
 reranker reads `content`, which holds the **summary** — the same text the vector
 was built from, since the pipeline embeds summary+code but persists only the
 summary. It is stronger scoring of identical evidence, with far more ways to
-break a correct top hit than to fix a wrong one. Reranking source code, which
-the bi-encoder genuinely has not seen at query time, is the untested variant and
-needs the `-ub` fix first.
+break a correct top hit than to fix a wrong one. Reranking source code — the obvious objection, since
+the bi-encoder never sees it at query time — was tested once `-ub` was raised
+and is **worse, not better**: 0.863 R@1 on summary+code and 0.833 on code alone,
+against 0.917 for summaries. The damage scales with how much code the
+cross-encoder reads, so no variant of this remains worth trying.
 
 Re-measure before trusting any timing here: the numbers above were taken while
 ingestion was running, so quality figures are sound (contention does not move

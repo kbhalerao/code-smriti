@@ -59,6 +59,16 @@ qwen3-reranker-0.6b on :11435, against the configuration `search_code` ships
     + rerank K=20, query instruction   0.947    0.910
     + rerank K=50                      0.953    0.920
     + rerank K=20, keyword queries     0.941    0.907
+    + rerank on summary+code           0.919    0.863
+    + rerank on code alone             0.892    0.833
+
+The last two answer the obvious objection — that the reranker only failed
+because it reread the summary the vector was built from, and would do better on
+source the bi-encoder never sees at query time. It does the opposite. The damage
+scales monotonically with how much code enters the scored text (-0.033 summary,
+-0.087 summary+code, -0.117 code), so a cross-encoder judging a
+natural-language query against raw source is worse at it, not better. There is
+no remaining variant worth trying.
 
 Perfect reordering of the same pool scores 1.000, so the headroom existed and
 the reranker spent it. It is a real regression, but **only the paired test shows
@@ -72,8 +82,8 @@ That is why `rerank` persists per-query ranks: the aggregate deltas here are
 The likely cause is visible in `--rerank-doc`: the bi-encoder is already at
 R@1 0.950, and `content` holds the summary the vector was built from, so the
 cross-encoder rescores identical evidence with more ways to break a correct top
-hit than to fix a wrong one. `--rerank-doc code` is the untested variant and
-needs llama-server restarted with `-ub 2048` first (see CLAUDE.md).
+hit than to fix a wrong one. `--rerank-doc code` needs llama-server running with
+`-ub 2048` (set on com.smriti.reranker 2026-08-21) or long documents 500.
 
 Usage:
     ./.venv/bin/python scripts/benchmark_retrieval.py sample --haystack 5000 --queries 300
