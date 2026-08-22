@@ -26,8 +26,14 @@ ENV/
 env/
 
 # Environment variables
+# `.env` alone is an exact match, so a `.env.bak-20260821` sitting next to it is
+# NOT ignored and can be staged — with a live token in it, into a repo that was
+# scrubbed for public release. Ignore every variant, then re-admit the tracked
+# examples explicitly.
 .env
-.env.local
+.env.*
+!.env.example
+!.env.template
 
 # MCP configuration (contains credentials)
 .mcp.json

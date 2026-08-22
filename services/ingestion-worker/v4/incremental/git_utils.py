@@ -2,6 +2,7 @@
 Git operations for incremental updates.
 """
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,40 @@ from typing import Optional
 from loguru import logger
 
 from .models import ChangeSet
+
+
+# Credentials reach git through the environment, never through the URL.
+#
+# `clone` used to interpolate the token into the clone URL. git persists that
+# into .git/config, so one secret ended up copied into every repository on disk
+# (296 of them, found 2026-08-21) and every later `fetch` silently depended on
+# it being there — which is why rotating the token alone fixed nothing: the next
+# clone wrote the new one straight back out.
+#
+# A credential helper supplied via GIT_CONFIG_* keeps the token out of the
+# config file and out of argv; only this string is visible in `ps`, and it names
+# the variable rather than holding the value. Repositories cloned before this
+# change still carry a token in their remote URL and keep working untouched —
+# git prefers URL credentials when they are present — so this can land without
+# rewriting them.
+_CREDENTIAL_HELPER = '!f(){ echo username=x-access-token; echo "password=$GITHUB_TOKEN"; };f'
+
+
+def _git_env(github_token: Optional[str] = None) -> dict:
+    """Environment for a git subprocess, with credentials bound to a helper.
+
+    Falls back to an ambient GITHUB_TOKEN so fetches work on the scheduled path,
+    where run_incremental.sh has already sourced .env, as well as on manual runs
+    where the caller passes the token from config.
+    """
+    env = os.environ.copy()
+    token = github_token or env.get("GITHUB_TOKEN", "")
+    if token:
+        env["GITHUB_TOKEN"] = token
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "credential.https://github.com.helper"
+        env["GIT_CONFIG_VALUE_0"] = _CREDENTIAL_HELPER
+    return env
 
 
 class GitOperations:
@@ -22,7 +57,8 @@ class GitOperations:
             cwd=repo_path,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            env=_git_env()
         )
 
     @staticmethod
@@ -264,18 +300,17 @@ class GitOperations:
             return True
 
         try:
-            # Construct clone URL
-            if github_token:
-                clone_url = f"https://{github_token}@github.com/{repo_id}.git"
-            else:
-                clone_url = f"https://github.com/{repo_id}.git"
+            # Plain URL: the token is supplied by the credential helper in
+            # _git_env, so it is never written into the new repo's config.
+            clone_url = f"https://github.com/{repo_id}.git"
 
             logger.info(f"Cloning {repo_id}...")
             result = subprocess.run(
                 ['git', 'clone', '--depth', '1', clone_url, str(target_path)],
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 min timeout
+                timeout=300,  # 5 min timeout
+                env=_git_env(github_token)
             )
 
             if result.returncode != 0:
