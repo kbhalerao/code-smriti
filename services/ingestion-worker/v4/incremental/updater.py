@@ -3,6 +3,8 @@ Incremental Updater - Main orchestrator for git-based incremental updates.
 """
 
 import asyncio
+import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -113,6 +115,10 @@ class IncrementalUpdater:
         # here for a human; nothing drains it automatically.
         self.dlq = DeadLetterQueue(self.cb_client)
         self.queue = IngestionQueue(self.cb_client)
+
+        # Parallel planners. I/O-bound, so this is about GitHub round trips, not
+        # cores; kept modest so a scan does not look like an abusive client.
+        self.scan_concurrency = int(os.getenv("SCAN_CONCURRENCY", "8"))
 
         # Set by IngestionRunner so a DLQ entry names the run that produced it.
         self.run_id = ""
@@ -255,7 +261,9 @@ class IncrementalUpdater:
             return
         self.dlq.record(repo_id, failures, run_id=self.run_id, commit=commit)
 
-    def plan_repo(self, repo_id: str, repo_path: Path) -> RepoPlan:
+    def plan_repo(
+        self, repo_id: str, repo_path: Path, stored_commit: Optional[str] = None
+    ) -> RepoPlan:
         """Decide what one repository needs, without doing any of it.
 
         This is the half that touches the network — fetch, sync, diff — and it is
@@ -299,7 +307,11 @@ class IncrementalUpdater:
 
         # 3. Get commits
         origin_head = self.git.get_origin_head(repo_path)
-        stored_commit = self.repo_lifecycle.get_stored_commit(repo_id)
+        # `repo_commits_index` is a single document, and get_stored_commit reads
+        # it afresh every call — 288 KV gets of the same doc across a scan. The
+        # caller may hand it in instead, having read it once.
+        if stored_commit is None:
+            stored_commit = self.repo_lifecycle.get_stored_commit(repo_id)
 
         if not origin_head:
             logger.info(f"  Empty repo - no branches found")
@@ -1156,14 +1168,40 @@ class IncrementalUpdater:
                 self.queue.drop(repo_id)
                 stats["deleted"] += 1
 
-        for repo_id in sorted(to_process):
+        # Planning is network-bound and independent per repo — a `git fetch` and a
+        # diff against a different .git each time — so it is the one part of
+        # ingestion that genuinely parallelises. Serial it was 5m17s for 288
+        # repos, essentially all of it waiting on GitHub.
+        #
+        # Threads, not processes: the work is subprocess git calls and socket
+        # reads, both of which drop the GIL.
+        commits_index = self.repo_lifecycle.get_commits_index()
+        plans: List[RepoPlan] = []
+
+        def _plan(repo_id: str) -> Optional[RepoPlan]:
             try:
-                plan = self.plan_repo(repo_id, self.repo_lifecycle.repo_id_to_path(repo_id))
+                return self.plan_repo(
+                    repo_id,
+                    self.repo_lifecycle.repo_id_to_path(repo_id),
+                    stored_commit=commits_index.get(repo_id),
+                )
             except Exception as e:
                 logger.error(f"Planning {repo_id} failed: {e}")
-                stats["error"] += 1
-                continue
+                return None
 
+        with ThreadPoolExecutor(max_workers=self.scan_concurrency) as pool:
+            for plan in pool.map(_plan, sorted(to_process)):
+                if plan is None:
+                    stats["error"] += 1
+                else:
+                    plans.append(plan)
+
+        # Every Couchbase write happens back on this thread, deliberately.
+        # `repo_commits_index` is ONE document, and `_checkpoint_commit` is a
+        # read-modify-write of it — 287 of those in parallel would lose updates
+        # to each other. Batched here, they are a single write.
+        advanced: Dict[str, str] = {}
+        for plan in plans:
             stats["planned"] += 1
             if plan.is_work:
                 if not self.dry_run and self.queue.enqueue(plan):
@@ -1171,7 +1209,7 @@ class IncrementalUpdater:
                 continue
 
             stats["no_work"] += 1
-            self.queue.drop(repo_id)
+            self.queue.drop(plan.repo_id)
 
             # A repo whose commit moved but whose corpus did not need to — a
             # changed .po file, a new PNG — still has to advance its stored
@@ -1179,11 +1217,12 @@ class IncrementalUpdater:
             # returned; here the plan never reaches the drain, so if the scan
             # did not checkpoint it the repo would be re-planned on every tick
             # for the rest of time.
-            if not self.dry_run and plan.target_commit and plan.status == STATUS_SKIPPED:
-                self._checkpoint_commit(UpdateResult(
-                    repo_id=repo_id, status=STATUS_SKIPPED,
-                    reason=plan.reason, commit=plan.target_commit,
-                ))
+            if plan.target_commit and plan.status == STATUS_SKIPPED:
+                advanced[plan.repo_id] = plan.target_commit
+
+        if advanced and not self.dry_run:
+            self.repo_lifecycle.update_commits_index(advanced)
+            logger.info(f"Advanced {len(advanced)} repo(s) with no indexable work")
 
         logger.info(
             f"Scan: {stats['planned']} planned, {stats['queued']} queued, "

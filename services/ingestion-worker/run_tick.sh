@@ -2,7 +2,7 @@
 # The ingestion tick: scan, drain, or both.
 #
 #   ./run_tick.sh drain     com.codesmriti.drain   every 5 minutes
-#   ./run_tick.sh scan      com.codesmriti.scan    every 30 minutes
+#   ./run_tick.sh scan      com.codesmriti.scan    every 15 minutes
 #   ./run_tick.sh           both, for a manual run
 #
 # Replaces the nightly batch as the thing that keeps the corpus current. Two
@@ -112,11 +112,15 @@ run_with_timeout() {
     return $rc
 }
 
-# Which half to run. The two are on different cadences because the scan is
-# measurably slow: 288 repos take ~5m17s to fetch and diff, so running it every
-# five minutes would mean ~3,300 git fetches an hour, back to back, forever. The
-# drain is the opposite — with an empty queue it is one indexed query — so it is
-# the one that wants to be frequent.
+# Which half to run. The two are on different cadences, but no longer because the
+# scan is slow — parallelising it took 288 repos from 5m17s to ~46s. What is left
+# is volume: a scan is 288 git fetches whatever its wall clock, so every five
+# minutes would be ~3,400 an hour aimed at GitHub. Fifteen minutes is ~1,150 and
+# still bounds push-to-indexed latency at a quarter hour, against the 24 hours the
+# nightly batch allowed.
+#
+# The drain is the opposite — one indexed query when the queue is empty, ~2s — so
+# it is the one that wants to be frequent.
 STAGE="${1:-both}"
 
 echo "=== $(date) tick ($STAGE) ===" >> "$LOG_FILE"
