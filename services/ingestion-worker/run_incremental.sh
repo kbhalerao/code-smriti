@@ -227,6 +227,15 @@ run_with_timeout() {
     shift 2
     local out="${RUN_OUTPUT_FILE:-$LOG_FILE}"
 
+    # A capture is a fresh capture. The run log is cumulative and must be
+    # appended to, but a caller reading back what a command printed wants only
+    # THIS invocation — appending silently accumulated every previous run's
+    # output, which made the dead-letter fingerprint change on every run and
+    # re-alert nightly even when nothing had.
+    if [[ -n "${RUN_OUTPUT_FILE:-}" ]]; then
+        : > "$out"
+    fi
+
     # The watchdog runs in a subshell and so cannot set a variable in this
     # scope; it reports "I fired" by writing to this file. Created up front via
     # mktemp (empty == did not fire) so the watchdog only ever writes to a file
@@ -374,7 +383,11 @@ if [[ $EXIT_CODE -eq 0 ]]; then
 
     if [[ $DLQ_RC -eq 1 ]]; then
         # Exit 1 means "entries exist" (see incremental_v4.py --dlq).
-        NEW_PRINT="$(shasum -a 256 < "$DLQ_OUT" | awk '{print $1}')"
+        # Fingerprint the ENTRY IDENTITY lines only ("  [kind] repo file"),
+        # sorted. Hashing the whole file would fold in timestamps and occurrence
+        # counts, which move on every run, so a permanently broken file would
+        # alert every night — the nagging this guard exists to prevent.
+        NEW_PRINT="$(grep '^  \[' "$DLQ_OUT" | sort | shasum -a 256 | awk '{print $1}')"
         OLD_PRINT="$(cat "$DLQ_FINGERPRINT" 2>/dev/null || true)"
         if [[ "$NEW_PRINT" != "$OLD_PRINT" ]]; then
             echo "Dead-letter queue changed; posting notice." >> "$LOG_FILE"

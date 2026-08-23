@@ -116,6 +116,13 @@ def main():
     # Dead-letter inspection mode. Read-only, takes no lock, and deliberately
     # exits non-zero when there is something to look at so a caller can gate on it.
     if args.dlq:
+        # Silence loguru first. This output is consumed by run_incremental.sh —
+        # both as the body of the cos notice and as the input to the
+        # change-fingerprint — and CouchbaseClient logs its connection banner to
+        # stderr on construction, which run_with_timeout merges into the capture.
+        from loguru import logger
+        logger.remove()
+
         from storage.couchbase_client import CouchbaseClient
         from v4.dlq import DeadLetterQueue
 
@@ -126,9 +133,14 @@ def main():
 
         print(f"{len(entries)} open dead-letter entry/entries:\n")
         for e in entries:
-            seen = f"x{e.get('count', 1)}" if e.get("count", 1) > 1 else ""
-            print(f"  [{e.get('kind')}] {e.get('repo_id')} {e.get('file_path')} {seen}")
-            print(f"      last seen {e.get('last_seen')} (run {e.get('run_id') or 'unknown'})")
+            # The "  [kind] repo file" line is the STABLE IDENTITY of an entry and
+            # is what the wrapper fingerprints to decide whether anything actually
+            # changed. Nothing that moves on its own — count, timestamps, run id —
+            # may appear on it, or a persistently broken file would re-alert every
+            # single night and the notice would stop being read.
+            print(f"  [{e.get('kind')}] {e.get('repo_id')} {e.get('file_path')}")
+            seen = f", seen {e.get('count')}x" if e.get("count", 1) > 1 else ""
+            print(f"      last {e.get('last_seen')} (run {e.get('run_id') or 'unknown'}{seen})")
             print(f"      {str(e.get('detail'))[:300]}")
         sys.exit(1)
 
