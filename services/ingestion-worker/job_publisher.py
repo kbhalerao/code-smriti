@@ -19,11 +19,20 @@ Three things keep it off the hot path:
 
 - **A throttle.** Progress updates collapse to one post per `min_interval`
   seconds per job. A 600-file repo would otherwise be 600 POSTs.
-- **A circuit breaker.** After `max_failures` consecutive failures the publisher
-  disables itself for the rest of the process and says so once. Without it, cos
-  being down would cost a connect timeout on every transition, all run.
-- **A short timeout.** Ingestion is GPU-bound and a few hundred milliseconds is
-  nothing; a hung POST is not.
+- **A circuit breaker, with a cooldown.** After `max_failures` consecutive
+  failures the publisher stops trying for `cooldown_secs`, then tries once more.
+  Without a breaker at all, cos being down would cost a connect timeout on every
+  transition, all run. But the first version latched the breaker OPEN for the
+  life of the process, which is too harsh for what actually happens: restarting
+  cos-api takes ~15 seconds and would blind the dashboard for the rest of a
+  multi-hour run. A transient outage should cost a gap, not the whole run.
+- **A bounded timeout.** Ingestion is GPU-bound and a second or two is nothing;
+  a hung POST is. Originally 5s, which was tuned against an idle box and proved
+  too tight against a working one: on 2026-08-23 three consecutive publishes
+  timed out 33 minutes into a run and tripped the breaker, and the box at that
+  moment was running the chunker flat out with a docker build on top. The
+  request itself is a KV upsert — when it takes seconds, the machine is busy,
+  not the query.
 """
 
 import time
@@ -48,9 +57,10 @@ class JobPublisher:
         api_url: Optional[str] = None,
         token: Optional[str] = None,
         run_id: str = "",
-        timeout: float = 5.0,
+        timeout: float = 15.0,
         min_interval: float = 3.0,
         max_failures: int = 3,
+        cooldown_secs: float = 120.0,
     ):
         self.api_url = (api_url if api_url is not None else config.cos_api_url).rstrip("/")
         self.token = token if token is not None else config.cos_token
@@ -58,9 +68,11 @@ class JobPublisher:
         self.timeout = timeout
         self.min_interval = min_interval
         self.max_failures = max_failures
+        self.cooldown_secs = cooldown_secs
 
         self._failures = 0
-        self._disabled = False
+        self._disabled = False          # permanent: no credentials configured
+        self._muted_until = 0.0         # temporary: cos is not answering
         self._last_post: Dict[str, float] = {}
         self._started_at: Dict[str, str] = {}
 
@@ -72,7 +84,8 @@ class JobPublisher:
 
     @property
     def enabled(self) -> bool:
-        return not self._disabled
+        """Whether a post would be attempted right now."""
+        return not self._disabled and time.monotonic() >= self._muted_until
 
     # --- lifecycle --------------------------------------------------------
 
@@ -165,6 +178,11 @@ class JobPublisher:
         if self._disabled or not jobs:
             return
 
+        # Muted after repeated failures. Expires on its own so a cos restart costs
+        # a gap in the dashboard rather than the rest of the run.
+        if time.monotonic() < self._muted_until:
+            return
+
         # Throttle per job, not globally: two repos should not silence each
         # other, and a lifecycle transition (force) is never throttled.
         #
@@ -196,15 +214,18 @@ class JobPublisher:
                 timeout=self.timeout,
             )
             resp.raise_for_status()
+            if self._failures:
+                logger.info("Job publishing recovered")
             self._failures = 0
         except Exception as e:
             self._failures += 1
             if self._failures >= self.max_failures:
-                self._disabled = True
+                self._muted_until = time.monotonic() + self.cooldown_secs
+                self._failures = 0
                 logger.warning(
-                    f"Job publishing disabled after {self._failures} consecutive "
-                    f"failures (last: {e}). Ingestion is unaffected; the dashboard "
-                    f"will be stale until the next run."
+                    f"Job publishing muted for {self.cooldown_secs:.0f}s after "
+                    f"{self.max_failures} consecutive failures (last: {e}). Ingestion "
+                    f"is unaffected; the dashboard will be stale until it recovers."
                 )
             else:
                 logger.debug(f"Job publish failed ({self._failures}/{self.max_failures}): {e}")

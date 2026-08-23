@@ -64,6 +64,39 @@ class TestNeverHarmsIngestion:
         assert len(post.calls) == 3, "should stop trying after the breaker trips"
         assert not pub.enabled
 
+    def test_the_breaker_recovers(self, monkeypatch):
+        """
+        The breaker must not latch open for the life of the process. Restarting
+        cos-api takes ~15s; if that blinded the dashboard for the rest of a
+        multi-hour run, a routine deploy would cost the whole run's reporting.
+        A transient outage should cost a gap, not everything after it.
+        """
+        pub, post = _publisher(monkeypatch, fail=True, max_failures=3, cooldown_secs=60)
+        for i in range(5):
+            pub.finish(f"repo/{i}")
+        assert len(post.calls) == 3 and not pub.enabled
+
+        # Cos comes back and the cooldown lapses.
+        post.fail = False
+        pub._muted_until = 0.0
+        assert pub.enabled
+        pub.finish("repo/after")
+        assert len(post.calls) == 4
+        assert post.calls[-1]["jobs"][0]["job_id"] == "repo/after"
+
+    def test_a_success_clears_the_failure_streak(self, monkeypatch):
+        """Two failures then a success must not leave the gate one away from tripping."""
+        pub, post = _publisher(monkeypatch, fail=True, max_failures=3)
+        pub.finish("a/1")
+        pub.finish("a/2")
+        post.fail = False
+        pub.finish("a/3")
+        post.fail = True
+        # A fresh streak, so this pair cannot reach the threshold.
+        pub.finish("a/4")
+        pub.finish("a/5")
+        assert pub.enabled, "the streak should have reset on the success"
+
     def test_missing_credentials_disable_it_quietly(self, monkeypatch):
         post = FakePost()
         monkeypatch.setattr(job_publisher.httpx, "post", post)
