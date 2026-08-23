@@ -1,0 +1,22 @@
+# Ingestion configuration — template.
+#
+# Copy to `ingestion_config.yaml`, which is gitignored because an exclusion list
+# names client repositories. Without the copy there are no exclusions at all, and
+# nothing says so: `load_exclusions` treats a missing file as an empty set and
+# logs at DEBUG. A fresh clone therefore ingests everything.
+#
+# Read by `RepoLifecycle.load_exclusions`. Only `exclude` is consumed.
+
+# Repositories the daily incremental run skips entirely, by `owner/name`.
+#
+# Exclusion FREEZES a repo; it does not remove it. `process_repo` returns
+# `excluded` before it fetches, so documents the repo already has stay in the
+# corpus at whatever commit they were last ingested at and drift from then on.
+# They are not orphan-deleted either: that path compares the corpus against the
+# canonical repo list, and excluding a repo does not take it off that list.
+#
+# Two different intentions, and this file only expresses one:
+#   - "stop spending ingestion time on this"  -> add it here
+#   - "get this out of search"                -> delete its documents as well
+exclude: []
+  # - owner/repo-name
