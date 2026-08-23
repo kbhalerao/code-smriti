@@ -219,9 +219,13 @@ _The schedule has been released — the next run will start on time._"
 # done with a watchdog subshell.
 #
 # Returns the command's exit code, or $TIMEOUT_RC if the watchdog had to kill it.
+# Set RUN_OUTPUT_FILE before a call to capture that command's output instead of
+# appending it to the run log. Used by the dead-letter check, which needs to read
+# what the command printed rather than just log it.
 run_with_timeout() {
     local limit=$1 label=$2
     shift 2
+    local out="${RUN_OUTPUT_FILE:-$LOG_FILE}"
 
     # The watchdog runs in a subshell and so cannot set a variable in this
     # scope; it reports "I fired" by writing to this file. Created up front via
@@ -236,7 +240,7 @@ run_with_timeout() {
     # just the direct child. Orphaned grandchildren would otherwise re-parent to
     # launchd and keep the job looking alive — the exact trap we're escaping.
     set -m
-    "$@" >> "$LOG_FILE" 2>&1 &
+    "$@" >> "$out" 2>&1 &
     local child=$!
     set +m
 
@@ -344,6 +348,59 @@ if [[ $EXIT_CODE -eq 0 ]]; then
     fi
 else
     echo "Skipping daily digest — ingestion did not succeed." >> "$LOG_FILE"
+fi
+
+# --- Dead-letter queue -----------------------------------------------------
+# Files that failed and did not recover from their in-task retry. These are bugs
+# in the pipeline, not contention, and nothing retries them automatically.
+#
+# ONE aggregated note, never one per file: `cos doc create` embeds every note for
+# vector search, and a hundred of them would be the same self-inflicted outage
+# that cost the 2026-08-21 timeout its alert. The detail lives in the queue; the
+# note just says to go and look.
+#
+# Only alerts when the set of entries CHANGES. A standing entry for a file that is
+# genuinely broken should be reported once, not every night until someone fixes
+# it — daily repetition is how an alert stops being read.
+if [[ $EXIT_CODE -eq 0 ]]; then
+    DLQ_OUT="$SCRIPT_DIR/logs/.dlq-latest.txt"
+    DLQ_FINGERPRINT="$SCRIPT_DIR/logs/.dlq-fingerprint"
+
+    set +e
+    RUN_OUTPUT_FILE="$DLQ_OUT" run_with_timeout 120 dlq \
+        "$PYTHON" -u "$SCRIPT_DIR/incremental_v4.py" --dlq
+    DLQ_RC=$?
+    set -e
+
+    if [[ $DLQ_RC -eq 1 ]]; then
+        # Exit 1 means "entries exist" (see incremental_v4.py --dlq).
+        NEW_PRINT="$(shasum -a 256 < "$DLQ_OUT" | awk '{print $1}')"
+        OLD_PRINT="$(cat "$DLQ_FINGERPRINT" 2>/dev/null || true)"
+        if [[ "$NEW_PRINT" != "$OLD_PRINT" ]]; then
+            echo "Dead-letter queue changed; posting notice." >> "$LOG_FILE"
+            deliver_cos_alert "# ⚠️ Ingestion dead-letter queue — $(date '+%Y-%m-%d %H:%M %Z')
+
+Files that failed and did **not** recover from their retry. Nothing retries these
+automatically — they need a human.
+
+\`\`\`
+$(head -c 3000 "$DLQ_OUT")
+\`\`\`
+
+Inspect: \`cd services/ingestion-worker && ./.venv/bin/python incremental_v4.py --dlq\`
+
+Host: $(hostname -s)"
+            printf '%s' "$NEW_PRINT" > "$DLQ_FINGERPRINT"
+        else
+            echo "Dead-letter queue unchanged since the last notice; not re-alerting." >> "$LOG_FILE"
+        fi
+        cat "$DLQ_OUT" >> "$LOG_FILE"
+    elif [[ $DLQ_RC -eq 0 ]]; then
+        # Empty queue: forget the last fingerprint so a recurrence alerts again.
+        rm -f "$DLQ_FINGERPRINT"
+    else
+        echo "Dead-letter check failed (exit $DLQ_RC); see $DLQ_OUT" >> "$LOG_FILE"
+    fi
 fi
 
 echo "=== $(date) Finished with exit code $EXIT_CODE ===" >> "$LOG_FILE"

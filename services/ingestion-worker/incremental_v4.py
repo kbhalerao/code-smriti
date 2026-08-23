@@ -86,6 +86,13 @@ def main():
         help="Check if an ingestion is currently running"
     )
     parser.add_argument(
+        "--dlq",
+        action="store_true",
+        help="List files that failed and were not recovered, then exit. Nothing "
+             "drains this queue automatically — an entry means the pipeline could "
+             "not fix it by retrying and a human needs to look."
+    )
+    parser.add_argument(
         "--trigger",
         choices=["manual", "scheduled", "webhook"],
         default="manual",
@@ -105,6 +112,25 @@ def main():
         else:
             print("No ingestion running")
             sys.exit(0)
+
+    # Dead-letter inspection mode. Read-only, takes no lock, and deliberately
+    # exits non-zero when there is something to look at so a caller can gate on it.
+    if args.dlq:
+        from storage.couchbase_client import CouchbaseClient
+        from v4.dlq import DeadLetterQueue
+
+        entries = DeadLetterQueue(CouchbaseClient()).open_entries(repo_id=args.repo)
+        if not entries:
+            print("Dead-letter queue is empty.")
+            sys.exit(0)
+
+        print(f"{len(entries)} open dead-letter entry/entries:\n")
+        for e in entries:
+            seen = f"x{e.get('count', 1)}" if e.get("count", 1) > 1 else ""
+            print(f"  [{e.get('kind')}] {e.get('repo_id')} {e.get('file_path')} {seen}")
+            print(f"      last seen {e.get('last_seen')} (run {e.get('run_id') or 'unknown'})")
+            print(f"      {str(e.get('detail'))[:300]}")
+        sys.exit(1)
 
     # LLM config is env-driven (LLM_BASE_URL / LLM_MODEL / LLM_PROVIDER)
     llm_config = LLM_CONFIG

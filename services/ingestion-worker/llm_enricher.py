@@ -21,6 +21,7 @@ import httpx
 from loguru import logger
 
 from config import WorkerConfig
+from llm_gate import gate_for
 
 config = WorkerConfig()
 
@@ -49,7 +50,7 @@ class LLMConfig:
     model: str
     base_url: str
     temperature: float = 0.3
-    max_tokens: int = 2000
+    max_tokens: int = config.llm_max_output_tokens
     # Per-request timeout. Must cover server-side queue time as well as
     # generation — see config.llm_timeout_seconds for why 60s was too tight.
     timeout_seconds: float = config.llm_timeout_seconds
@@ -118,6 +119,49 @@ class LLMEnricher:
 
         return self._client
 
+    def _empty_output_error(self, data: dict, prompt: str) -> ValueError:
+        """
+        Build the error for a /v1/responses reply that carried no usable text,
+        logging the raw response so the next occurrence is diagnosable.
+
+        This used to assert "likely truncated while thinking" for every empty
+        message. That was wrong often enough to be worth naming: reasoning is
+        disabled on this path (reasoning_effort defaults to "none", and ollama
+        honours it — the reply carries no `reasoning` item and
+        reasoning_tokens=0), so thinking is not where the budget goes. On
+        2026-08-22 seven of these fired in one run and six stopped between 83
+        and 335 tokens, nowhere near the 2000-token ceiling: not truncation at
+        all. Only the seventh hit the cap exactly.
+
+        So report what the response actually says and let the reader judge.
+        `status` and `incomplete_details` are the API's own account of why it
+        stopped, and hitting the ceiling is inferred from the token counts
+        rather than assumed.
+        """
+        usage = data.get("usage") or {}
+        out_tokens = usage.get("output_tokens")
+        reasoning_tokens = (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
+        truncated = out_tokens is not None and out_tokens >= self.config.max_tokens
+
+        # Bounded: launchd.out.log is already tens of MB and this fires per
+        # retry attempt. The interesting part of an empty reply is its shape,
+        # not its tail.
+        raw = json.dumps(data, default=str)
+        if len(raw) > 4000:
+            raw = raw[:4000] + f"... [truncated, {len(raw)} chars total]"
+        logger.error(
+            f"Empty /v1/responses reply from {self.config.model} "
+            f"(prompt {len(prompt)} chars): {raw}"
+        )
+
+        detail = "hit max_output_tokens" if truncated else "stopped short of max_output_tokens"
+        return ValueError(
+            f"LLM returned no usable output text "
+            f"(output_tokens={out_tokens}, max_output_tokens={self.config.max_tokens}, "
+            f"reasoning_tokens={reasoning_tokens}, status={data.get('status')!r}, "
+            f"incomplete_details={data.get('incomplete_details')!r}); {detail}"
+        )
+
     async def _call_responses(self, prompt: str) -> str:
         """Call the OpenAI-compatible /v1/responses endpoint."""
         payload = {
@@ -128,21 +172,26 @@ class LLMEnricher:
         }
         if self.config.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.config.reasoning_effort}
-        response = await self.client.post(
-            f"{self.config.base_url}/v1/responses",
-            json=payload,
-        )
+        # Admission control. See llm_gate: ollama hands out slots FIFO with no
+        # priority, so holding fewer of them is the only way to keep cos-web's
+        # chat (which shares this `general` runner) off the back of ingestion's
+        # queue. Inside the retry loop deliberately — each attempt is a request
+        # and must queue on its own merits.
+        async with gate_for(self.config.model, lambda: config.llm_enricher_max_inflight):
+            response = await self.client.post(
+                f"{self.config.base_url}/v1/responses",
+                json=payload,
+            )
         response.raise_for_status()
         data = response.json()
         # Extract text from the responses API format
         # Response structure: {"output": [{"type": "message", "content": [{"type": "output_text", "text": "..."}]}]}
         #
-        # An empty output_text is a failure, not a result. A thinking model that
-        # spends its whole max_output_tokens budget reasoning returns exactly
-        # this: status="completed", no incomplete_details, and a message block
-        # holding "". Returning that silently is how the daily digest posted
-        # empty content nine times between June and August 2026. Raising sends
-        # it through generate()'s retry loop like any other bad response.
+        # An empty output_text is a failure, not a result: a message block
+        # holding "" still arrives with status="completed" and no
+        # incomplete_details. Returning that silently is how the daily digest
+        # posted empty content nine times between June and August 2026. Raising
+        # sends it through generate()'s retry loop like any other bad response.
         output = data.get("output", [])
         for item in output:
             if item.get("type") == "message":
@@ -151,13 +200,7 @@ class LLMEnricher:
                     if block.get("type") == "output_text":
                         text = block.get("text") or ""
                         if not text.strip():
-                            usage = data.get("usage", {})
-                            raise ValueError(
-                                f"LLM returned an empty message "
-                                f"(output_tokens={usage.get('output_tokens')}, "
-                                f"max_output_tokens={self.config.max_tokens}); "
-                                f"likely truncated while thinking"
-                            )
+                            raise self._empty_output_error(data, prompt)
                         return text
         # Fallback: try to get text directly if format differs
         if "text" in data:
@@ -179,10 +222,16 @@ class LLMEnricher:
         }
         if self.config.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.config.reasoning_effort}
-        response = await self.client.post(
-            f"{self.config.base_url}/v1/responses",
-            json=payload,
-        )
+        # Admission control. See llm_gate: ollama hands out slots FIFO with no
+        # priority, so holding fewer of them is the only way to keep cos-web's
+        # chat (which shares this `general` runner) off the back of ingestion's
+        # queue. Inside the retry loop deliberately — each attempt is a request
+        # and must queue on its own merits.
+        async with gate_for(self.config.model, lambda: config.llm_enricher_max_inflight):
+            response = await self.client.post(
+                f"{self.config.base_url}/v1/responses",
+                json=payload,
+            )
         response.raise_for_status()
         data = response.json()
 
@@ -206,12 +255,7 @@ class LLMEnricher:
         # Same contract as _call_responses: a missing *or* empty message is a
         # failed call, so it retries rather than yielding an empty BDR.
         if output_text is None or not output_text.strip():
-            usage = data.get("usage", {})
-            raise ValueError(
-                f"Could not extract a non-empty output from responses API "
-                f"(output_tokens={usage.get('output_tokens')}, "
-                f"max_output_tokens={self.config.max_tokens})"
-            )
+            raise self._empty_output_error(data, prompt)
 
         return {
             "reasoning": reasoning_text,

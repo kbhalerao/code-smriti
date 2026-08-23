@@ -26,6 +26,7 @@ from loguru import logger
 
 from .schemas import (
     FileIndex, SymbolIndex, SemanticUnit, ModuleSummary, RepoSummary,
+    FailureKind, FileFailure, ProcessedFile,
     make_repo_id, SCHEMA_VERSION,
 )
 from .quality import QualityTracker
@@ -75,6 +76,12 @@ class V4Pipeline:
         # Initialize components
         self.code_parser = CodeParser()
         self.quality_tracker = QualityTracker()
+
+        # Populated by process_files: every file-level failure from the last
+        # pass, after its end-of-pass retry. This is what the DLQ is built from,
+        # and it is deliberately not derivable from the documents — a degraded
+        # document records what it IS, not what went wrong producing it.
+        self.file_failures: List[FileFailure] = []
 
         if enable_llm:
             self.llm_enricher = V4LLMEnricher(llm_config)
@@ -178,64 +185,196 @@ class V4Pipeline:
         progress_lock = threading.Lock()
         progress = {"completed": 0}
 
-        async def process_one(
-            file_path: Path,
-        ) -> Tuple[Optional[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
+        async def process_one(file_path: Path) -> ProcessedFile:
             async with semaphore:
-                try:
-                    # Parent module ID will be set during aggregation
-                    file_doc, symbol_docs, semantic_docs = await self.file_processor.process(
-                        file_path=file_path,
-                        repo_path=repo_path,
-                        repo_id=repo_id,
-                        commit_hash=commit_hash,
-                        parent_module_id=""  # Set during aggregation
-                    )
+                result = await self.process_file_bounded(
+                    file_path, repo_path, repo_id, commit_hash
+                )
 
-                    # Update and log progress
-                    with progress_lock:
-                        progress["completed"] += 1
-                        current = progress["completed"]
-                    relative_path = str(file_path.relative_to(repo_path))
-                    symbols_count = len(symbol_docs) if symbol_docs else 0
-                    units_count = len(semantic_docs) if semantic_docs else 0
-                    status = "ok" if file_doc else "skip"
-                    logger.info(
-                        f"[{current}/{total_files}] {relative_path} "
-                        f"({status}, {symbols_count} symbols, {units_count} semantic units)"
-                    )
-
-                    return file_doc, symbol_docs, semantic_docs
-                except Exception as e:
-                    with progress_lock:
-                        progress["completed"] += 1
-                        current = progress["completed"]
-                    relative_path = str(file_path.relative_to(repo_path))
-                    logger.error(f"[{current}/{total_files}] {relative_path} - ERROR: {e}")
-                    self.quality_tracker.record_file_failed(relative_path, str(e))
-                    return None, [], []
+            with progress_lock:
+                progress["completed"] += 1
+                current = progress["completed"]
+            relative_path = str(file_path.relative_to(repo_path))
+            status = "ok" if result.file_index else "skip"
+            if result.failed:
+                status = "degraded"
+            logger.info(
+                f"[{current}/{total_files}] {relative_path} "
+                f"({status}, {len(result.symbols)} symbols, {len(result.semantic_units)} semantic units)"
+            )
+            return result
 
         # Process all files concurrently
         tasks = [process_one(f) for f in files]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Task exception: {result}")
+        processed: List[ProcessedFile] = []
+        for file_path, result in zip(files, results):
+            if isinstance(result, BaseException):
+                # process_one is written not to raise, so this is a bug rather
+                # than an LLM problem — but it still must not silently drop a file.
+                relative_path = str(file_path.relative_to(repo_path))
+                logger.exception(f"Task exception on {relative_path}: {result}")
+                processed.append(ProcessedFile(failures=[FileFailure(
+                    file_path=relative_path,
+                    kind=FailureKind.EXCEPTION,
+                    detail=f"task raised {type(result).__name__}: {result}",
+                )]))
                 continue
-            file_doc, symbol_docs, semantic_docs = result
-            if file_doc:
-                all_file_indices.append(file_doc)
-                all_symbol_indices.extend(symbol_docs)
-                all_semantic_units.extend(semantic_docs)
+            processed.append(result)
+
+        # --- Second chance, once the fan-out has drained -----------------------
+        # Deliberately here and not inside process_one. A file usually fails
+        # because its own batch saturated the slots, so retrying in place
+        # recreates the condition that caused it; by now the slots are free.
+        if config.retry_failed_files:
+            retry_indices = [i for i, r in enumerate(processed) if r.failed]
+            if retry_indices:
+                logger.info(
+                    f"Retrying {len(retry_indices)} file(s) that failed, now that "
+                    f"the file pass has drained"
+                )
+                for i in retry_indices:
+                    file_path = files[i]
+                    relative_path = str(file_path.relative_to(repo_path))
+                    retried = await self.process_file_bounded(
+                        file_path, repo_path, repo_id, commit_hash
+                    )
+                    if retried.failed:
+                        # Still failing with the slots free. This is a bug in the
+                        # pipeline, not contention — it goes to the DLQ and a
+                        # human looks at it. The repo still completes and still
+                        # checkpoints its commit: aborting here would leave the
+                        # commit unadvanced and every later tick would reprocess
+                        # the whole repo forever over one poison file.
+                        for f in retried.failures:
+                            f.retried = True
+                        logger.error(
+                            f"{relative_path}: still failing after retry — "
+                            + "; ".join(f"{f.kind.value}: {f.detail}" for f in retried.failures)
+                        )
+                        processed[i] = retried
+                    else:
+                        logger.info(f"{relative_path}: recovered on retry")
+                        processed[i] = retried
+
+        for result in processed:
+            if result.file_index:
+                all_file_indices.append(result.file_index)
+                all_symbol_indices.extend(result.symbols)
+                all_semantic_units.extend(result.semantic_units)
+
+        self.file_failures = [f for r in processed for f in r.failures]
 
         logger.info(
             f"Processed {len(all_file_indices)} files, "
             f"{len(all_symbol_indices)} symbols, "
             f"{len(all_semantic_units)} semantic units"
         )
+        if self.file_failures:
+            logger.error(
+                f"{len(self.file_failures)} file-level failure(s) across "
+                f"{len({f.file_path for f in self.file_failures})} file(s)"
+            )
 
         return all_file_indices, all_symbol_indices, all_semantic_units
+
+    async def process_file_bounded(
+        self,
+        file_path: Path,
+        repo_path: Path,
+        repo_id: str,
+        commit_hash: str,
+        use_llm: Optional[bool] = None,
+    ) -> ProcessedFile:
+        """
+        One wall-clock-bounded attempt at a file. Never raises, never returns nothing.
+
+        Shared by the full-ingest path (process_files) and the incremental path
+        (IncrementalUpdater), which processes files directly and would otherwise
+        have no bound, no degradation and no failure reporting at all — and
+        incremental is the path almost every run takes.
+        """
+        relative_path = str(file_path.relative_to(repo_path))
+        try:
+            return await asyncio.wait_for(
+                self.file_processor.process(
+                    file_path=file_path,
+                    repo_path=repo_path,
+                    repo_id=repo_id,
+                    commit_hash=commit_hash,
+                    parent_module_id="",  # Set during aggregation
+                    use_llm=use_llm,
+                ),
+                timeout=config.file_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            # wait_for cancels the coroutine, so there are no partial documents
+            # to salvage — reprocess without the LLM instead. That is fast and
+            # network-free, and produces a COMPLETE basic document rather than
+            # half an enriched one. What must not happen is the file disappearing
+            # while the commits index advances and declares the repo current.
+            logger.error(
+                f"{relative_path}: exceeded the {config.file_timeout_seconds}s file budget; "
+                f"reprocessing without the LLM"
+            )
+            degraded = await self._process_without_llm(file_path, repo_path, repo_id, commit_hash)
+            degraded.failures.append(FileFailure(
+                file_path=relative_path,
+                kind=FailureKind.TIMEOUT,
+                detail=f"exceeded the {config.file_timeout_seconds}s file budget",
+            ))
+            return degraded
+        except Exception as e:
+            logger.exception(f"{relative_path}: unhandled error")
+            self.quality_tracker.record_file_failed(relative_path, str(e))
+            return ProcessedFile(failures=[FileFailure(
+                file_path=relative_path,
+                kind=FailureKind.EXCEPTION,
+                detail=f"{type(e).__name__}: {e}",
+            )])
+
+    async def _process_without_llm(
+        self,
+        file_path: Path,
+        repo_path: Path,
+        repo_id: str,
+        commit_hash: str,
+    ) -> ProcessedFile:
+        """
+        Reprocess one file with the LLM off, for a file that blew its wall clock.
+
+        Parser symbols keep their real spans and every summary falls back to
+        docstring + structure, so the result is a complete document rather than a
+        partial one. Marked `timeout_fallback` — distinct from an ordinary
+        `fallback` — so these stay findable afterwards without a DLQ lookup.
+        """
+        try:
+            result = await asyncio.wait_for(
+                self.file_processor.process(
+                    file_path=file_path,
+                    repo_path=repo_path,
+                    repo_id=repo_id,
+                    commit_hash=commit_hash,
+                    parent_module_id="",
+                    use_llm=False,
+                ),
+                timeout=config.file_timeout_seconds,
+            )
+        except Exception as e:
+            # No LLM was involved, so this is parsing or IO. Nothing to salvage.
+            relative_path = str(file_path.relative_to(repo_path))
+            logger.exception(f"{relative_path}: LLM-free reprocessing also failed")
+            return ProcessedFile(failures=[FileFailure(
+                file_path=relative_path,
+                kind=FailureKind.EXCEPTION,
+                detail=f"llm-free reprocessing failed: {type(e).__name__}: {e}",
+            )])
+
+        for doc in result.documents:
+            if getattr(doc, "quality", None) is not None:
+                doc.quality.summary_source = "timeout_fallback"
+        return result
 
     async def generate_embeddings(
         self,

@@ -42,6 +42,71 @@ class EnrichmentLevel(str, Enum):
     NONE = "none"                # No summary available
 
 
+class FailureKind(str, Enum):
+    """What went wrong while processing one file."""
+    CHUNKER = "chunker"    # LLM chunker call failed (not "found no regions")
+    SUMMARY = "summary"    # symbol/unit/file summary exhausted its retries
+    TIMEOUT = "timeout"    # the file blew its wall clock
+    EXCEPTION = "exception"  # anything else raised while processing the file
+
+
+@dataclass
+class FileFailure:
+    """
+    One thing that went wrong on one file, carried out of processing.
+
+    Failures used to be invisible. `llm_chunker._call_llm` returned `"[]"` from
+    every error path — the same value a successful "no additional regions"
+    returns — and `generate_symbol_summary` fell back to `BASIC` with
+    `summary_source="docstring"`, indistinguishable from a symbol that simply had
+    a good docstring. Both are real degradations of what lands in the corpus, and
+    neither reached the run record.
+
+    A `FileFailure` is what the pipeline retries on and what the DLQ is built
+    from. It is deliberately not a document field: the degraded document says
+    *what it is* (`summary_source`), this says *what happened*.
+    """
+    file_path: str
+    kind: FailureKind
+    detail: str
+    retried: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "file_path": self.file_path,
+            "kind": self.kind.value,
+            "detail": self.detail[:2000],
+            "retried": self.retried,
+        }
+
+
+@dataclass
+class ProcessedFile:
+    """
+    Everything one file produced, plus everything that went wrong producing it.
+
+    Returned instead of a bare 3-tuple so a partial result and its failures
+    travel together. A file that fails must still deliver whatever it managed —
+    dropping it leaves the corpus missing a file while the commits index
+    advances and declares the repo current.
+    """
+    file_index: Optional["FileIndex"] = None
+    symbols: List["SymbolIndex"] = field(default_factory=list)
+    semantic_units: List["SemanticUnit"] = field(default_factory=list)
+    failures: List[FileFailure] = field(default_factory=list)
+
+    @property
+    def failed(self) -> bool:
+        return bool(self.failures)
+
+    @property
+    def documents(self) -> List[Any]:
+        """Every document this file produced, in parent-then-children order."""
+        if not self.file_index:
+            return []
+        return [self.file_index, *self.symbols, *self.semantic_units]
+
+
 @dataclass
 class QualityInfo:
     """Quality tracking for a document."""
@@ -491,6 +556,18 @@ def make_file_id(repo_id: str, file_path: str) -> str:
     Hash of: file:{repo_id}:{path}  — one document per file.
     """
     return _hash_id(f"file:{repo_id}:{file_path}")
+
+
+def make_dlq_id(repo_id: str, file_path: str, kind: str) -> str:
+    """
+    Generate document_id for a dead-letter entry.
+
+    Hash of: dlq:{repo_id}:{path}:{kind} — one document per failing thing, NOT
+    one per occurrence. A repo that changes daily with one persistently broken
+    file would otherwise mint an entry a day and bury the queue in its own
+    repetition; keyed this way, a repeat increments `count` and moves `last_seen`.
+    """
+    return _hash_id(f"dlq:{repo_id}:{file_path}:{kind}")
 
 
 # Names the parser emits when it could not find one. They are placeholders, not

@@ -50,6 +50,11 @@ class IngestionRun:
     # Errors
     errors: List[dict] = field(default_factory=list)
 
+    # Open dead-letter entries by failure kind, as of the end of this run. Not
+    # "failures this run" — it is the standing "what is broken now" view, since
+    # entries clear when a file next processes cleanly.
+    dlq: dict = field(default_factory=dict)
+
     # Per-repo details for the ingestion_run document
     repos: dict = field(default_factory=dict)
 
@@ -86,6 +91,7 @@ class IngestionRun:
             },
             "repos": self.repos,
             "errors": self.errors if self.errors else None,
+            "dlq": self.dlq or None,
         }
 
 
@@ -329,9 +335,19 @@ class IngestionRunner:
             )
             cb_client = updater.cb_client
             repo_lifecycle = updater.repo_lifecycle
+            # So a dead-letter entry names the run that produced it.
+            updater.run_id = run_id
 
             # Run the update
             results = updater.run(repo_filter=repo_filter)
+
+            # Standing dead-letter state, read once at the end rather than
+            # accumulated during the run: entries clear when a file recovers, so
+            # only the final view is meaningful.
+            try:
+                self._run_record.dlq = updater.dlq.summary()
+            except Exception as e:
+                logger.error(f"Could not read DLQ summary: {e}")
 
             # Collect stats and build per-repo details
             for r in results:
@@ -397,6 +413,14 @@ class IngestionRunner:
 
             # Log summary
             logger.info(f"Run {run_id} {self._run_record.status} in {self._run_record.duration_seconds:.1f}s")
+            if self._run_record.dlq:
+                total = sum(self._run_record.dlq.values())
+                breakdown = ", ".join(f"{k}={v}" for k, v in sorted(self._run_record.dlq.items()))
+                logger.error(
+                    f"DEAD-LETTER QUEUE: {total} open entry/entries needing attention "
+                    f"({breakdown}). These failed their retry and will not be retried "
+                    f"automatically — see `incremental_v4.py --dlq`."
+                )
 
         return results
 

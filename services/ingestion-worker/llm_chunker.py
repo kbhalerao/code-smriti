@@ -23,8 +23,37 @@ import httpx
 from loguru import logger
 
 from config import WorkerConfig
+from llm_gate import gate_for
 
 config = WorkerConfig()
+
+
+class ChunkerCallFailed(Exception):
+    """
+    A chunker call did not produce a usable answer.
+
+    This type exists because `_call_llm` used to return `"[]"` from every failure
+    path — timeout, HTTP error, bare exception, empty message, truncated reply —
+    which is the *identical* value it returns when the model reads a file and
+    genuinely finds no additional regions. A failure was therefore
+    indistinguishable from a successful empty result: nothing raised, so
+    `file_processor.get_llm_chunks`'s `record_llm_call(success=False)` never
+    fired either, and the only trace was a log line that nothing counted and
+    nothing carried into the run record.
+
+    That silence was expensive. The chunker fires on ~65% of files, and for
+    extensions with no tree-sitter grammar (`.sh`, `.sql`, `.vue`, `.kt`) it is
+    the *only* source of content — so a swallowed failure put those files in the
+    corpus with essentially nothing in them, while the commits index advanced and
+    declared the repo current.
+
+    `partial_chunks` carries whatever earlier passes produced before the failing
+    one, so raising costs nothing that was already earned.
+    """
+
+    def __init__(self, message: str, partial_chunks: Optional[List["SemanticChunk"]] = None):
+        super().__init__(message)
+        self.partial_chunks: List["SemanticChunk"] = partial_chunks or []
 
 
 @dataclass
@@ -437,10 +466,15 @@ class LLMChunker:
             # Always sent, never conditional: an absent `reasoning` key is not
             # "off", it is the model's default, which for gemma4 is thinking ON.
             payload["reasoning"] = {"effort": self.reasoning_effort}
-            response = await self.client.post(
-                f"{self.base_url}/v1/responses",
-                json=payload,
-            )
+            # Admission control, not rate limiting: ollama hands out slots FIFO
+            # with no priority, so holding fewer of them is the only way to keep
+            # an interactive caller off the back of ingestion's queue. See
+            # llm_gate.
+            async with gate_for(self.model, lambda: config.llm_chunker_max_inflight):
+                response = await self.client.post(
+                    f"{self.base_url}/v1/responses",
+                    json=payload,
+                )
             response.raise_for_status()
             data = response.json()
 
@@ -454,8 +488,12 @@ class LLMChunker:
             # a generic "Failed to parse LLM response as JSON".
             usage = data.get("usage", {})
             if usage.get("output_tokens") is not None and usage["output_tokens"] >= MAX_OUTPUT_TOKENS:
-                logger.warning(
-                    f"LLM response hit the {MAX_OUTPUT_TOKENS}-token output ceiling and was "
+                # A failure, not a warning to read past. The reply is a valid
+                # *prefix* under schema-constrained decoding, so it will fail to
+                # parse for a reason that has nothing to do with the content —
+                # and every chunk in this call is lost either way.
+                raise ChunkerCallFailed(
+                    f"response hit the {MAX_OUTPUT_TOKENS}-token output ceiling and was "
                     f"truncated mid-structure; chunks from this call are lost. "
                     f"Raise MAX_OUTPUT_TOKENS or shrink the analysed content window."
                 )
@@ -471,33 +509,35 @@ class LLMChunker:
                             if not text.strip():
                                 # A thinking model that burns its whole output
                                 # budget reasoning returns status="completed"
-                                # with an empty message. Report it as what it
-                                # is instead of letting it become a spurious
-                                # "Failed to parse JSON".
-                                logger.warning(
-                                    f"LLM returned an empty message "
+                                # with an empty message. That is a lost call, not
+                                # a file with no semantic regions in it — the
+                                # distinction this whole class exists to make.
+                                raise ChunkerCallFailed(
+                                    f"model returned an empty message "
                                     f"(output_tokens={usage.get('output_tokens')}, "
-                                    f"max_output_tokens={MAX_OUTPUT_TOKENS}); "
-                                    f"treating as no chunks"
+                                    f"max_output_tokens={MAX_OUTPUT_TOKENS})"
                                 )
-                                return "[]"
+                            # The one legitimate path. If the model answers "[]"
+                            # here, it looked at the file and found nothing —
+                            # which is a real result and must stay distinct from
+                            # every failure above and below.
                             return text
             # Fallback
             if "text" in data:
                 return data["text"]
-            logger.warning(f"Unexpected responses API format: {data}")
-            return "[]"
+            raise ChunkerCallFailed(f"unexpected responses API format: {str(data)[:500]}")
+        except ChunkerCallFailed:
+            # Already precise about what went wrong; do not rewrap it as a
+            # generic call failure below.
+            raise
         except httpx.HTTPStatusError as e:
-            # Log the response body for debugging
             try:
                 error_body = e.response.text
-                logger.error(f"LLM call failed: {e}. Response: {error_body[:500]}")
-            except:
-                logger.error(f"LLM call failed: {e}")
-            return "[]"
+            except Exception:
+                error_body = "<unreadable>"
+            raise ChunkerCallFailed(f"HTTP {e.response.status_code}: {error_body[:500]}") from e
         except Exception as e:
-            logger.error(f"LLM call failed: {e}")
-            return "[]"
+            raise ChunkerCallFailed(f"{type(e).__name__}: {e}") from e
 
     def _parse_llm_response(self, response: str) -> List[Dict]:
         """Parse JSON from LLM response, handling markdown code blocks.
@@ -515,21 +555,29 @@ class LLMChunker:
 
         try:
             result = json.loads(response)
-            if isinstance(result, list):
-                return result
-            return []
         except json.JSONDecodeError as e:
             # Try fixing invalid escape sequences (common LLM issue)
             try:
                 # Fix invalid escapes by replacing single backslashes not followed by valid escape chars
                 fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', response)
                 result = json.loads(fixed)
-                if isinstance(result, list):
-                    return result
-                return []
             except json.JSONDecodeError:
-                logger.warning(f"Failed to parse LLM response as JSON: {e}")
-                return []
+                # Not "no chunks". Under schema-constrained decoding the reply is
+                # valid JSON by construction, so landing here means the server did
+                # not honour the schema — the documented symptom of pointing the
+                # chunker at a non-GGUF build, which _warn_if_schema_unsupported
+                # warns about once and which used to cost ~3-5% of chunks
+                # undetected.
+                raise ChunkerCallFailed(
+                    f"response was not valid JSON ({e}); first 300 chars: {response[:300]!r}"
+                ) from e
+
+        if not isinstance(result, list):
+            raise ChunkerCallFailed(
+                f"response parsed to {type(result).__name__}, expected a list; "
+                f"first 300 chars: {response[:300]!r}"
+            )
+        return result
 
     async def analyze_file(
         self,
@@ -551,11 +599,18 @@ class LLMChunker:
 
         Returns:
             List of semantic chunks found
+
+        Raises:
+            ChunkerCallFailed: if any pass failed. Passes are independent, so the
+                remaining ones still run and whatever they produced is attached to
+                the exception as `partial_chunks` — a failure in one pass must not
+                discard the work of the others, and must not be silent either.
         """
         if passes is None:
             passes = ENRICHMENT_PASSES
 
         all_chunks = []
+        failures = []
 
         for pass_config in passes:
             # Skip if pass doesn't apply to this language
@@ -575,10 +630,13 @@ class LLMChunker:
 
             # Call LLM, constrained to this pass's response shape and type vocabulary
             logger.debug(f"Running {pass_config.name} pass on {file_path}")
-            response = await self._call_llm(prompt, schema=response_schema(pass_config.types))
-
-            # Parse response
-            items = self._parse_llm_response(response)
+            try:
+                response = await self._call_llm(prompt, schema=response_schema(pass_config.types))
+                items = self._parse_llm_response(response)
+            except ChunkerCallFailed as e:
+                logger.error(f"Chunker pass {pass_config.name!r} failed on {file_path}: {e}")
+                failures.append(f"{pass_config.name}: {e}")
+                continue
 
             for item in items:
                 if item.get("confidence", 0) < 0.7:
@@ -597,6 +655,13 @@ class LLMChunker:
                 )
                 all_chunks.append(chunk)
                 logger.debug(f"Found {chunk.chunk_type}: {chunk.name} (confidence={chunk.confidence})")
+
+        if failures:
+            raise ChunkerCallFailed(
+                f"{len(failures)} of {len(passes)} chunker pass(es) failed on {file_path}: "
+                + "; ".join(failures),
+                partial_chunks=all_chunks,
+            )
 
         return all_chunks
 

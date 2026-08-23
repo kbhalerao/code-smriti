@@ -24,7 +24,7 @@ from loguru import logger
 
 from .schemas import (
     FileIndex, SymbolIndex, SemanticUnit, SymbolRef, QualityInfo, VersionInfo,
-    EnrichmentLevel, SCHEMA_VERSION,
+    EnrichmentLevel, FailureKind, FileFailure, ProcessedFile, SCHEMA_VERSION,
     make_file_id, assign_symbol_ids, make_semantic_unit_id, make_content_hash,
 )
 from .quality import QualityTracker
@@ -33,7 +33,7 @@ from embeddings.convention import CODE_CHARS_FOR_EMBEDDING
 # Import LLM chunker
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from llm_chunker import LLMChunker, is_underchunked, SemanticChunk
+from llm_chunker import ChunkerCallFailed, LLMChunker, is_underchunked, SemanticChunk
 
 
 class FileProcessor:
@@ -328,10 +328,14 @@ class FileProcessor:
 
             return semantic_chunks
 
-        except Exception as e:
-            logger.warning(f"LLM chunker failed for {file_path}: {e}")
+        except ChunkerCallFailed:
+            # Re-raised, not swallowed. Returning [] here is what made a failed
+            # call indistinguishable from a file with no semantic regions in it —
+            # and for languages with no tree-sitter grammar the chunker is the
+            # *only* source of content, so that silence emptied files. The caller
+            # keeps `partial_chunks` and records the failure.
             self.quality_tracker.record_llm_call(success=False)
-            return []
+            raise
 
     def get_code_snippet(
         self,
@@ -356,11 +360,41 @@ class FileProcessor:
         Generate summary for a symbol.
 
         Uses LLM if available, falls back to docstring + structure.
+
+        Kept as a two-value return for `scripts/reconcile_symbol_documents.py`,
+        which does not care why a summary degraded. Callers that must not lose
+        that signal use `generate_symbol_summary_checked`.
         """
-        if not self.enable_llm or not self.quality_tracker.llm_available:
-            # Fallback: use docstring + structure
+        summary, level, _failure = await self.generate_symbol_summary_checked(
+            symbol, code_snippet, file_path, language
+        )
+        return summary, level
+
+    async def generate_symbol_summary_checked(
+        self,
+        symbol: SymbolRef,
+        code_snippet: str,
+        file_path: str,
+        language: str,
+        use_llm: Optional[bool] = None,
+    ) -> Tuple[str, EnrichmentLevel, Optional[str]]:
+        """
+        Generate a symbol summary, reporting *why* it degraded if it did.
+
+        The third value is None on success and on a deliberate no-LLM run, and a
+        message when the LLM was supposed to answer and did not. That distinction
+        is invisible in the document itself: a failed enrichment and a symbol with
+        a perfectly good docstring both land as `BASIC`/`"docstring"`.
+
+        Note the enricher has already spent its own 3 attempts
+        (`llm_enricher.generate`, `max_retries=2`) by the time this reports a
+        failure — this is not a first try.
+        """
+        llm_on = self.enable_llm if use_llm is None else use_llm
+        if not llm_on or not self.quality_tracker.llm_available:
+            # Fallback: use docstring + structure. Deliberate, not a failure.
             summary = self._fallback_symbol_summary(symbol, file_path)
-            return summary, EnrichmentLevel.BASIC
+            return summary, EnrichmentLevel.BASIC, None
 
         try:
             # Call LLM for symbol summary
@@ -377,14 +411,14 @@ class FileProcessor:
                 tokens=result.get("tokens", 0)
             )
 
-            return result.get("summary", ""), EnrichmentLevel.LLM_SUMMARY
+            return result.get("summary", ""), EnrichmentLevel.LLM_SUMMARY, None
 
         except Exception as e:
-            logger.debug(f"LLM symbol summary failed for {symbol.name}: {e}")
+            logger.warning(f"LLM symbol summary failed for {symbol.name} in {file_path}: {e}")
             self.quality_tracker.record_llm_call(success=False)
 
             summary = self._fallback_symbol_summary(symbol, file_path)
-            return summary, EnrichmentLevel.BASIC
+            return summary, EnrichmentLevel.BASIC, f"{symbol.name}: {type(e).__name__}: {e}"
 
     def _fallback_symbol_summary(self, symbol: SymbolRef, file_path: str) -> str:
         """Generate fallback summary from docstring + structure."""
@@ -411,16 +445,23 @@ class FileProcessor:
         content: str,
         language: str,
         symbols: List[SymbolRef],
-        symbol_summaries: List[str]
-    ) -> Tuple[str, EnrichmentLevel]:
+        symbol_summaries: List[str],
+        use_llm: Optional[bool] = None,
+    ) -> Tuple[str, EnrichmentLevel, Optional[str]]:
         """
         Generate summary for a file.
 
         Uses LLM if available, combining symbol summaries with file preview.
+
+        The third value is None on success and on a deliberate no-LLM run, and a
+        message when the LLM was supposed to answer and did not — the document
+        itself cannot carry that distinction, since a failed enrichment and a
+        deliberate basic run both land as `BASIC`/`"fallback"`.
         """
-        if not self.enable_llm or not self.quality_tracker.llm_available:
+        llm_on = self.enable_llm if use_llm is None else use_llm
+        if not llm_on or not self.quality_tracker.llm_available:
             summary = self._fallback_file_summary(file_path, symbols, language)
-            return summary, EnrichmentLevel.BASIC
+            return summary, EnrichmentLevel.BASIC, None
 
         try:
             # Build context from symbol summaries
@@ -438,14 +479,14 @@ class FileProcessor:
                 tokens=result.get("tokens", 0)
             )
 
-            return result.get("summary", ""), EnrichmentLevel.LLM_SUMMARY
+            return result.get("summary", ""), EnrichmentLevel.LLM_SUMMARY, None
 
         except Exception as e:
-            logger.debug(f"LLM file summary failed for {file_path}: {e}")
+            logger.warning(f"LLM file summary failed for {file_path}: {e}")
             self.quality_tracker.record_llm_call(success=False)
 
             summary = self._fallback_file_summary(file_path, symbols, language)
-            return summary, EnrichmentLevel.BASIC
+            return summary, EnrichmentLevel.BASIC, f"{type(e).__name__}: {e}"
 
     def _fallback_file_summary(
         self,
@@ -482,8 +523,9 @@ class FileProcessor:
         repo_path: Path,
         repo_id: str,
         commit_hash: str,
-        parent_module_id: str
-    ) -> Tuple[Optional[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
+        parent_module_id: str,
+        use_llm: Optional[bool] = None,
+    ) -> ProcessedFile:
         """
         Process a single file into V4 documents.
 
@@ -495,20 +537,30 @@ class FileProcessor:
             parent_module_id: document_id of parent module
 
         Returns:
-            (file_index, [symbol_indices], [semantic_units])
+            A ProcessedFile carrying the documents AND anything that went wrong
+            producing them. Degradations are never silent: a failed chunker call
+            or a failed summary is reported alongside whatever the file still
+            managed to produce, rather than being indistinguishable from an
+            empty result.
         """
         relative_path = str(file_path.relative_to(repo_path))
+        failures: List[FileFailure] = []
+        # Per-call override so one file can be reprocessed without the LLM after
+        # blowing its wall clock, while the rest of the run keeps it. Instance
+        # state cannot express that: files are processed concurrently and share
+        # this FileProcessor.
+        llm_on = self.enable_llm if use_llm is None else use_llm
 
         # Read content at specific commit
         content = self.get_file_at_commit(repo_path, relative_path, commit_hash)
         if not content:
             logger.warning(f"[SKIP] {relative_path}: could not read file content")
             self.quality_tracker.record_file_skipped()
-            return None, [], []
+            return ProcessedFile()
         if len(content.strip()) < 50:
             logger.debug(f"[SKIP] {relative_path}: file too small ({len(content.strip())} chars)")
             self.quality_tracker.record_file_skipped()
-            return None, [], []
+            return ProcessedFile()
 
         # Detect language
         language = self.code_parser.detect_language(file_path)
@@ -528,17 +580,30 @@ class FileProcessor:
 
         # If underchunked, invoke LLM chunker for additional semantic chunks
         llm_chunks = []
-        if is_under and self.enable_llm and self.llm_chunker:
+        if is_under and llm_on and self.llm_chunker:
             logger.info(
                 f"[LLM-CHUNK] {relative_path}: underchunked ({under_reason}), "
                 f"tree-sitter found {len(symbols)} symbols, invoking LLM chunker..."
             )
-            llm_chunks = await self.get_llm_chunks(
-                file_path=relative_path,
-                content=content,
-                language=language or "unknown",
-                existing_symbols=symbols,
-            )
+            try:
+                llm_chunks = await self.get_llm_chunks(
+                    file_path=relative_path,
+                    content=content,
+                    language=language or "unknown",
+                    existing_symbols=symbols,
+                )
+            except ChunkerCallFailed as e:
+                # Keep what earlier passes produced — a failure in one pass must
+                # not discard work already done — and record it. For a language
+                # with no tree-sitter grammar this is the file's only content,
+                # so it is the difference between a thin document and an empty one.
+                llm_chunks = e.partial_chunks
+                logger.error(f"[LLM-CHUNK] {relative_path}: {e}")
+                failures.append(FileFailure(
+                    file_path=relative_path,
+                    kind=FailureKind.CHUNKER,
+                    detail=str(e),
+                ))
 
             # LLM chunks deliberately do NOT join `symbols`. They become their own
             # semantic_unit documents further down: the chunker names regions it
@@ -556,6 +621,11 @@ class FileProcessor:
                 logger.info(
                     f"[LLM-CHUNK] {relative_path}: added {len(llm_chunks)} semantic chunks: {chunk_types}"
                 )
+            elif failures:
+                # Not "found no additional chunks" — that is the sentence this
+                # whole change exists to stop the pipeline saying when a call
+                # failed. The error above already said what happened.
+                logger.debug(f"[LLM-CHUNK] {relative_path}: no chunks recovered from the failed call")
             else:
                 logger.debug(f"[LLM-CHUNK] {relative_path}: LLM found no additional chunks")
 
@@ -577,9 +647,15 @@ class FileProcessor:
             )
 
             # Generate summary
-            summary, enrichment_level = await self.generate_symbol_summary(
-                symbol, code_snippet, relative_path, language
+            summary, enrichment_level, summary_failure = await self.generate_symbol_summary_checked(
+                symbol, code_snippet, relative_path, language, use_llm=llm_on
             )
+            if summary_failure:
+                failures.append(FileFailure(
+                    file_path=relative_path,
+                    kind=FailureKind.SUMMARY,
+                    detail=summary_failure,
+                ))
             symbol_summaries.append(summary)
 
             # Create symbol_index document
@@ -603,7 +679,15 @@ class FileProcessor:
                 quality=QualityInfo(
                     enrichment_level=enrichment_level,
                     llm_available=self.quality_tracker.llm_available,
-                    summary_source="llm_from_docstring_and_code" if enrichment_level == EnrichmentLevel.LLM_SUMMARY else "docstring",
+                    # "llm_failed_fallback" is deliberately distinct from
+                    # "docstring": both are BASIC, but one is a symbol with a good
+                    # docstring and the other is an enrichment that did not happen.
+                    # Without the distinction a failure is unfindable after the fact.
+                    summary_source=(
+                        "llm_from_docstring_and_code" if enrichment_level == EnrichmentLevel.LLM_SUMMARY
+                        else "llm_failed_fallback" if summary_failure
+                        else "docstring"
+                    ),
                 ),
                 version=VersionInfo(
                     schema_version=SCHEMA_VERSION,
@@ -625,12 +709,19 @@ class FileProcessor:
         semantic_docs = []
         for chunk in llm_chunks:
             code_snippet = self.get_code_snippet(content, chunk.start_line, chunk.end_line)
-            summary, enrichment_level = await self.generate_symbol_summary(
+            summary, enrichment_level, summary_failure = await self.generate_symbol_summary_checked(
                 self.semantic_chunk_to_symbol_ref(chunk),
                 code_snippet,
                 relative_path,
                 language,
+                use_llm=llm_on,
             )
+            if summary_failure:
+                failures.append(FileFailure(
+                    file_path=relative_path,
+                    kind=FailureKind.SUMMARY,
+                    detail=summary_failure,
+                ))
             symbol_summaries.append(summary)
 
             unit_doc = SemanticUnit(
@@ -667,9 +758,15 @@ class FileProcessor:
             semantic_docs.append(unit_doc)
 
         # Generate file summary from symbol summaries
-        file_summary, file_enrichment = await self.generate_file_summary(
-            relative_path, content, language, symbols, symbol_summaries
+        file_summary, file_enrichment, file_summary_failure = await self.generate_file_summary(
+            relative_path, content, language, symbols, symbol_summaries, use_llm=llm_on
         )
+        if file_summary_failure:
+            failures.append(FileFailure(
+                file_path=relative_path,
+                kind=FailureKind.SUMMARY,
+                detail=f"file summary: {file_summary_failure}",
+            ))
 
         # Create file_index document
         file_doc_id = make_file_id(repo_id, relative_path)
@@ -690,7 +787,11 @@ class FileProcessor:
             quality=QualityInfo(
                 enrichment_level=file_enrichment,
                 llm_available=self.quality_tracker.llm_available,
-                summary_source="llm_from_symbols" if file_enrichment == EnrichmentLevel.LLM_SUMMARY else "fallback",
+                summary_source=(
+                    "llm_from_symbols" if file_enrichment == EnrichmentLevel.LLM_SUMMARY
+                    else "llm_failed_fallback" if file_summary_failure
+                    else "fallback"
+                ),
                 is_underchunked=is_under,
                 underchunk_reason=under_reason if is_under else "",
                 llm_chunks_added=len(llm_chunks),
@@ -716,4 +817,15 @@ class FileProcessor:
             f"enrichment={file_enrichment.value}"
         )
 
-        return file_doc, symbol_docs, semantic_docs
+        if failures:
+            logger.error(
+                f"[FILE] {relative_path}: completed with {len(failures)} failure(s) — "
+                f"{', '.join(sorted({f.kind.value for f in failures}))}"
+            )
+
+        return ProcessedFile(
+            file_index=file_doc,
+            symbols=symbol_docs,
+            semantic_units=semantic_docs,
+            failures=failures,
+        )

@@ -151,19 +151,26 @@ def main():
             for full_path in files:
                 rel = str(full_path.relative_to(repo_path))
                 try:
-                    fi, symbols, units = loop.run_until_complete(
-                        pipeline.file_processor.process(
+                    result = loop.run_until_complete(
+                        pipeline.process_file_bounded(
                             file_path=full_path,
                             repo_path=repo_path,
                             repo_id=repo_id,
                             commit_hash=commit,
-                            parent_module_id="",
                         )
                     )
                 except Exception as e:
                     logger.error(f"  {repo_id} {rel}: {e}")
                     failed += 1
                     continue
+                fi, symbols, units = result.file_index, result.symbols, result.semantic_units
+                if result.failed:
+                    # Shell scripts have no tree-sitter grammar, so the chunker is
+                    # their only source of content — a failure here is the
+                    # difference between a thin document and an empty one.
+                    failed += 1
+                    for f in result.failures:
+                        logger.error(f"  {repo_id} {rel}: {f.kind.value}: {f.detail}")
                 if not fi:
                     # Too small, or filtered downstream — not an error.
                     logger.info(f"  {repo_id} {rel}: produced no document")

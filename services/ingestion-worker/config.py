@@ -38,6 +38,18 @@ class WorkerConfig(BaseSettings):
     llm_provider: str = os.getenv("LLM_PROVIDER", "ollama")  # informational label
     llm_reasoning_effort: str = os.getenv("LLM_REASONING_EFFORT", "none")
 
+    # Output-token ceiling for enrichment and summary calls (/v1/responses
+    # "max_output_tokens"). Was a hard-coded 2000, which a repo summary hit
+    # exactly on 2026-08-22 and returned an empty message for.
+    #
+    # The ceiling on this is the *context*, not the model: OLLAMA_CONTEXT_LENGTH
+    # is 16384 and ollama passes --context-shift, which silently drops the head
+    # of the context — the instructions — rather than erroring. So prompt +
+    # max_output_tokens must stay under 16384 with room to spare. Enrichment
+    # prompts carry file source and have been observed near 4k tokens; 4000 out
+    # leaves ~8k of headroom. Raise both together or not at all.
+    llm_max_output_tokens: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "4000"))
+
     # Model for the LLM chunker specifically. Two hard requirements, both measured:
     #
     # 1. It must be a **GGUF** build. Constrained decoding (`json_schema` response
@@ -157,6 +169,48 @@ class WorkerConfig(BaseSettings):
     # real and eats margin. 300s would have re-created the exact failure the
     # paragraph above describes.
     llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "900"))
+
+    # How many requests ingestion may have in flight against each model, enforced
+    # client-side by llm_gate.LLMGate. This is the ONLY lever for prioritising
+    # interactive callers over ingestion: ollama has no request priority, no queue
+    # reordering and no preemption, so a caller cannot be moved up the queue —
+    # ingestion can only decline to fill it.
+    #
+    # 2 of OLLAMA_NUM_PARALLEL's 4 slots, leaving two always free for cos-web
+    # (chat on `general`, flow-select on `structured`) and scriven (`structured`).
+    # Note that capping at 4 would already be free — it merely stops ingestion
+    # queueing *inside* the server on top of the slots it holds, and cuts the
+    # worst-case interactive wait from ~70s to ~12s at no throughput cost. Going
+    # to 2 is the actual reservation and the part that costs throughput.
+    #
+    # The gate re-reads these on every acquire, so an adaptive limit (4 when cos
+    # is cold, 2 when warm) is a change to this value, not to the mechanism.
+    llm_chunker_max_inflight: int = int(os.getenv("LLM_CHUNKER_MAX_INFLIGHT", "2"))
+    llm_enricher_max_inflight: int = int(os.getenv("LLM_ENRICHER_MAX_INFLIGHT", "2"))
+
+    # Wall clock for ONE file, covering every LLM call it makes.
+    #
+    # There was no such bound before: llm_timeout_seconds is per *request*, and a
+    # file issues one request per significant symbol plus chunker passes, so a
+    # 50-symbol file had no ceiling short of the run watchdog. Worse, a file that
+    # blew up vanished — pipeline.process_files caught the exception and returned
+    # no file_index at all, while the commits index advanced and declared the repo
+    # current. A degraded summary is acceptable; a missing file is not.
+    #
+    # On expiry the file is reprocessed with the LLM off, which is fast and
+    # network-free, and lands a complete BASIC document marked
+    # `summary_source="timeout_fallback"`.
+    #
+    # 300s is roughly 25 symbol summaries at the ~12s the `structured`/`general`
+    # pair average. Files far above that are the ones worth hearing about.
+    file_timeout_seconds: float = float(os.getenv("FILE_TIMEOUT_SECONDS", "300"))
+
+    # Second chance for files that failed, taken at the END of a repo's file pass
+    # rather than in place. A file usually times out because its own batch
+    # saturated the slots; retrying while that batch is still in flight recreates
+    # the exact condition that caused it. By end-of-pass the fan-out has drained
+    # and the retry runs against free slots.
+    retry_failed_files: bool = os.getenv("RETRY_FAILED_FILES", "true").lower() == "true"
 
     # Incremental Update Configuration
     enable_incremental_updates: bool = os.getenv("ENABLE_INCREMENTAL_UPDATES", "false").lower() == "true"

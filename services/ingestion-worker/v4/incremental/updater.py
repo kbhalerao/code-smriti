@@ -36,6 +36,8 @@ DEFAULT_REINGEST_THRESHOLD = 0.5
 from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
 from ..doc_versions import file_key, newest_per_key
+from ..dlq import DeadLetterQueue
+from ..schemas import FailureKind, FileFailure
 from ..doc_loader import rehydrate_file_index
 
 
@@ -98,6 +100,13 @@ class IncrementalUpdater:
             cb_client=self.cb_client,
             github_token=config.github_token
         )
+        # Dead-letter queue. Failures that survive their end-of-pass retry land
+        # here for a human; nothing drains it automatically.
+        self.dlq = DeadLetterQueue(self.cb_client)
+
+        # Set by IngestionRunner so a DLQ entry names the run that produced it.
+        self.run_id = ""
+
         self.significance = SignificanceChecker(
             embedding_generator=self.pipeline.embedding_generator,
             enabled=enable_llm
@@ -188,6 +197,21 @@ class IncrementalUpdater:
         except Exception as e:
             logger.warning(f"Could not reconcile children of {file_path}: {e}")
 
+    def _dead_letter_rebuild_failures(self, repo_id: str, commit: str) -> None:
+        """
+        Carry a full rebuild's file failures into the DLQ.
+
+        The rebuild path runs through `pipeline.process_files`, which does its own
+        end-of-pass retry and leaves what survived on `pipeline.file_failures`.
+        Without this the incremental path would report failures and the rebuild
+        path would not — and a rebuild touches every file in the repo, so it is
+        the larger exposure of the two.
+        """
+        failures = getattr(self.pipeline, "file_failures", None)
+        if not failures:
+            return
+        self.dlq.record(repo_id, failures, run_id=self.run_id, commit=commit)
+
     def process_repo(self, repo_id: str, repo_path: Path, loop=None) -> UpdateResult:
         """Process a single repository with incremental update logic."""
         start_time = datetime.now()
@@ -256,6 +280,7 @@ class IncrementalUpdater:
                 finally:
                     if owns_loop:
                         loop.close()
+                self._dead_letter_rebuild_failures(repo_id, origin_head)
                 # Ingest all commits for new repo
                 self._ingest_commits(repo_id, repo_path)
             return UpdateResult(
@@ -342,6 +367,7 @@ class IncrementalUpdater:
                 finally:
                     if owns_loop:
                         loop.close()
+                self._dead_letter_rebuild_failures(repo_id, origin_head)
                 # Ingest new commits since last stored
                 self._ingest_commits(repo_id, repo_path, since_commit=stored_commit)
             return UpdateResult(
@@ -398,6 +424,13 @@ class IncrementalUpdater:
         # Child doc ids produced this run, per file — the input to reconciliation
         live_children: Dict[str, List[str]] = {}
 
+        # Files whose first attempt reported a failure. Retried once at the end of
+        # the pass rather than in place: a file usually fails because the LLM was
+        # saturated at that moment, and retrying immediately recreates exactly the
+        # condition that caused it.
+        needs_retry: List[str] = []
+        failures_by_file: Dict[str, List[FileFailure]] = {}
+
         try:
             for file_path in code_to_process:
                 full_path = repo_path / file_path
@@ -410,15 +443,24 @@ class IncrementalUpdater:
                 file_diff = self.git.get_file_diff(repo_path, base_commit, origin_head, file_path)
 
                 try:
-                    file_index, symbol_indices, semantic_units = loop.run_until_complete(
-                        self.pipeline.file_processor.process(
+                    # Bounded, degraded-not-dropped, and it reports what went
+                    # wrong. Calling file_processor.process directly — as this did
+                    # — gave the incremental path no wall clock, no fallback and
+                    # no failure signal, on the path almost every run takes.
+                    result = loop.run_until_complete(
+                        self.pipeline.process_file_bounded(
                             file_path=full_path,
                             repo_path=repo_path,
                             repo_id=repo_id,
                             commit_hash=origin_head,
-                            parent_module_id=""
                         )
                     )
+                    file_index = result.file_index
+                    symbol_indices = result.symbols
+                    semantic_units = result.semantic_units
+                    if result.failed:
+                        needs_retry.append(file_path)
+                        failures_by_file[file_path] = result.failures
 
                     if file_index:
                         file_indices.append(file_index)
@@ -445,6 +487,82 @@ class IncrementalUpdater:
 
                 except Exception as e:
                     logger.error(f"    Error processing {file_path}: {e}")
+                    needs_retry.append(file_path)
+                    failures_by_file[file_path] = [FileFailure(
+                        file_path=file_path,
+                        kind=FailureKind.EXCEPTION,
+                        detail=f"{type(e).__name__}: {e}",
+                    )]
+
+            # 7b-ii. Second chance for files that failed, now that the pass is done.
+            # Deliberately not in place: a file usually fails because the LLM was
+            # saturated at that moment, so an immediate retry recreates the exact
+            # condition that caused it.
+            if needs_retry and self.config.retry_failed_files:
+                logger.info(f"    Retrying {len(needs_retry)} failed file(s) after the pass")
+                for rel_path in needs_retry:
+                    full_path = repo_path / rel_path
+                    try:
+                        retried = loop.run_until_complete(
+                            self.pipeline.process_file_bounded(
+                                file_path=full_path,
+                                repo_path=repo_path,
+                                repo_id=repo_id,
+                                commit_hash=origin_head,
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"    Retry of {rel_path} raised: {e}")
+                        continue
+
+                    # Replace this file's documents wholesale. Identity is derived
+                    # from the path, so the retry produces the same ids and a
+                    # stale copy left behind would be upserted over anyway — but
+                    # children can differ, and those would leak.
+                    file_indices[:] = [d for d in file_indices if d.file_path != rel_path]
+                    all_symbol_indices[:] = [d for d in all_symbol_indices if d.file_path != rel_path]
+                    all_semantic_units[:] = [d for d in all_semantic_units if d.file_path != rel_path]
+
+                    if retried.file_index:
+                        file_indices.append(retried.file_index)
+                        all_symbol_indices.extend(retried.symbols)
+                        all_semantic_units.extend(retried.semantic_units)
+                        live_children[rel_path] = [
+                            d.document_id for d in (*retried.symbols, *retried.semantic_units)
+                        ]
+
+                    if retried.failed:
+                        # Still failing with the LLM quiet. That is a bug in the
+                        # pipeline rather than contention, and it goes to the DLQ
+                        # for a human. The repo still completes and still
+                        # checkpoints — aborting would leave the commit unadvanced
+                        # and every later run would reprocess the whole repo over
+                        # one poison file.
+                        for f in retried.failures:
+                            f.retried = True
+                        failures_by_file[rel_path] = retried.failures
+                        logger.error(
+                            f"    {rel_path}: still failing after retry — "
+                            + "; ".join(f"{f.kind.value}: {f.detail}" for f in retried.failures)
+                        )
+                    else:
+                        failures_by_file.pop(rel_path, None)
+                        logger.info(f"    {rel_path}: recovered on retry")
+
+            # 7b-iii. Dead-letter what is still broken, and clear what is not.
+            # A file that came through cleanly drops any stale entry, so the queue
+            # stays a "what is broken now" view rather than an append-only log.
+            if not self.dry_run:
+                recovered = [f for f in code_to_process if f not in failures_by_file]
+                if recovered:
+                    self.dlq.clear(repo_id, recovered)
+                if failures_by_file:
+                    self.dlq.record(
+                        repo_id,
+                        [f for fs in failures_by_file.values() for f in fs],
+                        run_id=self.run_id,
+                        commit=origin_head,
+                    )
 
             # 7c. Generate embeddings and store
             all_docs = file_indices + all_symbol_indices + all_semantic_units
