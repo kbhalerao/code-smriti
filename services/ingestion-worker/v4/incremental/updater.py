@@ -16,6 +16,10 @@ from .models import (
 )
 from .git_utils import GitOperations
 
+# Repo outcomes that represent no work done. A run of ~280 repos is mostly these,
+# and the dashboard collapses them to a count rather than listing every one.
+NO_WORK_STATUSES = {STATUS_SKIPPED, STATUS_EXCLUDED, STATUS_EMPTY}
+
 # Fraction of a repo's *indexable* files that must change before a surgical
 # update is abandoned for a full rebuild.
 #
@@ -75,6 +79,7 @@ class IncrementalUpdater:
         from v4.pipeline import V4Pipeline
         from storage.couchbase_client import CouchbaseClient
         from llm_enricher import LLM_CONFIG
+        from job_publisher import JobPublisher
 
         config = WorkerConfig()
         self.threshold = threshold
@@ -106,6 +111,10 @@ class IncrementalUpdater:
 
         # Set by IngestionRunner so a DLQ entry names the run that produced it.
         self.run_id = ""
+
+        # Advisory progress reporting to cos.agsci.com. Never load-bearing: it
+        # swallows its own errors and disables itself if cos is unreachable.
+        self.jobs = JobPublisher()
 
         self.significance = SignificanceChecker(
             embedding_generator=self.pipeline.embedding_generator,
@@ -197,6 +206,35 @@ class IncrementalUpdater:
         except Exception as e:
             logger.warning(f"Could not reconcile children of {file_path}: {e}")
 
+    @staticmethod
+    def _job_mode(result: UpdateResult) -> Optional[str]:
+        """How the repo was processed, or None if it was not.
+
+        `mode` answers "why is this one taking hours" — a rebuild processes every
+        file in the repo, an incremental only the changed ones. A repo that did
+        no work has no mode; reporting its *status* here would conflate the two
+        axes the dashboard deliberately keeps apart.
+        """
+        if result.status == STATUS_UPDATED:
+            return "incremental"
+        if result.status == STATUS_FULL_REINGEST:
+            return "initial_clone" if result.reason == "new_repo" else "full_reingest"
+        return None
+
+    @staticmethod
+    def _job_detail(result: UpdateResult) -> str:
+        """One line a human can read off the dashboard without opening a log."""
+        if result.status == STATUS_SKIPPED:
+            return result.reason or "no changes"
+        if result.status in (STATUS_UPDATED, STATUS_FULL_REINGEST):
+            parts = [f"{result.files_processed} file(s)"]
+            if result.files_deleted:
+                parts.append(f"{result.files_deleted} deleted")
+            if result.reason:
+                parts.append(result.reason)
+            return ", ".join(parts)
+        return result.reason or result.status
+
     def _dead_letter_rebuild_failures(self, repo_id: str, commit: str) -> None:
         """
         Carry a full rebuild's file failures into the DLQ.
@@ -276,7 +314,14 @@ class IncrementalUpdater:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 try:
-                    loop.run_until_complete(self.pipeline.ingest_repository(repo_path, repo_id))
+                    loop.run_until_complete(self.pipeline.ingest_repository(
+                        repo_path,
+                        repo_id,
+                        on_progress=lambda done, total, in_flight: self.jobs.update(
+                            repo_id, mode="initial_clone", done=done,
+                            total=total, in_flight=in_flight,
+                        ),
+                    ))
                 finally:
                     if owns_loop:
                         loop.close()
@@ -357,13 +402,30 @@ class IncrementalUpdater:
                 rebuild_reason = None
 
         if rebuild_reason:
+            # A rebuild processes every file in the repo, not just the changed
+            # ones, which is why the dashboard shows the mode rather than just a
+            # count: it is what explains why one job sits there for hours.
+            self.jobs.update(
+                repo_id,
+                mode="full_reingest",
+                detail=f"rebuilding ({rebuild_reason})",
+                total=corpus_files or indexable_changed,
+                force=True,
+            )
             if not self.dry_run:
                 owns_loop = loop is None
                 if owns_loop:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 try:
-                    loop.run_until_complete(self.pipeline.ingest_repository(repo_path, repo_id))
+                    loop.run_until_complete(self.pipeline.ingest_repository(
+                        repo_path,
+                        repo_id,
+                        on_progress=lambda done, total, in_flight: self.jobs.update(
+                            repo_id, mode="full_reingest", done=done,
+                            total=total, in_flight=in_flight,
+                        ),
+                    ))
                 finally:
                     if owns_loop:
                         loop.close()
@@ -424,6 +486,14 @@ class IncrementalUpdater:
         # Child doc ids produced this run, per file — the input to reconciliation
         live_children: Dict[str, List[str]] = {}
 
+        self.jobs.update(
+            repo_id,
+            mode="incremental",
+            detail=f"{indexable_changed} indexable of {changes.total_changed} changed",
+            total=len(code_to_process),
+            force=True,
+        )
+
         # Files whose first attempt reported a failure. Retried once at the end of
         # the pass rather than in place: a file usually fails because the LLM was
         # saturated at that moment, and retrying immediately recreates exactly the
@@ -436,6 +506,15 @@ class IncrementalUpdater:
                 full_path = repo_path / file_path
                 if not full_path.exists():
                     continue
+
+                self.jobs.update(
+                    repo_id,
+                    mode="incremental",
+                    done=files_processed,
+                    total=len(code_to_process),
+                    in_flight=[file_path],
+                    degraded=sorted(failures_by_file),
+                )
 
                 # Get old summary and embedding for significance check
                 old_file_summary = self.repo_lifecycle.get_old_file_summary(repo_id, file_path)
@@ -1050,18 +1129,36 @@ class IncrementalUpdater:
         logger.info(f"Phase 4: Processing {len(repos_to_process)} Repos")
         logger.info("-" * 70)
 
+        # Declare the queue before working it, so the dashboard shows the backlog
+        # rather than only whatever happens to be running when it is loaded.
+        self.jobs.run_id = self.run_id
+        self.jobs.publish_queue(sorted(repos_to_process))
+
         for repo_id in sorted(repos_to_process):
             repo_path = self.repo_lifecycle.repo_id_to_path(repo_id)
 
+            # Lifecycle is published from out here rather than inside
+            # process_repo, which has a dozen return points; every one of them
+            # would need its own finish() and one would eventually be missed.
+            self.jobs.start(repo_id)
             try:
                 result = self.process_repo(repo_id, repo_path)
                 results.append(result)
                 stats[result.status] = stats.get(result.status, 0) + 1
                 self._checkpoint_commit(result)
+                self.jobs.finish(
+                    repo_id,
+                    state="failed" if result.status == STATUS_ERROR else "done",
+                    mode=self._job_mode(result),
+                    detail=self._job_detail(result),
+                    error=result.error,
+                    noop=result.status in NO_WORK_STATUSES,
+                )
             except Exception as e:
                 logger.error(f"Failed to process {repo_id}: {e}")
                 results.append(UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error=str(e)))
                 stats['error'] += 1
+                self.jobs.finish(repo_id, state="failed", error=str(e))
 
         # Summary
         logger.info("\n" + "=" * 70)

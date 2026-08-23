@@ -19,7 +19,7 @@ import os
 import asyncio
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Callable, List, Dict, Optional, Tuple
 from datetime import datetime
 
 from loguru import logger
@@ -158,6 +158,7 @@ class V4Pipeline:
         repo_id: str,
         commit_hash: str,
         concurrency: int = 4,
+        on_progress: Optional[Callable[[int, int, List[str]], None]] = None,
     ) -> Tuple[List[FileIndex], List[SymbolIndex], List[SemanticUnit]]:
         """
         Process all files in parallel.
@@ -195,6 +196,14 @@ class V4Pipeline:
                 progress["completed"] += 1
                 current = progress["completed"]
             relative_path = str(file_path.relative_to(repo_path))
+            if on_progress:
+                # Advisory only. A reporting hook must never be able to fail the
+                # file it is reporting on — a rebuild is hours of work and a
+                # dashboard is not worth losing any of it.
+                try:
+                    on_progress(current, total_files, [relative_path])
+                except Exception as e:
+                    logger.debug(f"Progress callback failed: {e}")
             status = "ok" if result.file_index else "skip"
             if result.failed:
                 status = "degraded"
@@ -576,6 +585,7 @@ class V4Pipeline:
         repo_id: str,
         delete_existing: bool = True,
         file_concurrency: int = 4,
+        on_progress: Optional[Callable[[int, int, List[str]], None]] = None,
     ) -> Dict:
         """
         Ingest a complete repository.
@@ -616,6 +626,7 @@ class V4Pipeline:
             repo_id=repo_id,
             commit_hash=commit_hash,
             concurrency=file_concurrency,
+            on_progress=on_progress,
         )
 
         if not file_indices:
