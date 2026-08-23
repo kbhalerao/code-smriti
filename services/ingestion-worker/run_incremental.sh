@@ -60,6 +60,16 @@ ALERT_ATTEMPTS="${ALERT_ATTEMPTS:-3}"
 ALERT_BACKOFF_SECS=( ${ALERT_BACKOFF_SECS:-60 300} )   # before attempts 2 and 3
 ALERT_SPOOL_MAX="${ALERT_SPOOL_MAX:-20}"
 
+# Which stage to run. Set RUN_STAGE=report and this becomes the daily reporting
+# job: KPI, digest and the dead-letter notice, with no ingestion. That is what
+# com.codesmriti.daily calls, because under a five-minute tick those three are
+# the only things left that are genuinely daily — the corpus is kept current by
+# run_tick.sh now.
+#
+# An env var rather than an argument: "$@" is forwarded to incremental_v4.py, so
+# a positional would be passed through to it.
+RUN_STAGE="${RUN_STAGE:-full}"
+
 # Exit code used to signal "killed by the watchdog", matching GNU timeout(1).
 TIMEOUT_RC=124
 
@@ -292,11 +302,16 @@ PYTHON="$SCRIPT_DIR/.venv/bin/python"
 echo "Using: $PYTHON" >> "$LOG_FILE"
 
 # --- Ingestion -------------------------------------------------------------
-set +e
-run_with_timeout "$INGEST_TIMEOUT_SECS" ingest \
-    "$PYTHON" -u "$SCRIPT_DIR/incremental_v4.py" "$@"
-EXIT_CODE=$?
-set -e
+EXIT_CODE=0
+if [[ "$RUN_STAGE" == "report" ]]; then
+    echo "Reporting stage only — ingestion is run by the tick." >> "$LOG_FILE"
+else
+    set +e
+    run_with_timeout "$INGEST_TIMEOUT_SECS" ingest \
+        "$PYTHON" -u "$SCRIPT_DIR/incremental_v4.py" "$@"
+    EXIT_CODE=$?
+    set -e
+fi
 
 if [[ $EXIT_CODE -eq $LOCK_BUSY_RC ]]; then
     echo "Another ingestion holds the run lock; skipping this scheduled run." >> "$LOG_FILE"

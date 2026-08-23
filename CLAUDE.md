@@ -411,8 +411,35 @@ Code ingestion runs automatically via macOS LaunchAgents. Both must remain loade
 
 | Agent | Schedule | Purpose |
 |-------|----------|---------|
-| `com.codesmriti.incremental` | Daily 15:05 | Incremental repo sync + KPI dashboard regeneration |
+| `com.codesmriti.scan` | Every 15 min | Fetch, diff, and queue what needs ingesting. The only half that talks to git. |
+| `com.codesmriti.drain` | Every 5 min | Work the durable queue under the ingestion lock. Never fetches. |
+| `com.codesmriti.daily` | Daily 15:05 | KPI dashboard, digest, dead-letter notice. **No ingestion.** |
 | `com.codesmriti.bdr` | Weekly Sun 16:00 | BDR (Business Development Records) enrichment |
+
+`com.codesmriti.incremental` — the old single nightly job — is **booted out and
+`launchctl disable`d**, not merely unloaded, so it does not return at login. If it
+is ever wanted back it needs `launchctl enable` first; a plain `load` will look
+like it worked and silently do nothing.
+
+The split is the point. Ingestion is a durable queue worked continuously
+(`docs/INGESTION_QUEUE_DESIGN.md`), so push-to-indexed is bounded at ~15 minutes
+rather than 24 hours, and a watchdog kill costs the one repo in flight instead of
+the whole backlog. What is left that is genuinely *daily* — the KPI page, the
+digest, the DLQ notice — is `run_incremental.sh` with `RUN_STAGE=report`.
+
+Both cadences matter for different reasons. The drain is frequent because it is
+nearly free when idle: it asks the queue with a bare Couchbase client and exits in
+~2s, rather than building V4Pipeline and loading the embedding model to discover
+there is nothing to do. The scan is *less* frequent because it is 288 `git fetch`es
+however fast it runs — parallelised it takes ~46s (5m17s serial, `SCAN_CONCURRENCY`
+defaults to 8), but at five-minute intervals that would be ~3,400 fetches an hour
+aimed at GitHub.
+
+The digest reads a **window**, not the last run. Under a tick the newest
+`ingestion_run` doc is the last drain — often one repo, sometimes none — so
+`generate_daily_digest.py --since-hours 24` merges every run in the window. A repo
+takes its status from the most significant run it appeared in: updated at 09:00
+and skipped at 14:55 is still "updated today".
 
 **Plist files**: `~/Library/LaunchAgents/com.codesmriti.*.plist`
 
@@ -529,8 +556,8 @@ weekly BDR agent kept running normally throughout on the same interpreter.
 
 To reload an agent after editing its plist:
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.codesmriti.incremental.plist
-launchctl load ~/Library/LaunchAgents/com.codesmriti.incremental.plist
+launchctl bootout gui/$(id -u)/com.codesmriti.drain
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.codesmriti.drain.plist
 ```
 
 ## Incremental vs Full Re-ingestion

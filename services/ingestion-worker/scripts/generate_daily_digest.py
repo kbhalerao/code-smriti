@@ -3,7 +3,8 @@
 Daily Ingestion Digest -> Chief of Staff
 
 Runs as the final step of the daily incremental ingestion (see run_incremental.sh).
-Reads the most recent `ingestion_run` doc from Couchbase, pulls the `commit_index`
+Reads every `ingestion_run` doc in the last --since-hours (default 24) and merges
+them, pulls the `commit_index`
 docs it produced, synthesizes a per-repo / per-author markdown summary via the
 configured LLM, and POSTs the result as a `note` into the
 Chief of Staff inbox (tags=['updates'], status=inbox, priority=low).
@@ -20,7 +21,7 @@ import argparse
 import asyncio
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -65,6 +66,52 @@ def fetch_latest_run(cb: CouchbaseClient, run_id: str | None) -> dict | None:
         )
     rows = list(result)
     return rows[0] if rows else None
+
+
+def fetch_runs_since(cb: CouchbaseClient, since_iso: str) -> list[dict]:
+    """Every ingestion_run in the window, oldest first."""
+    bucket = config.couchbase_bucket
+    result = cb.cluster.query(
+        f"SELECT META().id as _id, b.* FROM `{bucket}` b "
+        f"WHERE type = 'ingestion_run' AND timestamp >= $since ORDER BY timestamp ASC",
+        since=since_iso,
+    )
+    return list(result)
+
+
+def merge_runs(runs: list[dict]) -> dict:
+    """Collapse a window of runs into one synthetic run doc.
+
+    The digest was written when a day held exactly one ingestion run, so "the
+    most recent ingestion_run doc" and "what happened today" were the same
+    sentence. Under a five-minute tick they are not: the newest run doc is the
+    last drain, which is often a single repo and sometimes nothing. Reading it
+    would turn a daily digest into a report on whichever five minutes happened
+    to end last.
+
+    A repo's status is taken from the most significant run it appeared in, not
+    the latest — a repo updated at 09:00 and skipped at 14:55 was still updated
+    today, and the digest is about what changed.
+    """
+    merged_repos: dict[str, dict] = {}
+    processed = 0
+
+    for run in runs:
+        processed += (run.get("stats") or {}).get("processed", 0)
+        for repo_id, info in (run.get("repos") or {}).items():
+            info = info or {}
+            prev = merged_repos.get(repo_id)
+            if prev and prev.get("status") in ACTIVE_STATUSES and info.get("status") not in ACTIVE_STATUSES:
+                continue
+            merged_repos[repo_id] = info
+
+    return {
+        "run_id": f"{len(runs)} run(s)" if len(runs) != 1 else (runs[0].get("run_id") or "unknown"),
+        "timestamp": runs[0].get("timestamp") if runs else "",
+        "completed_at": runs[-1].get("completed_at") if runs else "",
+        "repos": merged_repos,
+        "stats": {"processed": processed},
+    }
 
 
 def fetch_commits_for_run(cb: CouchbaseClient, repos: list[str], since: str) -> list[dict]:
@@ -338,10 +385,21 @@ async def amain(args: argparse.Namespace) -> int:
     digest_date = datetime.now().strftime("%Y-%m-%d")
 
     cb = CouchbaseClient()
-    run_doc = fetch_latest_run(cb, args.run_id)
-    if not run_doc:
-        logger.error("No ingestion_run doc found; nothing to digest.")
-        return 1
+    if args.run_id:
+        run_doc = fetch_latest_run(cb, args.run_id)
+        if not run_doc:
+            logger.error("No ingestion_run doc found; nothing to digest.")
+            return 1
+    else:
+        since = (datetime.now() - timedelta(hours=args.since_hours)).isoformat()
+        runs = fetch_runs_since(cb, since)
+        if not runs:
+            logger.error(
+                f"No ingestion_run doc in the last {args.since_hours}h; nothing to digest."
+            )
+            return 1
+        logger.info(f"Digesting {len(runs)} run(s) since {since}")
+        run_doc = merge_runs(runs)
 
     run_id = run_doc.get("run_id") or "unknown"
     started_at = run_doc.get("timestamp") or ""
@@ -430,6 +488,14 @@ async def amain(args: argparse.Namespace) -> int:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print to stdout, do not POST")
+    parser.add_argument(
+        "--since-hours",
+        type=int,
+        default=24,
+        help="Digest every ingestion run in this window (default: 24). Ignored "
+             "when --run-id names one run. Under a 5-minute tick a 'day' is many "
+             "runs, so the window is what makes a daily digest daily."
+    )
     parser.add_argument("--run-id", type=str, default=None, help="Specific run_id to digest")
     args = parser.parse_args()
     sys.exit(asyncio.run(amain(args)))
