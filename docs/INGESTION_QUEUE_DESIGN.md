@@ -1,6 +1,7 @@
 # Rolling Ingestion Queue — Design
 
-Status: agreed 2026-08-23. Items 1 and 2 built; 3-5 outstanding.
+Status: **all five items shipped 2026-08-23.** Live on com.codesmriti.scan /
+.drain / .daily. This document is now a record of why, not a plan.
 
 Replaces the nightly batch (`com.codesmriti.incremental`, 15:05 daily) with a
 5-minute tick over a durable per-repo queue, and stops ingestion from starving
@@ -338,6 +339,8 @@ is read, and the only place the aggregated alert points to.
 
 ## 8. Build order
 
+All five shipped. Items 3-5 in `b7b3072b`, `324148a7`, `cb06cb58`.
+
 1. ~~**Gate**~~ — **built**. `llm_gate.py`, applied to the chunker
    (`structured`) and the enricher (`general`); cos-web's chat shares the latter,
    so gating only the chunker would have left half the contention in place.
@@ -348,11 +351,11 @@ is read, and the only place the aggregated alert points to.
    reprocess marked `timeout_fallback`; end-of-pass retry on both the full and
    incremental paths; survivors land in the DLQ (`v4/dlq.py`, `--dlq`).
    `llm_timeout_seconds` is still 900 — see Outstanding below.
-3. **Queue + DLQ** — item schema, scan/drain split, 5-minute tick, staleness
+3. ~~**Queue + DLQ**~~ — **built**. — item schema, scan/drain split, 5-minute tick, staleness
    ordering, attempts exhausted → DLQ, aggregated per-run alert, watchdog to ~2h.
-4. **Job publishing + cos-web `/jobs`** including the DLQ view, generic enough
+4. ~~**Job publishing + cos-web `/jobs`**~~ — **built**, ahead of 3 by request. including the DLQ view, generic enough
    for scriven.
-5. **`Nice`** in the plist for the CPU-bound embedding phase — the launchd path
+5. ~~**`Nice`** in the plist~~ — **built**, folded into the tick plists. for the CPU-bound embedding phase — the launchd path
    disables MPS, so embedding is CPU torch plus 4 tree-sitter threads and does
    compete with Couchbase and cos-web. Use the plist `Nice` key, **not**
    `ProcessType: Background`, which also throttles disk I/O hard enough to
@@ -361,6 +364,32 @@ is read, and the only place the aggregated alert points to.
 
 1 and 2 are independent of the queue and fix a corpus correctness bug rather than
 scheduling. They went first.
+
+### What the build changed about this design
+
+Three things here were decided on reasoning and corrected by measurement. They
+are left in place above, with the corrections beside them, because the reasoning
+was not silly — it was just wrong, and the shape of the error is the useful part.
+
+- **"Both halves on the same 5-minute tick."** The scan takes 5m17s serial for
+  288 repos, so that would have been ~3,400 git fetches an hour, back to back,
+  forever. Parallelising it (8 threads, I/O-bound) brought it to ~46s, which
+  removed the *duration* objection but not the *volume* one. Scan runs at 15
+  minutes, drain at 5.
+- **"A drain tick is cheap when the queue is empty."** It was not: building the
+  runner loads the embedding model, so a no-op tick cost 30+ seconds. It now asks
+  the queue first with a bare Couchbase client — 2.3s.
+- **The queue needed an index, and then a predicate.** `counts()` scanned the
+  whole 180K-document corpus at 25s until it gained `state IS NOT MISSING`, because
+  N1QL will not use an index whose leading key has no predicate. Both indexes now
+  live in `scripts/ensure_query_indexes.py`, whose docstring already carried that
+  exact lesson from a previous encounter with it.
+
+And one consequence the design did not anticipate at all: **the daily digest read
+"the most recent ingestion_run doc"**, which is the same sentence as "what
+happened today" only while a day holds one run. Arming the tick without changing
+it would have silently reduced the digest to a report on the last five minutes.
+It reads a 24-hour window now.
 
 ### Outstanding from items 1-2
 
