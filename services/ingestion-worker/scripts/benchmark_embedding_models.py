@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 import httpx
 
-REPOS_PATH = Path(os.environ.get("REPOS_PATH", "/Users/kaustubh/Documents/codesmriti-repos"))
+REPOS_PATH = Path(os.environ.get("REPOS_PATH", "/Users/kaustubh/code/codesmriti-repos"))
 OLLAMA = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OUT = Path(os.environ.get("EMBBENCH_OUT", "/tmp/embbench"))
 

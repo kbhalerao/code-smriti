@@ -10,7 +10,7 @@
 # Work is selected by document_id ordering, so resuming re-embeds nothing twice
 # and skips nothing.
 set -u
-ROOT=/Users/kaustubh/Documents/code/code-smriti/services/ingestion-worker
+ROOT=/Users/kaustubh/code/code-smriti/services/ingestion-worker
 cd "$ROOT" || exit 1
 PY=$ROOT/.venv/bin/python
 LOG=$ROOT/logs/reembed_corpus.log

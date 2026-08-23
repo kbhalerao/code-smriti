@@ -1,8 +1,8 @@
 {
-    "adapter_path": "/Users/kaustubh/Documents/code/code-smriti/services/akriti-lora/models/adapters",
+    "adapter_path": "/Users/kaustubh/code/code-smriti/services/akriti-lora/models/adapters",
     "batch_size": 4,
-    "config": "/Users/kaustubh/Documents/code/code-smriti/services/akriti-lora/models/lora_config.yaml",
-    "data": "/Users/kaustubh/Documents/code/code-smriti/services/akriti-lora/data",
+    "config": "/Users/kaustubh/code/code-smriti/services/akriti-lora/models/lora_config.yaml",
+    "data": "/Users/kaustubh/code/code-smriti/services/akriti-lora/data",
     "fine_tune_type": "lora",
     "grad_accumulation_steps": 1,
     "grad_checkpoint": false,

@@ -20,7 +20,7 @@ export HOME="/Users/kaustubh"
 export USER="kaustubh"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-LOG="$HOME/Documents/code/code-smriti/logs/ensure_stack.log"
+LOG="$HOME/code/code-smriti/logs/ensure_stack.log"
 LIMA_DIR="$HOME/.colima/_lima/colima"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') | $1" >> "$LOG"; }

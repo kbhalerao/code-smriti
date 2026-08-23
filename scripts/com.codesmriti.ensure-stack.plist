@@ -13,7 +13,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/kaustubh/Documents/code/code-smriti/scripts/ensure_stack.sh</string>
+        <string>/Users/kaustubh/code/code-smriti/scripts/ensure_stack.sh</string>
     </array>
 
     <!-- Bring the stack up at boot... -->
@@ -27,8 +27,8 @@
     <integer>300</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/kaustubh/Documents/code/code-smriti/logs/ensure_stack.daemon.out</string>
+    <string>/Users/kaustubh/code/code-smriti/logs/ensure_stack.daemon.out</string>
     <key>StandardErrorPath</key>
-    <string>/Users/kaustubh/Documents/code/code-smriti/logs/ensure_stack.daemon.err</string>
+    <string>/Users/kaustubh/code/code-smriti/logs/ensure_stack.daemon.err</string>
 </dict>
 </plist>
