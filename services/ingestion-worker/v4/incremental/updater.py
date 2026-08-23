@@ -15,6 +15,9 @@ from .models import (
     STATUS_FULL_REINGEST, STATUS_EMPTY, STATUS_ERROR, STATUS_DELETED
 )
 from .git_utils import GitOperations
+from .plan import (
+    ACTION_CLONE_INGEST, ACTION_INCREMENTAL, ACTION_NONE, ACTION_REBUILD, RepoPlan,
+)
 
 # Repo outcomes that represent no work done. A run of ~280 repos is mostly these,
 # and the dashboard collapses them to a count rather than listing every one.
@@ -41,6 +44,7 @@ from .repo_lifecycle import RepoLifecycle
 from .significance import SignificanceChecker
 from ..doc_versions import file_key, newest_per_key
 from ..dlq import DeadLetterQueue
+from .queue import IngestionQueue
 from ..schemas import FailureKind, FileFailure
 from ..doc_loader import rehydrate_file_index
 
@@ -108,6 +112,7 @@ class IncrementalUpdater:
         # Dead-letter queue. Failures that survive their end-of-pass retry land
         # here for a human; nothing drains it automatically.
         self.dlq = DeadLetterQueue(self.cb_client)
+        self.queue = IngestionQueue(self.cb_client)
 
         # Set by IngestionRunner so a DLQ entry names the run that produced it.
         self.run_id = ""
@@ -250,29 +255,35 @@ class IncrementalUpdater:
             return
         self.dlq.record(repo_id, failures, run_id=self.run_id, commit=commit)
 
-    def process_repo(self, repo_id: str, repo_path: Path, loop=None) -> UpdateResult:
-        """Process a single repository with incremental update logic."""
-        start_time = datetime.now()
-        logger.info(f"\nProcessing {repo_id}")
+    def plan_repo(self, repo_id: str, repo_path: Path) -> RepoPlan:
+        """Decide what one repository needs, without doing any of it.
+
+        This is the half that touches the network — fetch, sync, diff — and it is
+        deliberately the ONLY half that does. `GitOperations.fetch` writes refspec
+        config and moves `origin/HEAD`, so if the processor fetched too, a scan and
+        a drain on the same tick would collide on git's own locks.
+
+        Everything it returns is pinned to the commit range it decided against, so
+        the processor works exactly that range and never re-derives it — which is
+        also what makes the file list it publishes exact rather than a guess that
+        origin/HEAD may already have moved past.
+        """
+        logger.info(f"\nPlanning {repo_id}")
 
         # 0. Check exclusion list
         if repo_id in self.exclusions:
             logger.info(f"  Skipping - excluded in config")
-            return UpdateResult(
-                repo_id=repo_id,
-                status=STATUS_EXCLUDED,
-                reason='in_exclusion_list',
-                duration_seconds=(datetime.now() - start_time).total_seconds()
-            )
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE,
+                            status=STATUS_EXCLUDED, reason='in_exclusion_list')
 
         # 1. Fetch latest from origin
         if not self.git.fetch(repo_path):
-            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git fetch failed')
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE,
+                            status=STATUS_ERROR, error='Git fetch failed')
 
         # 2. Put the worktree on origin's default branch before anything reads
-        #    it. Done here rather than beside each ingestion call below, so that
-        #    local_head is always the default branch's head and step 3 compares
-        #    like with like. See GitOperations.sync_to_default_branch.
+        #    it, so that local_head is the default branch's head and step 3
+        #    compares like with like. See GitOperations.sync_to_default_branch.
         local_head = self.git.sync_to_default_branch(repo_path)
         if local_head is None:
             # A remote nobody has pushed to yet is not a broken sync. The
@@ -281,10 +292,10 @@ class IncrementalUpdater:
             # the distinction has to be made here or six never-populated repos
             # report as errors on every run.
             if self.git.remote_has_branches(repo_path) is False:
-                return UpdateResult(
-                    repo_id=repo_id, status=STATUS_EMPTY, reason='no_origin_head'
-                )
-            return UpdateResult(repo_id=repo_id, status=STATUS_ERROR, error='Git sync failed')
+                return RepoPlan(repo_id=repo_id, action=ACTION_NONE,
+                                status=STATUS_EMPTY, reason='no_origin_head')
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE,
+                            status=STATUS_ERROR, error='Git sync failed')
 
         # 3. Get commits
         origin_head = self.git.get_origin_head(repo_path)
@@ -292,21 +303,124 @@ class IncrementalUpdater:
 
         if not origin_head:
             logger.info(f"  Empty repo - no branches found")
-            return UpdateResult(repo_id=repo_id, status=STATUS_EMPTY, reason='no_origin_head')
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE,
+                            status=STATUS_EMPTY, reason='no_origin_head')
 
         # 4. Check if update needed
         if stored_commit and local_head == origin_head == stored_commit:
             logger.info(f"  Skipping - no changes (commit: {stored_commit[:8]})")
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE, status=STATUS_SKIPPED,
+                            reason='no_changes', base_commit=stored_commit,
+                            target_commit=origin_head)
+
+        # 5. Never ingested — the whole repo is the work.
+        if not stored_commit:
+            logger.info(f"  New repo - full ingestion")
+            return RepoPlan(repo_id=repo_id, action=ACTION_CLONE_INGEST,
+                            target_commit=origin_head, reason='new_repo')
+
+        # 6. Get changed files
+        changes = self.git.get_changed_files(repo_path, stored_commit, origin_head)
+        if not changes:
+            logger.info(f"  Skipping - no file changes")
+            return RepoPlan(repo_id=repo_id, action=ACTION_NONE, status=STATUS_SKIPPED,
+                            reason='no_file_changes', base_commit=stored_commit,
+                            target_commit=origin_head)
+
+        # 7. Decide between a surgical update and a rebuild.
+        #
+        # The comparison has to be between like and like, and for a long time it
+        # was not. `changes.total_changed` counts every path git reports — images,
+        # lock files, .po catalogues, CSV fixtures — while the denominator counts
+        # `file_index` documents, which exist only for files the pipeline actually
+        # ingests. affiliate-sites logged "1064 files changed (765.5%)" against a
+        # corpus of 488: a ratio over a population the corpus never contained.
+        code_to_process, docs_to_process = self.filter_supported_files(changes.files_to_process, repo_path)
+        code_deleted, docs_deleted = self.filter_supported_files(changes.deleted, repo_path)
+        indexable_changed = (
+            len(code_to_process) + len(docs_to_process) + len(code_deleted) + len(docs_deleted)
+        )
+
+        base = dict(
+            repo_id=repo_id, base_commit=stored_commit, target_commit=origin_head,
+            added=changes.added, modified=changes.modified, deleted=changes.deleted,
+            code_to_process=code_to_process, docs_to_process=docs_to_process,
+            code_deleted=code_deleted, docs_deleted=docs_deleted,
+            indexable_changed=indexable_changed,
+        )
+
+        # Nothing the corpus holds has moved. The repo is at a new commit, so the
+        # pointer has to advance or this is re-evaluated on every run, but there
+        # is no work to do: the embeddings already match the repo state.
+        if indexable_changed == 0:
+            logger.info(
+                f"  Skipping - {changes.total_changed} changed file(s), none indexable "
+                f"(commit: {origin_head[:8]})"
+            )
+            return RepoPlan(action=ACTION_NONE, status=STATUS_SKIPPED,
+                            reason='no_indexable_changes', **base)
+
+        corpus_files = self.repo_lifecycle.get_repo_file_count(repo_id)
+
+        # An absent corpus is a rebuild, not a ratio. This used to fall out of a
+        # `or 1` divide-by-zero guard, which reached the right answer by accident
+        # and made every such repo log an absurd percentage (3 files changed,
+        # "150.0%"). Say it directly.
+        if corpus_files == 0:
+            logger.info(f"  No documents in corpus - full ingestion ({indexable_changed} indexable changes)")
+            return RepoPlan(action=ACTION_REBUILD, corpus_files=corpus_files,
+                            rebuild_reason='empty_corpus', **base)
+
+        change_ratio = indexable_changed / corpus_files
+        if change_ratio > self.threshold:
+            logger.info(f"  {indexable_changed} indexable of {changes.total_changed} changed files "
+                        f"({change_ratio:.1%} of {corpus_files}) > {self.threshold:.0%} threshold "
+                        f"- full re-ingestion")
+            return RepoPlan(action=ACTION_REBUILD, corpus_files=corpus_files,
+                            rebuild_reason=f'threshold_exceeded ({change_ratio:.1%})', **base)
+
+        return RepoPlan(action=ACTION_INCREMENTAL, corpus_files=corpus_files, **base)
+
+
+    def execute_plan(self, plan: RepoPlan, repo_path: Path, loop=None) -> UpdateResult:
+        """Do what a plan says, touching only what it names.
+
+        Deliberately does no git fetch and re-derives no decision: the plan is
+        pinned to a commit range and this works that range. That is what lets the
+        scan and the processor run as separate processes on the same tick without
+        fighting over `.git`.
+        """
+        start_time = datetime.now()
+        repo_id = plan.repo_id
+
+        # Rebound from the plan so the bodies below read exactly as they did when
+        # decision and execution shared one scope.
+        origin_head = plan.target_commit
+        stored_commit = plan.base_commit
+        base_commit = plan.base_commit
+        changes = plan.as_changeset()
+        code_to_process = plan.code_to_process
+        docs_to_process = plan.docs_to_process
+        code_deleted = plan.code_deleted
+        docs_deleted = plan.docs_deleted
+        indexable_changed = plan.indexable_changed
+        corpus_files = plan.corpus_files
+        rebuild_reason = plan.rebuild_reason
+
+        if plan.action == ACTION_NONE:
             return UpdateResult(
                 repo_id=repo_id,
-                status=STATUS_SKIPPED,
-                reason='no_changes',
-                commit=stored_commit,
-                duration_seconds=(datetime.now() - start_time).total_seconds()
+                status=plan.status or STATUS_SKIPPED,
+                reason=plan.reason,
+                error=plan.error,
+                commit=plan.target_commit,
+                duration_seconds=(datetime.now() - start_time).total_seconds(),
             )
 
+        logger.info(f"\nProcessing {repo_id}")
+
         # 5. New repo - full ingestion
-        if not stored_commit:
+        if plan.action == ACTION_CLONE_INGEST:
             logger.info(f"  New repo - full ingestion")
             if not self.dry_run:
                 owns_loop = loop is None
@@ -336,72 +450,7 @@ class IncrementalUpdater:
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
 
-        # 6. Get changed files
-        base_commit = stored_commit
-        changes = self.git.get_changed_files(repo_path, base_commit, origin_head)
-
-        if not changes:
-            logger.info(f"  Skipping - no file changes")
-            return UpdateResult(
-                repo_id=repo_id,
-                status=STATUS_SKIPPED,
-                reason='no_file_changes',
-                commit=origin_head,
-                duration_seconds=(datetime.now() - start_time).total_seconds()
-            )
-
-        # 7. Decide between a surgical update and a rebuild.
-        #
-        # The comparison has to be between like and like, and for a long time it
-        # was not. `changes.total_changed` counts every path git reports —
-        # images, lock files, .po catalogues, CSV fixtures — while the denominator
-        # counts `file_index` documents, which exist only for files the pipeline
-        # actually ingests. affiliate-sites logged "1064 files changed (765.5%)"
-        # against a corpus of 488: a ratio over a population the corpus never
-        # contained. Filtering first is also free, because step 8 needs these
-        # exact lists anyway and used to recompute them.
-        code_to_process, docs_to_process = self.filter_supported_files(changes.files_to_process, repo_path)
-        code_deleted, docs_deleted = self.filter_supported_files(changes.deleted, repo_path)
-        indexable_changed = (
-            len(code_to_process) + len(docs_to_process) + len(code_deleted) + len(docs_deleted)
-        )
-
-        # Nothing the corpus holds has moved. The repo is at a new commit, so the
-        # pointer has to advance or this is re-evaluated on every run, but there
-        # is no work to do: the embeddings already match the repo state.
-        if indexable_changed == 0:
-            logger.info(
-                f"  Skipping - {changes.total_changed} changed file(s), none indexable "
-                f"(commit: {origin_head[:8]})"
-            )
-            return UpdateResult(
-                repo_id=repo_id,
-                status=STATUS_SKIPPED,
-                reason='no_indexable_changes',
-                commit=origin_head,
-                duration_seconds=(datetime.now() - start_time).total_seconds()
-            )
-
-        corpus_files = self.repo_lifecycle.get_repo_file_count(repo_id)
-
-        # An absent corpus is a rebuild, not a ratio. This used to fall out of a
-        # `or 1` divide-by-zero guard, which reached the right answer by accident
-        # and made every such repo log an absurd percentage (3 files changed,
-        # "150.0%"). Say it directly.
-        if corpus_files == 0:
-            logger.info(f"  No documents in corpus - full ingestion ({indexable_changed} indexable changes)")
-            rebuild_reason = 'empty_corpus'
-        else:
-            change_ratio = indexable_changed / corpus_files
-            if change_ratio > self.threshold:
-                logger.info(f"  {indexable_changed} indexable of {changes.total_changed} changed files "
-                            f"({change_ratio:.1%} of {corpus_files}) > {self.threshold:.0%} threshold "
-                            f"- full re-ingestion")
-                rebuild_reason = f'threshold_exceeded ({change_ratio:.1%})'
-            else:
-                rebuild_reason = None
-
-        if rebuild_reason:
+        if plan.action == ACTION_REBUILD:
             # A rebuild processes every file in the repo, not just the changed
             # ones, which is why the dashboard shows the mode rather than just a
             # count: it is what explains why one job sits there for hours.
@@ -440,6 +489,7 @@ class IncrementalUpdater:
                 files_processed=changes.total_changed,
                 duration_seconds=(datetime.now() - start_time).total_seconds()
             )
+
 
         # 8. Surgical incremental update. The filtered lists come from step 7,
         # which needed them to make the decision in the first place.
@@ -694,6 +744,17 @@ class IncrementalUpdater:
             docs_created=len(file_indices) + len(all_symbol_indices),
             duration_seconds=duration
         )
+
+    def process_repo(self, repo_id: str, repo_path: Path, loop=None) -> UpdateResult:
+        """Plan a repository and immediately execute the plan.
+
+        The one-pass path, kept for the single-run CLI and for anything that wants
+        a repo brought current right now. The scan/drain pair uses the same two
+        halves with the queue in between.
+        """
+        return self.execute_plan(self.plan_repo(repo_id, repo_path), repo_path, loop)
+
+
 
     def _existing_module_summaries(self, repo_id: str) -> dict:
         """Prior LLM module summaries keyed by module_path, for carry-forward.
@@ -1060,6 +1121,130 @@ class IncrementalUpdater:
             self.repo_lifecycle.update_commits_index({result.repo_id: result.commit})
         except Exception as e:
             logger.warning(f"Could not checkpoint {result.repo_id}@{result.commit[:8]}: {e}")
+
+    # --- scan / drain -------------------------------------------------------
+    #
+    # The two halves of a tick. They run as separate processes with no ordering
+    # dependency: if the scan queues something after the drain has already looked,
+    # it is picked up on the next tick. Five-minute eventual consistency is the
+    # whole coordination protocol.
+
+    def scan(self, repo_filter: Optional[str] = None) -> Dict[str, int]:
+        """Decide what needs doing and queue it. The only half that fetches."""
+        stats = {"planned": 0, "queued": 0, "no_work": 0, "cloned": 0, "deleted": 0, "error": 0}
+
+        if repo_filter:
+            canonical = {repo_filter}
+        else:
+            canonical = set(self.repo_lifecycle.get_canonical_repo_list())
+
+        on_disk = {r["repo_id"] for r in self.repo_lifecycle.discover_repos_on_disk()}
+        in_db = self.repo_lifecycle.get_repos_in_database()
+        to_process = canonical & on_disk
+
+        for repo_id in sorted(canonical - on_disk):
+            target = self.repo_lifecycle.repo_id_to_path(repo_id)
+            if self.git.clone(repo_id, target, self.config.github_token):
+                to_process.add(repo_id)
+                stats["cloned"] += 1
+            else:
+                stats["error"] += 1
+
+        if not repo_filter:
+            for repo_id in sorted(in_db - canonical):
+                self.repo_lifecycle.delete_repo_docs(repo_id, self.dry_run)
+                self.queue.drop(repo_id)
+                stats["deleted"] += 1
+
+        for repo_id in sorted(to_process):
+            try:
+                plan = self.plan_repo(repo_id, self.repo_lifecycle.repo_id_to_path(repo_id))
+            except Exception as e:
+                logger.error(f"Planning {repo_id} failed: {e}")
+                stats["error"] += 1
+                continue
+
+            stats["planned"] += 1
+            if plan.is_work:
+                if not self.dry_run and self.queue.enqueue(plan):
+                    stats["queued"] += 1
+                continue
+
+            stats["no_work"] += 1
+            self.queue.drop(repo_id)
+
+            # A repo whose commit moved but whose corpus did not need to — a
+            # changed .po file, a new PNG — still has to advance its stored
+            # commit. The one-pass path did this from the UpdateResult it
+            # returned; here the plan never reaches the drain, so if the scan
+            # did not checkpoint it the repo would be re-planned on every tick
+            # for the rest of time.
+            if not self.dry_run and plan.target_commit and plan.status == STATUS_SKIPPED:
+                self._checkpoint_commit(UpdateResult(
+                    repo_id=repo_id, status=STATUS_SKIPPED,
+                    reason=plan.reason, commit=plan.target_commit,
+                ))
+
+        logger.info(
+            f"Scan: {stats['planned']} planned, {stats['queued']} queued, "
+            f"{stats['no_work']} with nothing to do, {stats['cloned']} cloned, "
+            f"{stats['deleted']} orphans removed, {stats['error']} error(s)"
+        )
+        return stats
+
+    def drain(self, max_items: Optional[int] = None) -> List[UpdateResult]:
+        """Work the queue until it is empty or the budget is spent.
+
+        Caller holds the ingestion lock, which is what makes the reclaim below
+        safe: only one drain can exist, so anything still leased belongs to a
+        processor that died.
+        """
+        self.queue.reclaim_leased()
+
+        results: List[UpdateResult] = []
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            while max_items is None or len(results) < max_items:
+                plan = self.queue.claim_next()
+                if plan is None:
+                    break
+
+                repo_path = self.repo_lifecycle.repo_id_to_path(plan.repo_id)
+                self.jobs.start(plan.repo_id, mode=plan.action)
+                try:
+                    result = self.execute_plan(plan, repo_path, loop)
+                except Exception as e:
+                    logger.exception(f"Executing {plan.repo_id} failed")
+                    attempts = self.queue.record_failure(plan.repo_id, str(e))
+                    if attempts >= self.queue.max_attempts:
+                        # Out of attempts: this is not transient and retrying it
+                        # every tick would burn the GPU on a known-broken repo.
+                        self.dlq.record(plan.repo_id, [FileFailure(
+                            file_path="<repo>", kind=FailureKind.EXCEPTION,
+                            detail=f"{type(e).__name__}: {e}", retried=True,
+                        )], run_id=self.run_id, commit=plan.target_commit or "")
+                    results.append(UpdateResult(
+                        repo_id=plan.repo_id, status=STATUS_ERROR, error=str(e)))
+                    self.jobs.finish(plan.repo_id, state="failed", error=str(e))
+                    continue
+
+                results.append(result)
+                self._checkpoint_commit(result)
+                self.queue.drop(plan.repo_id)
+                self.jobs.finish(
+                    plan.repo_id,
+                    state="failed" if result.status == STATUS_ERROR else "done",
+                    mode=self._job_mode(result),
+                    detail=self._job_detail(result),
+                    error=result.error,
+                    noop=result.status in NO_WORK_STATUSES,
+                )
+        finally:
+            loop.close()
+
+        logger.info(f"Drain: completed {len(results)} item(s)")
+        return results
 
     def run(self, repo_filter: Optional[str] = None) -> List[UpdateResult]:
         """Run incremental update for all repos."""

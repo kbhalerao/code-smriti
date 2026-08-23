@@ -272,7 +272,22 @@ class IngestionRunner:
             except Exception as e:
                 logger.error(f"Failed to save run record: {e}")
 
-    def run(self, repo_filter: Optional[str] = None) -> List[UpdateResult]:
+    def drain(self, max_items: Optional[int] = None) -> List[UpdateResult]:
+        """Work the durable queue under the same lock a full run takes.
+
+        Same wrapper as `run` — lock, logs, run record, SIGTERM handling — with
+        the queue supplying the work instead of a freshly computed repo list.
+        A watchdog kill now costs the item in flight and nothing else: the rest
+        of the backlog is still in the queue when the next tick starts.
+        """
+        return self.run(mode="drain", max_items=max_items)
+
+    def run(
+        self,
+        repo_filter: Optional[str] = None,
+        mode: str = "full",
+        max_items: Optional[int] = None,
+    ) -> List[UpdateResult]:
         """
         Run incremental ingestion with locking.
 
@@ -339,7 +354,10 @@ class IngestionRunner:
             updater.run_id = run_id
 
             # Run the update
-            results = updater.run(repo_filter=repo_filter)
+            if mode == "drain":
+                results = updater.drain(max_items=max_items)
+            else:
+                results = updater.run(repo_filter=repo_filter)
 
             # Standing dead-letter state, read once at the end rather than
             # accumulated during the run: entries clear when a file recovers, so

@@ -38,6 +38,20 @@ BUCKET = "code_kosha"
 
 INDEXES: list[tuple[str, str, str]] = [
     (
+        "idx_ingestion_queue",
+        "claiming the longest-waiting queued repo, every drain tick",
+        f"""CREATE INDEX IF NOT EXISTS idx_ingestion_queue ON `{BUCKET}`
+            (state, enqueued_at, attempts)
+            WHERE type = 'ingestion_queue_item'""",
+    ),
+    (
+        "idx_ingestion_dlq",
+        "the dead-letter queue, read after every run and by --dlq",
+        f"""CREATE INDEX IF NOT EXISTS idx_ingestion_dlq ON `{BUCKET}`
+            (last_seen DESC, repo_id)
+            WHERE type = 'ingestion_dlq'""",
+    ),
+    (
         "idx_repo_summary_list",
         "listing every repository for the inspector's picker",
         f"""CREATE INDEX IF NOT EXISTS idx_repo_summary_list ON `{BUCKET}`

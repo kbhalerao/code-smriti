@@ -86,6 +86,29 @@ def main():
         help="Check if an ingestion is currently running"
     )
     parser.add_argument(
+        "--scan",
+        action="store_true",
+        help="Decide what needs doing and queue it, without doing any of it. "
+             "The only half that talks to git. Safe to run while a drain is working."
+    )
+    parser.add_argument(
+        "--drain",
+        action="store_true",
+        help="Work the durable queue under the ingestion lock. Does no git fetch: "
+             "every item is pinned to the commit range the scan decided against."
+    )
+    parser.add_argument(
+        "--max-items",
+        type=int,
+        default=None,
+        help="Stop the drain after this many repos (default: until the queue is empty)"
+    )
+    parser.add_argument(
+        "--queue",
+        action="store_true",
+        help="Show what is waiting, longest-waiting first, then exit"
+    )
+    parser.add_argument(
         "--dlq",
         action="store_true",
         help="List files that failed and were not recovered, then exit. Nothing "
@@ -112,6 +135,31 @@ def main():
         else:
             print("No ingestion running")
             sys.exit(0)
+
+    # Queue inspection. Read-only, takes no lock.
+    if args.queue:
+        from loguru import logger as _log
+        _log.remove()
+        from storage.couchbase_client import CouchbaseClient
+        from v4.incremental.queue import IngestionQueue
+
+        q = IngestionQueue(CouchbaseClient())
+        counts = q.counts()
+        if not counts:
+            print("Queue is empty.")
+            sys.exit(0)
+        print("  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+        print()
+        for item in q.pending(limit=100):
+            plan = item.get("plan") or {}
+            files = len(plan.get("code_to_process") or [])
+            attempts = item.get("attempts", 0)
+            print(
+                f"  [{item.get('state'):6}] {item.get('repo_id'):45} "
+                f"{plan.get('action', '?'):12} {files:4} file(s)"
+                + (f"  attempts={attempts}" if attempts else "")
+            )
+        sys.exit(0)
 
     # Dead-letter inspection mode. Read-only, takes no lock, and deliberately
     # exits non-zero when there is something to look at so a caller can gate on it.
@@ -147,6 +195,46 @@ def main():
     # LLM config is env-driven (LLM_BASE_URL / LLM_MODEL / LLM_PROVIDER)
     llm_config = LLM_CONFIG
 
+    # Scan: plans and queues, never executes. Deliberately does NOT take the
+    # ingestion lock — a scan and a drain are meant to run on the same tick.
+    if args.scan:
+        import fcntl
+        from pathlib import Path as _Path
+        from v4.incremental.updater import IncrementalUpdater
+
+        lock_path = _Path(__file__).parent / "logs" / "scan.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = open(lock_path, "a+")
+        try:
+            # Its own lock, not the ingestion one. ~100 fetches does not sit
+            # comfortably inside a 5-minute tick, so two scans can overlap
+            # without this; two drains cannot, because of the ingestion lock.
+            fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            print("Another scan is running; skipping.")
+            sys.exit(0)
+
+        updater = IncrementalUpdater(
+            threshold=args.threshold, dry_run=args.dry_run,
+            enable_llm=not args.no_llm, llm_config=llm_config,
+        )
+        stats = updater.scan(repo_filter=args.repo)
+        print(" ".join(f"{k}={v}" for k, v in stats.items()))
+        sys.exit(0)
+
+    # A drain tick with an empty queue must be nearly free. Constructing the
+    # runner builds V4Pipeline, which loads the embedding model — tens of seconds
+    # of work to discover there is nothing to do, every five minutes, forever. So
+    # ask the queue first, with nothing but a Couchbase client.
+    if args.drain:
+        from loguru import logger as _log
+        from storage.couchbase_client import CouchbaseClient
+        from v4.incremental.queue import IngestionQueue, STATE_QUEUED
+
+        if not IngestionQueue(CouchbaseClient()).counts().get(STATE_QUEUED):
+            print("Queue is empty; nothing to drain.")
+            sys.exit(0)
+
     # Initialize runner (handles locking and logging)
     runner = IngestionRunner(
         threshold=args.threshold,
@@ -157,7 +245,10 @@ def main():
     )
 
     try:
-        results = runner.run(repo_filter=args.repo)
+        if args.drain:
+            results = runner.drain(max_items=args.max_items)
+        else:
+            results = runner.run(repo_filter=args.repo)
 
         # Exit with error if any failures
         if any(r.status == 'error' for r in results):
