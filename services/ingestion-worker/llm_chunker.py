@@ -326,10 +326,23 @@ def is_underchunked(file_path: str, content: str, chunks: List[Dict], language: 
             reasons.append(f"heavy_string_formatting ({format_count} instances)")
 
     if language == "javascript" or language == "typescript":
-        # Template literals with expressions
-        template_literals = len(re.findall(r'`[^`]*\$\{[^}]+\}[^`]*`', content))
-        if template_literals > 3:
-            reasons.append(f"template_literals ({template_literals} instances)")
+        # Template literals big enough to be hiding an HTML or SQL blob the
+        # structural chunker cannot see into. Gated on *length*, like every
+        # pattern in §3, rather than on instance count.
+        #
+        # Counting instances was the bug: `> 3` interpolations flags essentially
+        # every non-trivial JS file, because interpolation is how ordinary JS
+        # writes a URL, a coordinate pair or a toast message. It fired on 59 of
+        # farmworth_frontend's 1,271 files and identified nothing — the LLM
+        # chunker was called to look for structure that was never there, and the
+        # run report named healthy files as degraded.
+        big_literals = [
+            lit
+            for lit in re.findall(r'`[^`]*\$\{[^}]+\}[^`]*`', content)
+            if len(lit) >= 200
+        ]
+        if big_literals:
+            reasons.append(f"template_literals ({len(big_literals)} substantial instances)")
 
     # 5. File has no language-specific parsing (fallback chunker was used)
     if language in ("sql", "svelte", "vue", "unknown"):
