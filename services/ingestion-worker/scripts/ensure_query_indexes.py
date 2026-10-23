@@ -80,6 +80,24 @@ INDEXES: list[tuple[str, str, str]] = [
             WHERE type IN ['symbol_index', 'semantic_unit']""",
     ),
     (
+        "idx_doc_type",
+        "the KPI dashboard's document counts by type, answered from the index alone",
+        f"""CREATE INDEX IF NOT EXISTS idx_doc_type ON `{BUCKET}` (type)""",
+    ),
+    (
+        "idx_commit_stats",
+        "the KPI dashboard's commit aggregates, covered so no document is fetched",
+        f"""CREATE INDEX IF NOT EXISTS idx_commit_stats ON `{BUCKET}`
+            (commit_date, repo_id, author, metadata.lines_added, metadata.lines_deleted)
+            WHERE type = 'commit_index'""",
+    ),
+    (
+        "idx_ingestion_run",
+        "the newest ingestion runs, for the KPI dashboard's run table",
+        f"""CREATE INDEX IF NOT EXISTS idx_ingestion_run ON `{BUCKET}` (`timestamp` DESC)
+            WHERE type = 'ingestion_run'""",
+    ),
+    (
         "idx_annotation_target",
         "judgments on one document",
         f"""CREATE INDEX IF NOT EXISTS idx_annotation_target ON `{BUCKET}`

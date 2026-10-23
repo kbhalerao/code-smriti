@@ -44,7 +44,9 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
 
     # Total documents by type
     result = cb_client.cluster.query(f"""
-        SELECT type, COUNT(*) as cnt FROM `{bucket}` GROUP BY type
+        SELECT type, COUNT(*) as cnt FROM `{bucket}`
+        WHERE type IS NOT MISSING
+        GROUP BY type
     """)
     stats['doc_types'] = {r['type']: r['cnt'] for r in result}
     stats['total_docs'] = sum(stats['doc_types'].values())
@@ -81,7 +83,7 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
     result = cb_client.cluster.query(f"""
         SELECT COUNT(DISTINCT repo_id) as cnt
         FROM `{bucket}`
-        WHERE type = 'commit_index'
+        WHERE type = 'commit_index' AND commit_date IS NOT MISSING
         GROUP BY repo_id
         HAVING MIN(commit_date) >= '{current_year}-01'
     """)
@@ -91,7 +93,7 @@ def query_stats(cb_client: CouchbaseClient) -> dict:
     # Recent ingestion runs
     result = cb_client.cluster.query(f"""
         SELECT * FROM `{bucket}`
-        WHERE type = 'ingestion_run'
+        WHERE type = 'ingestion_run' AND `timestamp` IS NOT MISSING
         ORDER BY timestamp DESC
         LIMIT 10
     """)
