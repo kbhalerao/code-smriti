@@ -357,11 +357,14 @@ class RetrievalOrchestrator:
             conjuncts: list[dict] = [{"term": doc_type, "field": "type"}]
 
             if repo_filter:
+                # repo_id is stored in its original casing (owner/Repo) but the
+                # FTS term index is lowercased, so the term must be lowercased
+                # too or mixed-case repos match nothing.
                 conjuncts.append(
-                    {"term": repo_filter[0], "field": "repo_id"}
+                    {"term": repo_filter[0].lower(), "field": "repo_id"}
                     if len(repo_filter) == 1
                     else {"disjuncts": [
-                        {"term": rid, "field": "repo_id"} for rid in repo_filter
+                        {"term": rid.lower(), "field": "repo_id"} for rid in repo_filter
                     ]}
                 )
 
@@ -419,7 +422,7 @@ class RetrievalOrchestrator:
                 # Process returned hits for re-ranking (BM25 scores are flat)
                 # Post-filter to ensure only valid doc types (workaround for 7.6.2 bug)
                 doc_types_set = set(doc_types)
-                repo_filter_set = set(repo_filter) if repo_filter else None
+                repo_filter_set = {r.lower() for r in repo_filter} if repo_filter else None
                 for hit in hits:
                     doc_id = hit.get("id")
                     if not doc_id:
@@ -437,7 +440,7 @@ class RetrievalOrchestrator:
                         actual_type = doc.get("type")
                         if actual_type not in doc_types_set:
                             continue
-                        if repo_filter_set is not None and doc.get("repo_id") not in repo_filter_set:
+                        if repo_filter_set is not None and (doc.get("repo_id") or "").lower() not in repo_filter_set:
                             continue
 
                         metadata = doc.get("metadata", {})

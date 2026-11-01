@@ -320,7 +320,8 @@ async def search_code(
             """Run one filtered KNN search for a single document type."""
             conjuncts: list[dict] = [{"term": doc_type_term, "field": "type"}]
             if repo_filter:
-                conjuncts.append({"term": repo_filter, "field": "repo_id"})
+                # Lowercased to match the FTS term index; see orchestrator._search_level.
+                conjuncts.append({"term": repo_filter.lower(), "field": "repo_id"})
             filter_query = conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
 
             request = {
