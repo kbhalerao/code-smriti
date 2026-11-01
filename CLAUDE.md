@@ -24,7 +24,9 @@ Credentials are in `.env` at project root. The bucket is `code_kosha` (not `code
 ## Embedding Pipeline
 
 The model is **`Qwen/Qwen3-Embedding-0.6B`**, stored **Matryoshka-truncated to 768
-dimensions**, loaded in-process via sentence-transformers on both sides. It
+dimensions**. Documents are embedded in-process via sentence-transformers. Queries
+are embedded by Ollama, as `qwen3-embedding:0.6b-q8_0`, because the in-process model
+cost 2.7 GB resident and OOM-killed the API on the 8 GB Docker VM. The model
 replaced `nomic-embed-text-v1.5` on 2026-08-19 on measured retrieval: over 5,000
 documents and 300 natural-language queries, nomic scored MRR 0.752 / recall@1
 0.667 against 0.886 / 0.817 — a 7.7-sigma difference. Larger Qwen variants add
@@ -53,6 +55,17 @@ All embeddings are **normalized to unit length** (L2 norm = 1.0) for the FTS
 vector index, which uses `dot_product` — that is the cosine only for unit
 vectors, and Matryoshka truncation denormalises, so truncation always
 renormalises.
+
+Queries and documents therefore come from different builds of the same weights,
+which is safe because it is measured, not because it is obvious.
+`services/ingestion-worker/scripts/measure_query_serving.py` retrieves against
+vectors stored in the corpus: over 300 queries and 5,000 documents, R@1 is 0.940
+served against 0.943 from Hugging Face, one rank-1 hit lost and none gained,
+minimum query cosine 0.9987. **Re-run it before changing `ollama_model`**; a
+different quantization needs no re-embed if that holds. At startup
+`probe_embedder()` compares the served vector to an anchor from the Hugging Face
+model, which catches the wrong model but not a small quantization shift. If Ollama
+is down, searches return **503** (`EmbeddingServiceError`), not empty results.
 
 Symbol embeddings carry the summary plus up to `CODE_CHARS_FOR_EMBEDDING` (8,000)
 characters of source. Batching is bounded by both a token budget and an
@@ -159,11 +172,12 @@ Two roles matter to this project:
 | Role | Backing model | Engine | Used by |
 |---|---|---|---|
 | `general` | gemma4:26b-nvfp4 | MLX (safetensors) | enrichment/summaries — **cannot batch** |
-| `structured` | gemma4:26b-a4b-it-q8_0 | GGUF | LLM chunker; also Listings AI extraction |
+| `structured` | qwen3.8:27b-mlx (since 2026-10-05) | MLX (safetensors) | LLM chunker; also Listings AI extraction |
 
-The engine is not cosmetic: constrained decoding (`json_schema`) is enforced only
-on GGUF. The MLX runner accepts a schema and silently ignores it. Check before
-pointing anything schema-dependent at a role — note that `ollama show` does **not**
+The engine is not cosmetic: constrained decoding (`json_schema`) is enforced on
+GGUF, and on MLX only from ollama 0.33.1; older MLX runners accept a schema and
+silently ignore it (`llm_chunker.schema_enforced`). Check before pointing anything
+schema-dependent at a role — note that `ollama show` does **not**
 report the format, so grepping its output returns nothing whether or not the model
 is GGUF. Use the API, which is what `llm_chunker.py` itself checks:
 
