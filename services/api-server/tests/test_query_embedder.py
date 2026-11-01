@@ -131,9 +131,21 @@ def _serve(monkeypatch, handler) -> None:
     monkeypatch.setattr(embedding, "get_embedding_model", lambda name=EMBEDDING_MODEL: embedder)
 
 
+def _on_anchor(request):
+    anchor = embedding.convention()["probe_anchor"]
+    return httpx.Response(200, json={"embeddings": [anchor + [0.0] * (1024 - len(anchor))]})
+
+
 def test_probe_passes_when_the_host_serves_the_model(monkeypatch):
-    _serve(monkeypatch, _ok())
+    _serve(monkeypatch, _on_anchor)
     assert asyncio.run(probe_embedder()) is None
+
+
+def test_probe_rejects_a_different_model_of_the_same_width(monkeypatch):
+    # The width check alone passed this: right shape, different space.
+    _serve(monkeypatch, _ok())
+    problem = asyncio.run(probe_embedder())
+    assert problem and "not in the corpus's space" in problem
 
 
 def test_probe_reports_an_unreachable_host(monkeypatch):

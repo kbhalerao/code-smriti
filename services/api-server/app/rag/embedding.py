@@ -29,6 +29,12 @@ documents, 768-dim cosine to the Hugging Face vector was >= 0.9986 for queries
 and >= 0.9993 for documents, and top-1 retrieval against Hugging Face document
 vectors agreed on 20 of 20. The same test with the query instruction left off
 fell to a 0.77 minimum cosine, so the instruction below is not optional.
+
+Then measured against the corpus itself, by the ingestion worker's
+`scripts/measure_query_serving.py` (300 queries, 5,000 stored vectors): served
+queries score MRR 0.957 / R@1 0.940 against 0.959 / 0.943 for the Hugging Face
+model. One rank-1 hit lost, none gained, minimum query cosine 0.9987. Re-run it
+before changing the `ollama_model` tag.
 """
 
 from functools import lru_cache
@@ -56,13 +62,29 @@ _CONVENTIONS = {
         ),
         "native_dims": 1024,
         "ollama_model": "qwen3-embedding:0.6b-q8_0",
+        # Leading dims of the Hugging Face model's vector for PROBE_TEXT, printed by
+        # scripts/measure_query_serving.py. The served q8_0 scores 0.9998 against it.
+        "probe_anchor": [
+            -0.0104, -0.2361, -0.0516, -0.273, 0.2557, 0.0871, -0.0004, 0.2054,
+            -0.1486, 0.2403, -0.0547, -0.1915, 0.1663, -0.0471, -0.2179, 0.3455,
+            -0.2015, 0.0412, 0.2355, -0.104, -0.1337, 0.1058, -0.1356, 0.435,
+            0.0934, 0.0374, -0.0167, 0.1976, -0.0907, -0.0549, 0.14, 0.1003,
+        ],
     },
     "nomic-ai/nomic-embed-text-v1.5": {
         "query_prefix": "search_query: ",
         "native_dims": 768,
         "ollama_model": None,
+        "probe_anchor": None,
     },
 }
+
+PROBE_TEXT = "probe"
+# Unrelated vectors score near 0 here and the right model 0.9998, so this is not
+# finely tuned. It catches the wrong model; it cannot see a small quantization
+# shift, which is what measure_query_serving.py is for.
+PROBE_MIN_COSINE = 0.99
+
 
 
 def convention(model_name: str = EMBEDDING_MODEL) -> dict:
@@ -224,19 +246,31 @@ async def probe_embedder(model_name: str = EMBEDDING_MODEL) -> Optional[str]:
 
     Independent of the manifest check on purpose: a corpus that cannot be read says
     nothing about whether the embedding host is up, and each must be able to report
-    without the other having passed. `encode` rejects a vector of the wrong native
-    width, so a successful probe means the host answered with the model's shape.
+    without the other having passed.
+
+    `encode` rejects the wrong width, but any model of that width passes that and
+    any tag can be repointed, so the vector is also compared to an anchor taken
+    from the model the corpus was built with.
     """
     try:
-        probe = truncate(await get_embedding_model(model_name).encode("probe"))
+        vec = await get_embedding_model(model_name).encode(PROBE_TEXT)
     except EmbeddingServiceError as e:
         return (
             f"Could not embed a probe query, so searches will fail until this is "
             f"fixed: {e}"
         )
-    if probe.shape[1] != EMBEDDING_DIMS:
+    if truncate(vec).shape[1] != EMBEDDING_DIMS:
         return (
-            f"Served model emits {probe.shape[1]} dimensions after truncation, "
-            f"expected {EMBEDDING_DIMS}."
+            f"Served model emits {truncate(vec).shape[1]} dimensions after "
+            f"truncation, expected {EMBEDDING_DIMS}."
+        )
+    anchor = np.asarray(convention(model_name)["probe_anchor"], dtype=np.float32)
+    leading = vec[: anchor.size]
+    cosine = float(leading @ anchor / (np.linalg.norm(leading) * np.linalg.norm(anchor)))
+    if cosine < PROBE_MIN_COSINE:
+        return (
+            f"The served model is not in the corpus's space: probe cosine {cosine:.3f} "
+            f"against the reference, expected at least {PROBE_MIN_COSINE}. Check what "
+            f"{get_embedding_model(model_name).ollama_model} points at in Ollama."
         )
     return None
