@@ -75,6 +75,30 @@ class SemanticChunk:
 # silent corruption, not a soft limit — see _call_llm's truncation check.
 MAX_OUTPUT_TOKENS = 8000
 
+# ollama's MLX runner gained constrained decoding in 0.33.1. Until then only the
+# GGUF engine enforced a json_schema and MLX silently ignored it.
+MLX_SCHEMA_MIN_VERSION = (0, 33, 1)
+MLX_SCHEMA_MIN_VERSION_STR = ".".join(map(str, MLX_SCHEMA_MIN_VERSION))
+
+
+def schema_enforced(fmt: str, version: Optional[str]) -> Optional[bool]:
+    """Whether an ollama runner honours a `json_schema`, from what the API reports.
+
+    True for GGUF on any version; for anything else (MLX/safetensors) only from
+    MLX_SCHEMA_MIN_VERSION. None when the server version is unknown — callers
+    must not treat that as a failure, since the server may not be ollama.
+
+    This is the API's half of the answer. It cannot see an alias whose *name*
+    breaks the prompt template (gemma4 on MLX), so a True here still wants one
+    real call through the alias.
+    """
+    if fmt == "gguf":
+        return True
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)", version or "")
+    if not m:
+        return None
+    return tuple(int(g) for g in m.groups()) >= MLX_SCHEMA_MIN_VERSION
+
 
 @dataclass
 class EnrichmentPass:
@@ -375,8 +399,9 @@ class LLMChunker:
         # Env-driven (LLM_BASE_URL / LLM_CHUNKER_MODEL) — no specific server implied.
         self.base_url = (base_url or config.llm_base_url).rstrip("/")
         # Deliberately NOT config.llm_model: the chunker is the one caller that
-        # depends on schema-constrained decoding, which only ollama's GGUF engine
-        # implements. See config.llm_chunker_model.
+        # depends on schema-constrained decoding, so it needs a runner that
+        # enforces one (GGUF on any ollama; MLX from 0.33.1). See
+        # config.llm_chunker_model.
         self.model = model or config.llm_chunker_model
         self.temperature = temperature
         # Thinking is pinned OFF here, NOT inherited from LLM_REASONING_EFFORT.
@@ -424,13 +449,16 @@ class LLMChunker:
     async def _warn_if_schema_unsupported(self) -> None:
         """Warn once if this model's runtime can't honour a response schema.
 
-        A safetensors/MLX build accepts `text.format` and ignores it, returning
-        fenced prose that fails to parse — with nothing in the response marking
-        it as unsupported. That silence is what made this cost ~3-5% of chunks
-        undetected, so surface it at the first call instead.
+        Before ollama 0.33.1 a safetensors/MLX build accepted `text.format` and
+        ignored it, returning fenced prose that fails to parse — with nothing in
+        the response marking it as unsupported. That silence is what made this
+        cost ~3-5% of chunks undetected, so surface it at the first call instead.
+        From 0.33.1 the MLX runner enforces the schema, so a non-GGUF format is
+        only a problem on an older server (see schema_enforced).
 
-        `/api/show` is ollama-specific while the rest of this class is
-        provider-agnostic, so a server without it is not an error — just skip.
+        `/api/show` and `/api/version` are ollama-specific while the rest of this
+        class is provider-agnostic, so a server without them is not an error —
+        just skip.
         """
         if self._schema_support_checked:
             return
@@ -439,15 +467,18 @@ class LLMChunker:
             resp = await self.client.post(f"{self.base_url}/api/show", json={"model": self.model})
             resp.raise_for_status()
             fmt = (resp.json().get("details") or {}).get("format", "unknown")
+            ver = await self.client.get(f"{self.base_url}/api/version")
+            ver.raise_for_status()
+            version = ver.json().get("version")
         except Exception as e:
-            logger.debug(f"Could not determine model format for {self.model}: {e}")
+            logger.debug(f"Could not determine model format/server version for {self.model}: {e}")
             return
-        if fmt != "gguf":
+        if schema_enforced(fmt, version) is False:
             logger.warning(
-                f"Chunker model {self.model!r} is format={fmt}, not gguf — ollama only "
-                f"enforces json_schema on its GGUF engine, so responses will be "
-                f"unconstrained and some will fail to parse. Set LLM_CHUNKER_MODEL to a "
-                f"GGUF build (e.g. 'structured')."
+                f"Chunker model {self.model!r} is format={fmt} on ollama {version} — "
+                f"that runner ignores json_schema before {MLX_SCHEMA_MIN_VERSION_STR}, so "
+                f"responses will be unconstrained and some will fail to parse. Upgrade "
+                f"ollama, or set LLM_CHUNKER_MODEL to a GGUF build."
             )
 
     async def _call_llm(self, prompt: str, schema: dict = None) -> str:
@@ -577,10 +608,11 @@ class LLMChunker:
             except json.JSONDecodeError:
                 # Not "no chunks". Under schema-constrained decoding the reply is
                 # valid JSON by construction, so landing here means the server did
-                # not honour the schema — the documented symptom of pointing the
-                # chunker at a non-GGUF build, which _warn_if_schema_unsupported
-                # warns about once and which used to cost ~3-5% of chunks
-                # undetected.
+                # not honour the schema — the documented symptom of a runner that
+                # ignores it (a non-GGUF build on ollama < 0.33.1, or an alias whose
+                # name changes the prompt rendering; see ~/code/ollama README).
+                # _warn_if_schema_unsupported covers the first case; this used to
+                # cost ~3-5% of chunks undetected.
                 raise ChunkerCallFailed(
                     f"response was not valid JSON ({e}); first 300 chars: {response[:300]!r}"
                 ) from e

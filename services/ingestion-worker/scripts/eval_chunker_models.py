@@ -6,15 +6,15 @@ Reproduces the experiment behind the yield table in `config.llm_chunker_model`
 directly comparable to the recorded baselines rather than an impression.
 
 Yield is the metric because schema *compliance* is not discriminating: ollama
-enforces `json_schema` on every GGUF build, so any GGUF candidate emits valid
-JSON. What varies is how much a model finds while constrained. The columns that
+enforces `json_schema` on every GGUF build (and on MLX from 0.33.1), so a candidate
+on an enforcing runner emits valid JSON. What varies is how much a model finds while constrained. The columns that
 are not `kept` exist to catch a model that scores well by cheating — returning
 valid-but-empty arrays, or getting truncated mid-document and silently reported
 as `completed`.
 
 Usage:
     uv run python scripts/eval_chunker_models.py
-    uv run python scripts/eval_chunker_models.py --models structured granite4.1:3b-q8_0
+    uv run python scripts/eval_chunker_models.py --models structured lfm2.5:8b-a1b-q8_0
     uv run python scripts/eval_chunker_models.py --files 20 --seed 0
 """
 
@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import httpx
 
 from config import WorkerConfig
-from llm_chunker import ENRICHMENT_PASSES, LLMChunker
+from llm_chunker import ENRICHMENT_PASSES, LLMChunker, schema_enforced
 
 config = WorkerConfig()
 
@@ -108,9 +108,9 @@ def pick_files(repos_root: Path, n: int, seed: int) -> list[Path]:
 async def model_format(model: str) -> str:
     """Ask ollama which engine will serve this tag.
 
-    A `safetensors` answer invalidates the whole run: the MLX runner accepts a
-    json_schema and ignores it, so the model is scored unconstrained while every
-    other arm is constrained.
+    On ollama < 0.33.1 a `safetensors` answer invalidates the whole run: the MLX
+    runner accepted a json_schema and ignored it, so the model was scored
+    unconstrained while every other arm was constrained. See server_version.
     """
     try:
         async with httpx.AsyncClient(timeout=30) as c:
@@ -119,6 +119,16 @@ async def model_format(model: str) -> str:
             return r.json().get("details", {}).get("format", "?")
     except Exception as e:
         return f"?({type(e).__name__})"
+
+
+async def server_version() -> str | None:
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{config.llm_base_url}/api/version")
+            r.raise_for_status()
+            return r.json().get("version")
+    except Exception:
+        return None
 
 
 class ResponseTap:
@@ -181,8 +191,13 @@ class ResponseTap:
 async def run_model(model: str, files: list[Path], repos_root: Path) -> ModelResult:
     result = ModelResult(model=model)
     result.fmt = await model_format(model)
-    if result.fmt != "gguf":
-        print(f"  !! format={result.fmt} — schema will NOT be enforced; numbers are not comparable")
+    version = await server_version()
+    if schema_enforced(result.fmt, version) is False:
+        print(f"  !! format={result.fmt} on ollama {version} — schema will NOT be enforced; "
+              f"numbers are not comparable")
+    elif result.fmt != "gguf":
+        print(f"  note: format={result.fmt} on ollama {version} enforces the schema, but an "
+              f"ALIAS can still break it (name-dependent rendering) — call the alias you ship")
 
     chunker = LLMChunker(model=model)
     ResponseTap(chunker, result).install()
@@ -239,7 +254,7 @@ def print_table(results: list[ModelResult], n_files: int) -> None:
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+",
-                    default=["structured", "granite4.1:3b-q8_0", "lfm2.5:8b-a1b-q8_0"])
+                    default=["structured", "lfm2.5:8b-a1b-q8_0"])
     ap.add_argument("--files", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default="scripts/eval_chunker_models_results/results.json")

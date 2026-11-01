@@ -52,12 +52,16 @@ class WorkerConfig(BaseSettings):
 
     # Model for the LLM chunker specifically. Two hard requirements, both measured:
     #
-    # 1. It must be a **GGUF** build. Constrained decoding (`json_schema` response
-    #    format) is implemented only by ollama's GGUF engine; the MLX/safetensors
-    #    runner accepts the schema and silently ignores it, returning fenced prose
-    #    that then fails to parse. `ollama show` does NOT report the format, so
-    #    grepping it returns nothing either way; ask the API, as
-    #    _warn_if_schema_unsupported does:
+    # 1. The runner serving it must ENFORCE the schema (`json_schema` response
+    #    format). Before ollama 0.33.1 only the GGUF engine did: the MLX/
+    #    safetensors runner accepted the schema and silently ignored it, returning
+    #    fenced prose that then fails to parse. 0.33.1 added constrained decoding
+    #    to MLX, so on ollama >= 0.33.1 a safetensors build is acceptable —
+    #    *through the alias you will actually call*: gemma4's MLX renderer keys on
+    #    the model NAME, and an alias returns valid-but-empty output under a
+    #    schema (see the ~/code/ollama README). `ollama show` does NOT report the
+    #    format; ask the API, as llm_chunker.schema_enforced does (format +
+    #    /api/version):
     #      curl -s localhost:11434/api/show -d '{"model":"structured"}' \\
     #        | python3 -c "import sys,json;print(json.load(sys.stdin)['details']['format'])"
     # 2. It must not be a low-precision quant. Q4_0 costs ~18% of extractions
@@ -67,7 +71,7 @@ class WorkerConfig(BaseSettings):
     # Measured on 20 files x 3 passes, chunks kept (0 malformed unless noted):
     #   gemma4 Q4_0 GGUF + schema        99
     #   gemma4 Q4_0 GGUF, no schema     117
-    #   gemma4 Q8_0 GGUF + schema       130   <- this default
+    #   gemma4 Q8_0 GGUF + schema       130   <- the default until 2026-10-05
     #   gemma4 nvfp4 MLX, schema ignored 142 (136 clean, 1 parse failure)
     #
     # Q8_0 recovers the quantization loss while keeping enforcement: within ~4% of
@@ -148,11 +152,27 @@ class WorkerConfig(BaseSettings):
     #
     # `structured` is a ROLE ALIAS (~/code/ollama/aliases/structured.Modelfile,
     # `make repoint NAME=structured MODEL=...`). Address the alias, never the raw
-    # `gemma4:26b-a4b-it-q8_0` tag — calling both loads the same weights twice.
+    # tag it points at — calling both can load the same weights twice.
+    #
+    # UPDATE 2026-10-05 — `structured` now points at qwen3.8:27b-mlx (dense 27B on
+    # MLX), not the gemma MoE GGUF that (a)-(c) above measured. Evidence and the
+    # reasoning are in structured.Modelfile. What it changes for THIS pipeline:
+    #   - yield: 80 chunks kept vs 41 on gemma Q8_0 GGUF over 8 files (199 vs 131
+    #     over 20) — more than the +16% class-30b bought in (a).
+    #   - CONCURRENCY IS THE COST. The qwen MLX build is flat at ~78 tok/s
+    #     aggregate at 1/2/4 concurrent callers; the gemma MoE reached 118.6 at 4
+    #     (see (b)). This pipeline runs concurrent files, so expect ~0.66x the
+    #     aggregate throughput on top of ~1.5-1.95x more output per file: roughly
+    #     2.3-3x longer runs than on gemma — though still ~3.7x faster than the
+    #     dense GGUF rejected in (b) (20.8 tok/s flat). That figure comes from two
+    #     measurements on different dates, NOT a measured end-to-end run.
+    #   - Re-measure end to end before a large re-ingest. If the window matters
+    #     more than yield, `make repoint NAME=structured MODEL=gemma4:26b-a4b-it-q8_0`
+    #     (re-pull it first; it was removed from disk on 2026-10-05).
     #
     # Not pinned in ~/.ollama/warmup.sh, so the first chunker call of a run pays a
-    # ~29GB cold load. That is now paid on every run rather than occasionally, but
-    # it is one load amortised over hours of batch work.
+    # cold load (~18GB now, and the same runner as `class-30b`). It is one load
+    # amortised over hours of batch work.
     llm_chunker_model: str = os.getenv("LLM_CHUNKER_MODEL", "structured")
 
     # Per-request LLM timeout. This has to cover *queue* time, not just generation:
