@@ -37,15 +37,10 @@ def _vector(dims: int = 1024) -> list:
     return (v / np.linalg.norm(v)).tolist()
 
 
-def _embedder(monkeypatch, handler) -> QueryEmbedder:
+def _embedder(handler) -> QueryEmbedder:
     """A QueryEmbedder whose HTTP client is routed to `handler`."""
-    real = httpx.AsyncClient
-    monkeypatch.setattr(
-        embedding.httpx,
-        "AsyncClient",
-        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
-    )
-    return QueryEmbedder("http://ollama:11434/")
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return QueryEmbedder("http://ollama:11434/", client=client)
 
 
 def _ok(dims: int = 1024):
@@ -60,7 +55,7 @@ def test_query_is_sent_with_the_instruction_and_pinned(monkeypatch):
         seen["body"] = json.loads(request.content)
         return httpx.Response(200, json={"embeddings": [_vector()]})
 
-    asyncio.run(embed_query(_embedder(monkeypatch, handler), "where is auth"))
+    asyncio.run(embed_query(_embedder(handler), "where is auth"))
 
     assert seen["url"] == "http://ollama:11434/api/embed"
     assert seen["body"]["model"] == "qwen3-embedding:0.6b-q8_0"
@@ -69,7 +64,7 @@ def test_query_is_sent_with_the_instruction_and_pinned(monkeypatch):
 
 
 def test_query_vector_is_truncated_and_unit_length(monkeypatch):
-    vec = asyncio.run(embed_query(_embedder(monkeypatch, _ok()), "q"))
+    vec = asyncio.run(embed_query(_embedder(_ok()), "q"))
 
     assert len(vec) == EMBEDDING_DIMS
     assert np.linalg.norm(vec) == pytest.approx(1.0, abs=1e-5)
@@ -82,7 +77,7 @@ def test_wrong_width_is_rejected_not_truncated(monkeypatch):
     # A 4B model answers with 2560 dims. Truncating that to 768 would "work" and
     # land in a different space, so the width is checked before truncation.
     with pytest.raises(EmbeddingServiceError, match="expected 1 of 1024"):
-        asyncio.run(embed_query(_embedder(monkeypatch, _ok(2560)), "q"))
+        asyncio.run(embed_query(_embedder(_ok(2560)), "q"))
 
 
 @pytest.mark.parametrize(
@@ -95,7 +90,7 @@ def test_wrong_width_is_rejected_not_truncated(monkeypatch):
 )
 def test_host_failures_become_embedding_service_errors(monkeypatch, response):
     with pytest.raises(EmbeddingServiceError):
-        asyncio.run(embed_query(_embedder(monkeypatch, lambda r: response), "q"))
+        asyncio.run(embed_query(_embedder(lambda r: response), "q"))
 
 
 def test_unreachable_host_becomes_embedding_service_error(monkeypatch):
@@ -103,7 +98,7 @@ def test_unreachable_host_becomes_embedding_service_error(monkeypatch):
         raise httpx.ConnectError("refused", request=request)
 
     with pytest.raises(EmbeddingServiceError, match="ConnectError"):
-        asyncio.run(embed_query(_embedder(monkeypatch, handler), "q"))
+        asyncio.run(embed_query(_embedder(handler), "q"))
 
 
 def test_model_without_an_ollama_tag_is_refused():
@@ -127,7 +122,7 @@ _MANIFEST = {"model": EMBEDDING_MODEL, "dims": EMBEDDING_DIMS}
 
 def _serve(monkeypatch, handler) -> None:
     """Route get_embedding_model to an embedder talking to `handler`."""
-    embedder = _embedder(monkeypatch, handler)
+    embedder = _embedder(handler)
     monkeypatch.setattr(embedding, "get_embedding_model", lambda name=EMBEDDING_MODEL: embedder)
 
 

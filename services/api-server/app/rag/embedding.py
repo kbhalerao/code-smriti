@@ -42,7 +42,8 @@ from typing import List, Optional
 
 import httpx
 import numpy as np
-from loguru import logger
+
+from app.http_client import get_http_client
 
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 EMBEDDING_DIMS = 768
@@ -127,6 +128,7 @@ class QueryEmbedder:
         ollama_host: str,
         model_name: str = EMBEDDING_MODEL,
         timeout: float = 30.0,
+        client: Optional[httpx.AsyncClient] = None,
     ):
         conv = convention(model_name)
         if not conv["ollama_model"]:
@@ -139,6 +141,7 @@ class QueryEmbedder:
         self.native_dims = conv["native_dims"]
         self.url = f"{ollama_host.rstrip('/')}/api/embed"
         self.timeout = timeout
+        self._client = client
 
     async def encode(self, text: str) -> np.ndarray:
         """The model's native-dimension vector for `text`, exactly as given.
@@ -147,13 +150,13 @@ class QueryEmbedder:
         turn the next search into a cold load.
         """
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(
-                    self.url,
-                    json={"model": self.ollama_model, "input": text, "keep_alive": -1},
-                )
-                resp.raise_for_status()
-                vectors = resp.json()["embeddings"]
+            resp = await (self._client or get_http_client()).post(
+                self.url,
+                json={"model": self.ollama_model, "input": text, "keep_alive": -1},
+                timeout=self.timeout,
+            )
+            resp.raise_for_status()
+            vectors = resp.json()["embeddings"]
         except (httpx.HTTPError, KeyError, ValueError) as e:
             raise EmbeddingServiceError(
                 f"Embedding request to {self.url} ({self.ollama_model}) failed: "

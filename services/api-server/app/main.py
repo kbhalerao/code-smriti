@@ -14,7 +14,7 @@ from loguru import logger
 
 from .config import settings
 from .database import close_cluster
-from .chat.pydantic_rag_agent import close_shared_resources, get_http_client
+from .http_client import close_http_client, get_http_client
 from .errors import embedding_unavailable_handler
 from .rag.embedding import EmbeddingServiceError, assert_corpus_matches, probe_embedder
 
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down gracefully...")
-    await close_shared_resources()  # Close RAG agent shared resources
+    await close_http_client()
     await close_cluster()  # Close Couchbase connection
     logger.info("Shutdown complete")
 

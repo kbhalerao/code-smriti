@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
 from app.database.couchbase_client import CouchbaseClient
+from app.http_client import get_http_client
 from app.rag.models import SearchLevel, SearchResult, FileContent
 from app.rag import tools as rag_tools
 from app.rag.embedding import EMBEDDING_MODEL, QueryEmbedder, get_embedding_model
@@ -65,29 +66,7 @@ class RAGContext:
 # Singletons
 # =============================================================================
 
-_http_client: Optional[httpx.AsyncClient] = None
 _rag_agent: Optional[Agent] = None
-
-
-async def close_shared_resources():
-    """Close shared resources on shutdown."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
-        logger.info("Closed shared HTTP client")
-
-
-def get_http_client() -> httpx.AsyncClient:
-    """Get or create the shared HTTP client (singleton)."""
-    global _http_client
-    if _http_client is None:
-        logger.info("Creating shared httpx AsyncClient")
-        _http_client = httpx.AsyncClient(
-            timeout=120.0,
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
-        )
-    return _http_client
 
 
 def get_rag_agent(ollama_host: str, llm_model: str) -> Agent[RAGContext, str]:
