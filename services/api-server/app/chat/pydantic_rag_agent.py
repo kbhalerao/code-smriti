@@ -19,11 +19,11 @@ import httpx
 from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
 from app.rag.models import SearchLevel, SearchResult, FileContent
 from app.rag import tools as rag_tools
+from app.rag.embedding import EMBEDDING_MODEL, QueryEmbedder, get_embedding_model
 from app.rag.reranker import get_reranker
 
 
@@ -57,7 +57,7 @@ class RAGContext:
     repos_path: str
     ollama_host: str
     http_client: httpx.AsyncClient
-    embedding_model: SentenceTransformer
+    embedding_model: QueryEmbedder
     conversation_history: List[ConversationMessage]
 
 
@@ -65,7 +65,6 @@ class RAGContext:
 # Singletons
 # =============================================================================
 
-_embedding_model: Optional[SentenceTransformer] = None
 _http_client: Optional[httpx.AsyncClient] = None
 _rag_agent: Optional[Agent] = None
 
@@ -77,17 +76,6 @@ async def close_shared_resources():
         await _http_client.aclose()
         _http_client = None
         logger.info("Closed shared HTTP client")
-
-
-def get_embedding_model(model_name: str = "nomic-ai/nomic-embed-text-v1.5") -> SentenceTransformer:
-    """Get or create the embedding model (singleton)."""
-    global _embedding_model
-    if _embedding_model is None:
-        logger.info(f"Loading embedding model: {model_name}")
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        _embedding_model = SentenceTransformer(model_name, trust_remote_code=True)
-        logger.info(f"Embedding model loaded: {model_name}")
-    return _embedding_model
 
 
 def get_http_client() -> httpx.AsyncClient:
@@ -425,7 +413,7 @@ class CodeSmritiRAGAgent:
         tenant_id: str,
         ollama_host: str = "http://localhost:11434",
         llm_model: str = "deepseek-coder:6.7b",
-        embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5",
+        embedding_model_name: str = EMBEDDING_MODEL,
         conversation_history: Optional[List[ConversationMessage]] = None
     ):
         self.db = db

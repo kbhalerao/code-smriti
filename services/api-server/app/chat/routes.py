@@ -6,7 +6,7 @@ Exposes shared RAG tools as REST endpoints for both MCP and LLM modes.
 
 import os
 from typing import Optional, List, Literal
-from ..rag.embedding import embed_query
+from ..rag.embedding import embed_query, get_embedding_model
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -34,7 +34,6 @@ from app.rag import graph_tools
 from app.chat.pydantic_rag_agent import (
     CodeSmritiRAGAgent,
     ConversationMessage,
-    get_embedding_model,
 )
 
 # New unified pipeline
@@ -653,7 +652,7 @@ Output only the keywords, one per line. Include:
     search_query = f"{request.query} {expanded_terms}"
 
     # Step 2: Vector search on repo_bdr and document types
-    query_embedding = embed_query(embedding_model, search_query)
+    query_embedding = await embed_query(embedding_model, search_query)
 
     # Search both repo_bdr and document types
     contexts = []

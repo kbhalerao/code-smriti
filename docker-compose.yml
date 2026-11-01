@@ -66,8 +66,6 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./services/api-server/logs:/app/logs
-      - model_cache:/root/.cache/huggingface
-      - model_cache:/root/.cache/torch
       - ${REPOS_PATH:?Set REPOS_PATH in .env}:/repos:ro  # For CodeFetcher
     depends_on:
       couchbase:
@@ -81,7 +79,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s  # Allow 2 minutes for embedding model loading
+      start_period: 40s  # Couchbase connect and the embedding probe; no model loads in-process
 
   # Chief of Staff services moved to separate repo: ../chief-of-staff
   # Run independently with external nginx routing directly to them

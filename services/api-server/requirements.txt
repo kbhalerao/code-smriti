@@ -15,8 +15,8 @@ couchbase
 # HTTP client for Ollama
 httpx==0.28.1
 
-# Embeddings
-sentence-transformers==3.3.1
+# Query vectors (app/rag/embedding.py); the model itself is served by Ollama
+numpy
 
 # Logging
 loguru==0.7.3
@@ -27,8 +27,4 @@ python-dotenv
 # PydanticAI for tool calling
 pydantic-ai
 
-# Additional dependencies for transformers
-einops==0.8.1
-
 # Note: Python 3.12+ required
-# huggingface-hub must be <1.0 for transformers compatibility

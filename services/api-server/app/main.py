@@ -14,7 +14,8 @@ from loguru import logger
 
 from .config import settings
 from .database import close_cluster
-from .chat.pydantic_rag_agent import close_shared_resources, get_embedding_model, get_http_client
+from .chat.pydantic_rag_agent import close_shared_resources, get_http_client
+from .rag.embedding import assert_corpus_matches, get_embedding_model
 
 
 # Configure logging
@@ -54,25 +55,23 @@ async def lifespan(app: FastAPI):
     logger.info(f"Log level: {settings.log_level}")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
-    # Pre-load embedding model at startup (takes ~30s, blocks worker if done on first request)
-    logger.info("Pre-loading embedding model at startup...")
-    get_embedding_model(settings.embedding_model_name)
+    # Queries are embedded by Ollama, so there is nothing to pre-load here; the
+    # probe below is what proves the host is serving the right model.
     get_http_client()
-    logger.info("✓ Embedding model and HTTP client ready")
+    logger.info("✓ HTTP client ready")
 
     # Loud, not fatal: a mismatch means results are wrong while the service is
     # otherwise healthy, and a dimension check cannot catch it — 768 truncated
     # from Qwen is the same shape nomic produced and a different space.
     try:
-        from .rag.embedding import assert_corpus_matches
         from .dependencies import get_db
         problem = await assert_corpus_matches(
             get_db(),
             loaded_model_name=settings.embedding_model_name,
-            model=get_embedding_model(settings.embedding_model_name),
+            embedder=get_embedding_model(settings.embedding_model_name),
         )
         if problem:
-            logger.error(f"EMBEDDING MISMATCH: {problem}")
+            logger.error(f"EMBEDDING PROBLEM: {problem}")
         else:
             logger.info("✓ Embedding convention matches the corpus manifest")
     except Exception as e:

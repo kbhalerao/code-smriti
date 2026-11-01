@@ -18,26 +18,49 @@ nomic-embed-text MRR 0.752 / recall@1 0.667 against Qwen3-Embedding-0.6B
 MRR 0.886 / recall@1 0.817, a 7.7-sigma difference. Larger Qwen variants add
 nothing measurable. Truncating to 768 costs nothing (0.884 vs 0.886) and keeps
 both FTS indexes their current shape.
+
+Queries are embedded by Ollama over HTTP, not by an in-process model. Loading
+Qwen3-Embedding-0.6B through sentence-transformers cost 2.7 GB resident in the
+API container, and on an 8 GB Docker VM shared with Couchbase that was enough to
+make the kernel OOM-kill the API in a restart loop. The served model is the
+`q8_0` GGUF of the same weights, so agreement with the corpus (built from the
+Hugging Face model) is measured rather than assumed: over 20 queries and 20
+documents, 768-dim cosine to the Hugging Face vector was >= 0.9986 for queries
+and >= 0.9993 for documents, and top-1 retrieval against Hugging Face document
+vectors agreed on 20 of 20. The same test with the query instruction left off
+fell to a 0.77 minimum cosine, so the instruction below is not optional.
 """
 
+from functools import lru_cache
 from typing import List, Optional
 
+import httpx
 import numpy as np
 from loguru import logger
 
 EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 EMBEDDING_DIMS = 768
 
+# `ollama_model` is the tag that serves the model's vectors; None means this
+# service cannot embed queries for it. The tag is part of the space (quantization
+# shifts vectors slightly), so it lives here rather than in settings. Unlike the
+# ingestion worker's copy, the query instruction is the literal text: that
+# worker lets sentence-transformers look the prompt up by name, and Ollama has no
+# prompt registry. The text is the `query` prompt in the model's
+# config_sentence_transformers.json, concatenated with no separator.
 _CONVENTIONS = {
     "Qwen/Qwen3-Embedding-0.6B": {
-        "query_prompt_name": "query",
-        "query_prefix": "",
+        "query_prefix": (
+            "Instruct: Given a web search query, retrieve relevant passages "
+            "that answer the query\nQuery:"
+        ),
         "native_dims": 1024,
+        "ollama_model": "qwen3-embedding:0.6b-q8_0",
     },
     "nomic-ai/nomic-embed-text-v1.5": {
-        "query_prompt_name": None,
         "query_prefix": "search_query: ",
         "native_dims": 768,
+        "ollama_model": None,
     },
 }
 
@@ -63,7 +86,71 @@ def truncate(vectors: np.ndarray, dims: int = EMBEDDING_DIMS) -> np.ndarray:
     return out / norms
 
 
-def embed_query(model, text: str) -> List[float]:
+class EmbeddingServiceError(RuntimeError):
+    """The embedding host was unreachable or answered with something unusable."""
+
+
+class QueryEmbedder:
+    """Embeds query text through Ollama's `/api/embed`."""
+
+    def __init__(
+        self,
+        ollama_host: str,
+        model_name: str = EMBEDDING_MODEL,
+        timeout: float = 30.0,
+    ):
+        conv = convention(model_name)
+        if not conv["ollama_model"]:
+            raise ValueError(
+                f"{model_name!r} has no Ollama tag in the embedding convention, "
+                f"so queries cannot be embedded for it."
+            )
+        self.model_name = model_name
+        self.ollama_model = conv["ollama_model"]
+        self.native_dims = conv["native_dims"]
+        self.url = f"{ollama_host.rstrip('/')}/api/embed"
+        self.timeout = timeout
+
+    async def encode(self, text: str) -> np.ndarray:
+        """The model's native-dimension vector for `text`, exactly as given.
+
+        `keep_alive: -1` pins the 0.6B model (~0.6 GB) so a quiet hour does not
+        turn the next search into a cold load.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.post(
+                    self.url,
+                    json={"model": self.ollama_model, "input": text, "keep_alive": -1},
+                )
+                resp.raise_for_status()
+                vectors = resp.json()["embeddings"]
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            raise EmbeddingServiceError(
+                f"Embedding request to {self.url} ({self.ollama_model}) failed: "
+                f"{type(e).__name__}: {e}"
+            ) from e
+
+        # A model that is not the one we asked for still returns a vector. Its
+        # width is the only thing this boundary can check cheaply.
+        if len(vectors) != 1 or len(vectors[0]) != self.native_dims:
+            got = len(vectors[0]) if vectors else 0
+            raise EmbeddingServiceError(
+                f"{self.ollama_model} returned {len(vectors)} vector(s) of {got} "
+                f"dimensions, expected 1 of {self.native_dims}."
+            )
+        return np.asarray(vectors[0], dtype=np.float32)
+
+
+@lru_cache(maxsize=None)
+def get_embedding_model(model_name: str = EMBEDDING_MODEL) -> QueryEmbedder:
+    """The query embedder for `model_name`, pointed at the configured Ollama host."""
+    from app.config import settings
+
+    return QueryEmbedder(settings.ollama_host, model_name)
+
+
+async def embed_query(embedder: QueryEmbedder, text: str) -> List[float]:
     """
     Embed a search query.
 
@@ -71,23 +158,14 @@ def embed_query(model, text: str) -> List[float]:
     instruction on queries and documents bare, where nomic took literal
     prefixes on both.
     """
-    conv = convention()
-    kwargs = {}
-    if conv["query_prompt_name"]:
-        kwargs["prompt_name"] = conv["query_prompt_name"]
-    vec = model.encode(
-        f"{conv['query_prefix']}{text}",
-        convert_to_tensor=False,
-        show_progress_bar=False,
-        normalize_embeddings=True,
-        **kwargs,
-    )
-    return truncate(np.asarray(vec, dtype=np.float32))[0].tolist()
+    conv = convention(embedder.model_name)
+    vec = await embedder.encode(f"{conv['query_prefix']}{text}")
+    return truncate(vec)[0].tolist()
 
 
 async def assert_corpus_matches(
     db, bucket: str = "code_kosha", loaded_model_name: Optional[str] = None,
-    model=None,
+    embedder: Optional[QueryEmbedder] = None,
 ) -> Optional[str]:
     """
     Compare this service's convention against how the corpus was actually built.
@@ -126,15 +204,20 @@ async def assert_corpus_matches(
             f"value in .env overrides the docker-compose default."
         )
 
-    # And prove it by using it: a name can be right while the object is not.
-    if model is not None:
+    # And prove it by using it: a name can be right while the thing serving it is
+    # not. `encode` itself rejects a vector of the wrong native width, so a
+    # successful probe means the host answered with the model's shape.
+    if embedder is not None:
         try:
-            probe = truncate(np.asarray(model.encode("probe"), dtype=np.float32))
-            if probe.shape[1] != EMBEDDING_DIMS:
-                return (
-                    f"Loaded model emits {probe.shape[1]} dimensions after "
-                    f"truncation, expected {EMBEDDING_DIMS}."
-                )
-        except Exception as e:
-            logger.warning(f"Could not probe the embedding model: {e}")
+            probe = truncate(await embedder.encode("probe"))
+        except EmbeddingServiceError as e:
+            return (
+                f"Could not embed a probe query, so searches will fail until the "
+                f"embedding host answers: {e}"
+            )
+        if probe.shape[1] != EMBEDDING_DIMS:
+            return (
+                f"Served model emits {probe.shape[1]} dimensions after "
+                f"truncation, expected {EMBEDDING_DIMS}."
+            )
     return None

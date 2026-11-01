@@ -7,11 +7,10 @@ Core tool logic shared between MCP and LLM modes.
 import os
 import fnmatch
 from pathlib import Path
-from .embedding import embed_query
+from .embedding import QueryEmbedder, embed_query
 from typing import List, Optional
 
 from loguru import logger
-from sentence_transformers import SentenceTransformer
 from couchbase.options import QueryOptions
 
 from app.database.couchbase_client import CouchbaseClient
@@ -267,7 +266,7 @@ async def explore_structure(
 
 async def search_code(
     db: CouchbaseClient,
-    embedding_model: SentenceTransformer,
+    embedding_model: QueryEmbedder,
     query: str,
     level: SearchLevel = SearchLevel.FILE,
     repo_filter: str = None,
@@ -281,7 +280,7 @@ async def search_code(
 
     Args:
         db: Couchbase client
-        embedding_model: Sentence transformer for query embedding
+        embedding_model: Embedder for the query vector
         query: Search query (natural language or code)
         level: Granularity level (symbol, file, module, repo, doc)
         repo_filter: Optional repository filter
@@ -305,7 +304,7 @@ async def search_code(
         # Generate query embedding
         # Prefixing and Matryoshka truncation live in one module shared with
         # the ingestion worker's convention; doing either here would drift.
-        query_embedding = embed_query(embedding_model, query)
+        query_embedding = await embed_query(embedding_model, query)
 
         # Oversample so the cosine re-rank below has a real candidate pool.
         # Kept <= 100: on 7.6.2 larger k values break the type filter.

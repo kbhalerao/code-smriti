@@ -6,11 +6,9 @@ into a single coherent pipeline. Supports both developer and sales personas.
 """
 
 import os
-from typing import Optional
 
 from loguru import logger
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
 from app.rag.intent import (
@@ -19,6 +17,7 @@ from app.rag.intent import (
     QueryIntent,
     Persona,
 )
+from app.rag.embedding import EMBEDDING_MODEL, get_embedding_model
 from app.rag.orchestrator import RetrievalOrchestrator, RetrievalResult
 from app.rag.reranker import CrossEncoderReranker
 from app.rag.rewriter import QueryRewriter
@@ -37,23 +36,6 @@ class PipelineResult(BaseModel):
     adequate_context: bool = True
     gaps: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
-
-
-# Singleton for embedding model
-_embedding_model: Optional[SentenceTransformer] = None
-
-
-def get_embedding_model(
-    model_name: str = "nomic-ai/nomic-embed-text-v1.5"
-) -> SentenceTransformer:
-    """Get or create embedding model (singleton)."""
-    global _embedding_model
-    if _embedding_model is None:
-        logger.info(f"Loading embedding model: {model_name}")
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        _embedding_model = SentenceTransformer(model_name, trust_remote_code=True)
-        logger.info("Embedding model loaded")
-    return _embedding_model
 
 
 class RAGPipeline:
@@ -83,7 +65,7 @@ class RAGPipeline:
         tenant_id: str = "code_kosha",
         ollama_host: str = None,
         llm_model: str = "general",
-        embedding_model_name: str = "nomic-ai/nomic-embed-text-v1.5",
+        embedding_model_name: str = EMBEDDING_MODEL,
     ):
         self.db = db
         self.tenant_id = tenant_id
@@ -259,7 +241,5 @@ def create_pipeline(
         tenant_id=tenant_id,
         ollama_host=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         llm_model=os.getenv("LLM_MODEL_NAME", "general"),
-        embedding_model_name=os.getenv(
-            "EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"
-        ),
+        embedding_model_name=os.getenv("EMBEDDING_MODEL", EMBEDDING_MODEL),
     )

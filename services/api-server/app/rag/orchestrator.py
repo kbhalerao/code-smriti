@@ -8,12 +8,11 @@ automatically tries adjacent levels until good results are found.
 import asyncio
 import os
 from dataclasses import dataclass, field
-from .embedding import embed_query
+from .embedding import QueryEmbedder, embed_query
 from typing import Optional
 
 import httpx
 from loguru import logger
-from sentence_transformers import SentenceTransformer
 
 from app.database.couchbase_client import CouchbaseClient
 from app.rag.intent import ClassifiedIntent, QueryIntent, SearchDirection, Persona
@@ -95,7 +94,7 @@ class RetrievalOrchestrator:
     def __init__(
         self,
         db: CouchbaseClient,
-        embedding_model: SentenceTransformer,
+        embedding_model: QueryEmbedder,
         tenant_id: str = "code_kosha",
         min_good_results: int = 2,
         score_threshold: float = 0.65,
@@ -150,7 +149,7 @@ class RetrievalOrchestrator:
         # queries with generic topic synonyms (e.g. "RBAC", "auth") and
         # pushing the actually-relevant repos out of the top-K. The bridge
         # step does grounded, data-driven rewriting later for code passes.
-        query_embedding = embed_query(self.embedding_model, query)
+        query_embedding = await embed_query(self.embedding_model, query)
 
         # ── Step 1: REPO pass — drives both OOD gate and routing ────────────
         # If the user named a specific repo, trust them and skip routing.
@@ -274,7 +273,7 @@ class RetrievalOrchestrator:
                     tech_context = [r.content for r in results[:3] if r.content]
                     rewritten_query = await self.rewriter.rewrite(query, tech_context)
                     if rewritten_query and rewritten_query != query:
-                        current_embedding = embed_query(self.embedding_model, rewritten_query)
+                        current_embedding = await embed_query(self.embedding_model, rewritten_query)
                     matched_module_ids = [r.document_id for r in results[:5]]
                     logger.info(
                         f"Bridge: rewrote={rewritten_query != query}, "
