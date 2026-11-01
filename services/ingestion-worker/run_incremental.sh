@@ -18,8 +18,6 @@ cd "$SCRIPT_DIR"
 # Logging - append to log file
 LOG_FILE="$SCRIPT_DIR/logs/launchd.out.log"
 mkdir -p "$SCRIPT_DIR/logs"
-source "$SCRIPT_DIR/_logrotate.sh"
-rotate_log "$LOG_FILE"
 echo "=== $(date) Starting incremental ingestion ===" >> "$LOG_FILE"
 
 # Essential environment for launchd
@@ -34,6 +32,10 @@ if [[ -f .env ]]; then
     source .env
     set +a
 fi
+
+# After .env, which can set LOG_MAX_BYTES and LOG_KEEP.
+source "$SCRIPT_DIR/_logrotate.sh"
+rotate_log "$LOG_FILE"
 
 # Python non-interactive mode
 export PYTHONUNBUFFERED=1
