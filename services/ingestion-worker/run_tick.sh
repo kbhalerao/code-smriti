@@ -36,6 +36,11 @@ cd "$SCRIPT_DIR"
 LOG_FILE="$SCRIPT_DIR/logs/tick.log"
 mkdir -p "$SCRIPT_DIR/logs"
 
+# Rotate before this tick appends anything. Nothing else trims this file and
+# the tick writes to it 288 times a day.
+source "$SCRIPT_DIR/_logrotate.sh"
+rotate_log "$LOG_FILE"
+
 # Essential environment for launchd
 export HOME="${HOME:-$(eval echo ~$(whoami))}"
 export USER="${USER:-$(whoami)}"

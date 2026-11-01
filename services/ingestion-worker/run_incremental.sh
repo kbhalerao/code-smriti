@@ -17,6 +17,9 @@ cd "$SCRIPT_DIR"
 
 # Logging - append to log file
 LOG_FILE="$SCRIPT_DIR/logs/launchd.out.log"
+mkdir -p "$SCRIPT_DIR/logs"
+source "$SCRIPT_DIR/_logrotate.sh"
+rotate_log "$LOG_FILE"
 echo "=== $(date) Starting incremental ingestion ===" >> "$LOG_FILE"
 
 # Essential environment for launchd
