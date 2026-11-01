@@ -15,7 +15,8 @@ from loguru import logger
 from .config import settings
 from .database import close_cluster
 from .chat.pydantic_rag_agent import close_shared_resources, get_http_client
-from .rag.embedding import assert_corpus_matches, get_embedding_model
+from .errors import embedding_unavailable_handler
+from .rag.embedding import EmbeddingServiceError, assert_corpus_matches, get_embedding_model
 
 
 # Configure logging
@@ -92,6 +93,8 @@ app = FastAPI(
     version=settings.api_version,
     lifespan=lifespan,
 )
+
+app.add_exception_handler(EmbeddingServiceError, embedding_unavailable_handler)
 
 # CORS middleware for Cloudflare origin
 app.add_middleware(

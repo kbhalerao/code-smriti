@@ -90,6 +90,13 @@ class EmbeddingServiceError(RuntimeError):
     """The embedding host was unreachable or answered with something unusable."""
 
 
+# What a client is told. The exception's own message names the internal host and
+# model tag, so it belongs in the log and not in a response.
+EMBEDDING_UNAVAILABLE_DETAIL = (
+    "Search is temporarily unavailable: the embedding service did not answer."
+)
+
+
 class QueryEmbedder:
     """Embeds query text through Ollama's `/api/embed`."""
 

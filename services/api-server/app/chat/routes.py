@@ -6,7 +6,12 @@ Exposes shared RAG tools as REST endpoints for both MCP and LLM modes.
 
 import os
 from typing import Optional, List, Literal
-from ..rag.embedding import embed_query, get_embedding_model
+from ..rag.embedding import (
+    EMBEDDING_UNAVAILABLE_DETAIL,
+    EmbeddingServiceError,
+    embed_query,
+    get_embedding_model,
+)
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -339,9 +344,13 @@ async def ask_codebase_endpoint(
                 try:
                     async for chunk in agent.chat_stream(request.query):
                         yield chunk
+                except EmbeddingServiceError as e:
+                    # The 200 is already on the wire, so this can only be in-band.
+                    logger.error(f"Streaming error: {e}")
+                    yield f"\n\n[Error: {EMBEDDING_UNAVAILABLE_DETAIL}]"
                 except Exception as e:
                     logger.error(f"Streaming error: {e}", exc_info=True)
-                    yield f"\n\n[Error: {str(e)}]"
+                    yield "\n\n[Error: Query failed]"
 
             return StreamingResponse(stream_generator(), media_type="text/plain")
 
@@ -357,9 +366,11 @@ async def ask_codebase_endpoint(
             }
         )
 
+    except EmbeddingServiceError:
+        raise  # 503, by the handler in app.main
     except Exception as e:
         logger.error(f"ask_codebase failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Query failed")
 
 
 @router.get("/health")
@@ -436,9 +447,11 @@ async def unified_ask_endpoint(
             }
         )
 
+    except EmbeddingServiceError:
+        raise  # 503, by the handler in app.main
     except Exception as e:
         logger.error(f"unified_ask failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Query failed")
 
 
 @router.post("/ask/code", response_model=UnifiedAskResponse)

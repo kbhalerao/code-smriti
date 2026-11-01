@@ -7,7 +7,7 @@ Core tool logic shared between MCP and LLM modes.
 import os
 import fnmatch
 from pathlib import Path
-from .embedding import QueryEmbedder, embed_query
+from .embedding import EmbeddingServiceError, QueryEmbedder, embed_query
 from typing import List, Optional
 
 from loguru import logger
@@ -469,6 +469,10 @@ async def search_code(
         logger.info(f"search_code: query='{query[:50]}' level={level.value} preview={preview} found {len(results)} results")
         return results
 
+    except EmbeddingServiceError:
+        # An outage is not "no results". Returned as [] it reads as an empty index
+        # to both the API caller and the agent, which then says so with confidence.
+        raise
     except Exception as e:
         logger.error(f"search_code failed: {e}", exc_info=True)
         return []
