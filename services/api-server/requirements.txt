@@ -27,4 +27,4 @@ python-dotenv
 # PydanticAI for tool calling
 pydantic-ai
 
-# Note: Python 3.12+ required
+# Python 3.11, matching the image and requirements.lock

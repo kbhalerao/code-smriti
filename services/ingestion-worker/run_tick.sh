@@ -25,8 +25,8 @@
 # stops being read. Failures land in the queue's attempt counter and then the
 # DLQ; run_daily.sh is what reports them, once, on a fingerprint.
 #
-# Both intervals sit at or under OLLAMA_KEEP_ALIVE (30m) so the ~29GB chunker
-# weights stay resident between ticks instead of cold-loading on each one.
+# Both intervals sit at or under OLLAMA_KEEP_ALIVE (30m) so the chunker weights
+# stay resident between ticks instead of cold-loading on each one.
 
 set -e
 

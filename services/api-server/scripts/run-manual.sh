@@ -15,17 +15,15 @@ docker run -d \
   -e COUCHBASE_PASSWORD=${COUCHBASE_PASSWORD:?COUCHBASE_PASSWORD required} \
   -e COUCHBASE_BUCKET_CODE=code_kosha \
   -e COUCHBASE_BUCKET_USERS=users \
-  -e OLLAMA_HOST=http://host.docker.internal:1234 \
+  -e OLLAMA_HOST=http://host.docker.internal:11434 \
   -e JWT_SECRET=your-secret-key-here-change-in-production \
   -e AES_ENCRYPTION_KEY=your-32-byte-encryption-key-here \
   -e API_USERNAME=codesmriti \
   -e API_PASSWORD=Kx9mP2vL8nQ5wR7jT4yB3zF6H8aC1dE9 \
-  -e EMBEDDING_MODEL_NAME=nomic-ai/nomic-embed-text-v1.5 \
-  -e LLM_MODEL_NAME=qwen/qwen3-30b-a3b-2507 \
+  -e EMBEDDING_MODEL_NAME=Qwen/Qwen3-Embedding-0.6B \
+  -e LLM_MODEL_NAME=general \
   --add-host=host.docker.internal:host-gateway \
   -p 8001:8000 \
-  -v model_cache:/root/.cache/huggingface \
-  -v model_cache:/root/.cache/torch \
   code-smriti-api-server:latest
 
 echo ""

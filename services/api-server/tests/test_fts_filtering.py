@@ -11,7 +11,7 @@ import httpx
 import numpy as np
 from pathlib import Path
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
+from app.rag.embedding import EMBEDDING_MODEL, convention, truncate
 from couchbase.cluster import Cluster
 from couchbase.options import ClusterOptions
 from couchbase.auth import PasswordAuthenticator
@@ -53,8 +53,20 @@ def couchbase_cluster():
 
 @pytest.fixture(scope="module")
 def embedding_model():
-    """Load embedding model."""
-    return SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
+    """Query vectors as the API builds them, from the Ollama host on this machine."""
+    conv = convention(EMBEDDING_MODEL)
+
+    class Embedder:
+        def encode(self, text, normalize_embeddings=True):
+            resp = httpx.post(
+                f"{os.getenv('OLLAMA_URL', 'http://localhost:11434')}/api/embed",
+                json={"model": conv["ollama_model"], "input": f"{conv['query_prefix']}{text}"},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            return truncate(np.asarray(resp.json()["embeddings"][0], dtype=np.float32))[0]
+
+    return Embedder()
 
 
 @pytest.fixture(scope="module")
@@ -140,7 +152,7 @@ class TestKNNSearch:
         """Verify pure KNN search returns results sorted by similarity."""
         query = "PRISM weather data"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 
@@ -169,7 +181,7 @@ class TestKNNSearch:
         """Verify KNN scores match computed cosine similarity."""
         query = "authentication login"
         query_embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         )
 
@@ -214,7 +226,7 @@ class TestKNNWithFilters:
         """Test query + knn with 'and' operator filters correctly."""
         query = "database models"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 
@@ -252,7 +264,7 @@ class TestKNNWithFilters:
         """Test query (disjuncts) + knn with 'and' operator."""
         query = "API endpoints"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 
@@ -300,7 +312,7 @@ class TestKNNWithFilters:
         """Test that knn_operator:and works correctly with large k values."""
         query = "weather data capabilities"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 
@@ -360,7 +372,7 @@ class TestKNNWithFilters:
         """
         query = "weather data"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 
@@ -427,7 +439,7 @@ class TestScoreBehavior:
         """Document that combined query+knn scores are dominated by BM25."""
         query = "authentication"
         embedding = embedding_model.encode(
-            f"search_query: {query}",
+            query,
             normalize_embeddings=True
         ).tolist()
 

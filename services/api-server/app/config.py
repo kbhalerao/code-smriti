@@ -34,11 +34,10 @@ class Settings(BaseSettings):
     # AES encryption for GitHub PATs
     aes_encryption_key: str
 
-    # Ollama Configuration
+    # Ollama serves both the LLM and query embeddings, so repointing this moves
+    # both. The embedding tag is part of the vector space and lives with the
+    # convention in app/rag/embedding.py, not here.
     ollama_host: str = "http://localhost:11434"
-    # Unused for embeddings — the embedding model is loaded in-process via
-    # sentence-transformers (see app/rag/embedding.py). Kept for the LLM host.
-    ollama_model: str = "nomic-embed-text"
 
     # LLM and Embedding Models
     # Note: LLM must support tool/function calling for RAG agent to work
