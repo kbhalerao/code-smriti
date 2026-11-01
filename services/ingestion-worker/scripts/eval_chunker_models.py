@@ -192,9 +192,13 @@ async def run_model(model: str, files: list[Path], repos_root: Path) -> ModelRes
     result = ModelResult(model=model)
     result.fmt = await model_format(model)
     version = await server_version()
-    if schema_enforced(result.fmt, version) is False:
+    enforced = schema_enforced(result.fmt, version)
+    if enforced is False:
         print(f"  !! format={result.fmt} on ollama {version} — schema will NOT be enforced; "
               f"numbers are not comparable")
+    elif enforced is None:
+        print(f"  !! format={result.fmt} on ollama {version} — cannot tell whether the schema "
+              f"is enforced; numbers may not be comparable")
     elif result.fmt != "gguf":
         print(f"  note: format={result.fmt} on ollama {version} enforces the schema, but an "
               f"ALIAS can still break it (name-dependent rendering) — call the alias you ship")

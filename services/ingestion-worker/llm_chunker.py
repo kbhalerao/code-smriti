@@ -84,9 +84,10 @@ MLX_SCHEMA_MIN_VERSION_STR = ".".join(map(str, MLX_SCHEMA_MIN_VERSION))
 def schema_enforced(fmt: str, version: Optional[str]) -> Optional[bool]:
     """Whether an ollama runner honours a `json_schema`, from what the API reports.
 
-    True for GGUF on any version; for anything else (MLX/safetensors) only from
-    MLX_SCHEMA_MIN_VERSION. None when the server version is unknown — callers
-    must not treat that as a failure, since the server may not be ollama.
+    True for GGUF on any version, and for MLX (safetensors) from
+    MLX_SCHEMA_MIN_VERSION. None when the format is one we know nothing about, or
+    the server version is unknown: callers must not treat that as a failure, since
+    the server may not be ollama, and must not treat it as enforcement either.
 
     This is the API's half of the answer. It cannot see an alias whose *name*
     breaks the prompt template (gemma4 on MLX), so a True here still wants one
@@ -94,6 +95,8 @@ def schema_enforced(fmt: str, version: Optional[str]) -> Optional[bool]:
     """
     if fmt == "gguf":
         return True
+    if fmt != "safetensors":
+        return None
     m = re.match(r"(\d+)\.(\d+)\.(\d+)", version or "")
     if not m:
         return None

@@ -33,3 +33,10 @@ def test_mlx_from_0_33_1_enforces_it(version):
 def test_unknown_version_is_unknown_not_a_failure(version):
     # Not an ollama server, or /api/version unreachable: the caller must not warn.
     assert schema_enforced("safetensors", version) is None
+
+
+@pytest.mark.parametrize("fmt", ["unknown", "?", "?(HTTPStatusError)", ""])
+def test_unknown_format_is_unknown_not_enforced(fmt):
+    # A failed /api/show lookup, on a server new enough that MLX enforces. This
+    # used to read as enforced, which silenced the eval harness's warning.
+    assert schema_enforced(fmt, "0.40.13") is None
