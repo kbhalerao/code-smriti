@@ -22,6 +22,7 @@ from app.rag.embedding import (
     QueryEmbedder,
     assert_corpus_matches,
     embed_query,
+    probe_embedder,
 )
 
 QUERY_INSTRUCTION = (
@@ -124,24 +125,63 @@ class _Db:
 _MANIFEST = {"model": EMBEDDING_MODEL, "dims": EMBEDDING_DIMS}
 
 
+def _serve(monkeypatch, handler) -> None:
+    """Route get_embedding_model to an embedder talking to `handler`."""
+    embedder = _embedder(monkeypatch, handler)
+    monkeypatch.setattr(embedding, "get_embedding_model", lambda name=EMBEDDING_MODEL: embedder)
+
+
 def test_probe_passes_when_the_host_serves_the_model(monkeypatch):
-    embedder = _embedder(monkeypatch, _ok())
-    assert asyncio.run(assert_corpus_matches(_Db(_MANIFEST), embedder=embedder)) is None
+    _serve(monkeypatch, _ok())
+    assert asyncio.run(probe_embedder()) is None
 
 
 def test_probe_reports_an_unreachable_host(monkeypatch):
     def handler(request):
         raise httpx.ConnectError("refused", request=request)
 
-    problem = asyncio.run(
-        assert_corpus_matches(_Db(_MANIFEST), embedder=_embedder(monkeypatch, handler))
-    )
+    _serve(monkeypatch, handler)
+    problem = asyncio.run(probe_embedder())
     assert problem and "Could not embed a probe query" in problem
 
 
-def test_probe_reports_a_manifest_mismatch(monkeypatch):
+def test_corpus_check_passes_when_the_manifest_agrees():
+    assert asyncio.run(assert_corpus_matches(_Db(_MANIFEST))) is None
+
+
+def test_corpus_check_reports_a_manifest_mismatch():
     stale = {"model": "nomic-ai/nomic-embed-text-v1.5", "dims": 768}
-    problem = asyncio.run(
-        assert_corpus_matches(_Db(stale), embedder=_embedder(monkeypatch, _ok()))
-    )
+    problem = asyncio.run(assert_corpus_matches(_Db(stale)))
     assert problem and "Embedding mismatch" in problem
+
+
+class _BrokenDb:
+    async def get_doc(self, bucket, key):
+        raise TimeoutError("couchbase is still starting")
+
+
+def test_unreadable_manifest_is_a_problem_not_a_pass():
+    # This used to return None, which main.py logged as a checkmark.
+    problem = asyncio.run(assert_corpus_matches(_BrokenDb()))
+    assert problem and "unverified" in problem
+
+
+def test_wrong_model_name_reaches_the_klaxon_without_a_database():
+    # .env setting nomic is the precedent this check exists for. It used to die
+    # earlier, building the embedder, and surface as a mild warning.
+    problem = asyncio.run(
+        assert_corpus_matches(_BrokenDb(), loaded_model_name="nomic-ai/nomic-embed-text-v1.5")
+    )
+    assert problem and "EMBEDDING_MODEL_NAME" in problem
+
+
+def test_wrong_model_name_is_a_service_error_at_request_time(monkeypatch):
+    # Otherwise a bare ValueError escapes every route as an opaque 500.
+    from types import SimpleNamespace
+    import sys
+
+    fake = SimpleNamespace(settings=SimpleNamespace(ollama_host="http://ollama:11434"))
+    monkeypatch.setitem(sys.modules, "app.config", fake)
+    embedding.get_embedding_model.cache_clear()
+    with pytest.raises(EmbeddingServiceError, match="no Ollama tag"):
+        embedding.get_embedding_model("nomic-ai/nomic-embed-text-v1.5")

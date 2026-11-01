@@ -16,7 +16,7 @@ from .config import settings
 from .database import close_cluster
 from .chat.pydantic_rag_agent import close_shared_resources, get_http_client
 from .errors import embedding_unavailable_handler
-from .rag.embedding import EmbeddingServiceError, assert_corpus_matches, get_embedding_model
+from .rag.embedding import EmbeddingServiceError, assert_corpus_matches, probe_embedder
 
 
 # Configure logging
@@ -56,27 +56,29 @@ async def lifespan(app: FastAPI):
     logger.info(f"Log level: {settings.log_level}")
     logger.info(f"CORS origins: {settings.cors_origins}")
 
-    # Queries are embedded by Ollama, so there is nothing to pre-load here; the
-    # probe below is what proves the host is serving the right model.
     get_http_client()
     logger.info("✓ HTTP client ready")
 
     # Loud, not fatal: a mismatch means results are wrong while the service is
     # otherwise healthy, and a dimension check cannot catch it — 768 truncated
     # from Qwen is the same shape nomic produced and a different space.
+    #
+    # Two independent checks, so that neither failing can hide the other. Queries
+    # are embedded by Ollama, so there is nothing to pre-load; the probe is what
+    # exercises that path.
     try:
         from .dependencies import get_db
-        problem = await assert_corpus_matches(
-            get_db(),
-            loaded_model_name=settings.embedding_model_name,
-            embedder=get_embedding_model(settings.embedding_model_name),
+        corpus_problem = await assert_corpus_matches(
+            get_db(), loaded_model_name=settings.embedding_model_name
         )
-        if problem:
-            logger.error(f"EMBEDDING PROBLEM: {problem}")
-        else:
-            logger.info("✓ Embedding convention matches the corpus manifest")
     except Exception as e:
-        logger.warning(f"Could not verify embedding manifest: {e}")
+        corpus_problem = f"Could not verify the embedding manifest: {e}"
+    probe_problem = await probe_embedder(settings.embedding_model_name)
+
+    for problem in filter(None, (corpus_problem, probe_problem)):
+        logger.error(f"EMBEDDING PROBLEM: {problem}")
+    if not corpus_problem and not probe_problem:
+        logger.info("✓ Embedding convention matches the corpus manifest; probe answered")
 
     yield
 

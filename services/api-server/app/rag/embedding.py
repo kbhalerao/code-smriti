@@ -154,7 +154,13 @@ def get_embedding_model(model_name: str = EMBEDDING_MODEL) -> QueryEmbedder:
     """The query embedder for `model_name`, pointed at the configured Ollama host."""
     from app.config import settings
 
-    return QueryEmbedder(settings.ollama_host, model_name)
+    try:
+        return QueryEmbedder(settings.ollama_host, model_name)
+    except ValueError as e:
+        # Misconfiguration, known only once a request needs the embedder. It has
+        # the same effect as the host being down, and takes the same 503 rather
+        # than a bare ValueError from whichever route got here first.
+        raise EmbeddingServiceError(str(e)) from e
 
 
 async def embed_query(embedder: QueryEmbedder, text: str) -> List[float]:
@@ -172,21 +178,31 @@ async def embed_query(embedder: QueryEmbedder, text: str) -> List[float]:
 
 async def assert_corpus_matches(
     db, bucket: str = "code_kosha", loaded_model_name: Optional[str] = None,
-    embedder: Optional[QueryEmbedder] = None,
 ) -> Optional[str]:
     """
     Compare this service's convention against how the corpus was actually built.
 
-    Returns a description of the mismatch, or None if they agree. Logged loudly
-    rather than raised: a mismatch means results are wrong but the service is
-    otherwise healthy, and refusing to start would take down search entirely
-    when degraded search plus a klaxon is more useful.
+    Returns a description of the mismatch, or None only if agreement was actually
+    established. Logged loudly rather than raised: a mismatch means results are
+    wrong but the service is otherwise healthy, and refusing to start would take
+    down search entirely when degraded search plus a klaxon is more useful.
     """
+    # Comparing this module's constants against the manifest proves only that two
+    # pieces of configuration agree. It said "matches" while the service had
+    # nomic loaded, because EMBEDDING_MODEL_NAME in .env overrode the compose
+    # default and nothing checked what was actually in memory. Checked first, as
+    # it needs no database and should not be hidden by a database problem.
+    if loaded_model_name and loaded_model_name != EMBEDDING_MODEL:
+        return (
+            f"Configured model is {loaded_model_name}, but this service embeds "
+            f"queries as {EMBEDDING_MODEL}. Check EMBEDDING_MODEL_NAME — a "
+            f"value in .env overrides the docker-compose default."
+        )
+
     try:
         doc = await db.get_doc(bucket, "embedding_manifest")
     except Exception as e:
-        logger.warning(f"Could not read embedding manifest: {e}")
-        return None
+        return f"Could not read the embedding manifest, so the corpus is unverified: {e}"
     if doc is None:
         return (
             "No embedding manifest in the corpus. It predates the manifest, so "
@@ -199,32 +215,28 @@ async def assert_corpus_matches(
             f"{EMBEDDING_MODEL} at {EMBEDDING_DIMS}. Search results are "
             f"meaningless until one side is re-run."
         )
+    return None
 
-    # Comparing this module's constants against the manifest proves only that two
-    # pieces of configuration agree. It said "matches" while the service had
-    # nomic loaded, because EMBEDDING_MODEL_NAME in .env overrode the compose
-    # default and nothing checked what was actually in memory.
-    if loaded_model_name and loaded_model_name != EMBEDDING_MODEL:
+
+async def probe_embedder(model_name: str = EMBEDDING_MODEL) -> Optional[str]:
+    """
+    Embed something through the path a search uses. Returns the problem, or None.
+
+    Independent of the manifest check on purpose: a corpus that cannot be read says
+    nothing about whether the embedding host is up, and each must be able to report
+    without the other having passed. `encode` rejects a vector of the wrong native
+    width, so a successful probe means the host answered with the model's shape.
+    """
+    try:
+        probe = truncate(await get_embedding_model(model_name).encode("probe"))
+    except EmbeddingServiceError as e:
         return (
-            f"Loaded model is {loaded_model_name}, but this service embeds "
-            f"queries as {EMBEDDING_MODEL}. Check EMBEDDING_MODEL_NAME — a "
-            f"value in .env overrides the docker-compose default."
+            f"Could not embed a probe query, so searches will fail until this is "
+            f"fixed: {e}"
         )
-
-    # And prove it by using it: a name can be right while the thing serving it is
-    # not. `encode` itself rejects a vector of the wrong native width, so a
-    # successful probe means the host answered with the model's shape.
-    if embedder is not None:
-        try:
-            probe = truncate(await embedder.encode("probe"))
-        except EmbeddingServiceError as e:
-            return (
-                f"Could not embed a probe query, so searches will fail until the "
-                f"embedding host answers: {e}"
-            )
-        if probe.shape[1] != EMBEDDING_DIMS:
-            return (
-                f"Served model emits {probe.shape[1]} dimensions after "
-                f"truncation, expected {EMBEDDING_DIMS}."
-            )
+    if probe.shape[1] != EMBEDDING_DIMS:
+        return (
+            f"Served model emits {probe.shape[1]} dimensions after truncation, "
+            f"expected {EMBEDDING_DIMS}."
+        )
     return None
