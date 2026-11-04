@@ -257,6 +257,19 @@ class SizingUnavailable(Exception):
     """The decision model could not be reached; stop trying for this run."""
 
 
+class ContextTooLong(Exception):
+    """The state tokenised past the model's context. MAX_STATE_CHARS assumes
+    code-like density; HTML and markup run denser (36,000 chars of a static
+    site's pages came to 16,541 tokens against a 16,384 context)."""
+
+    def __init__(self, tokens: int, limit: int):
+        super().__init__(f"{tokens} tokens > {limit}")
+        self.tokens, self.limit = tokens, limit
+
+
+_CONTEXT_ERROR = re.compile(r"\((\d+) tokens\) exceeds the available context size \((\d+) tokens\)")
+
+
 @dataclass
 class SizingStats:
     sized: int = 0
@@ -351,6 +364,10 @@ class CommitSizer:
             resp = self.http.post(self.url, json=body, timeout=self.timeout)
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
             raise SizingUnavailable(str(e)) from e
+        if resp.status_code == 400:
+            m = _CONTEXT_ERROR.search(resp.text)
+            if m:
+                raise ContextTooLong(int(m.group(1)), int(m.group(2)))
         resp.raise_for_status()
         answer = resp.json()["answers"]["choice"]
         size = answer["choice"]
@@ -358,6 +375,16 @@ class CommitSizer:
         if size not in CLASSES or set(probs) != set(CLASSES):
             raise ValueError(f"unexpected answer: {answer!r}")
         return size, probs
+
+    def _classify_fitting(self, state: str, file_stats: Dict) -> Tuple[str, Dict[str, float]]:
+        """Classify, shrinking the state in proportion to any context overshoot."""
+        for _ in range(3):
+            try:
+                return self.classify(state)
+            except ContextTooLong as e:
+                state = state[:int(len(state) * e.limit / e.tokens * 0.9)]
+                file_stats["truncated"] = True
+        return self.classify(state)
 
     # -- orchestration --
 
@@ -371,7 +398,7 @@ class CommitSizer:
             if state is None:
                 size, probs = SIZE_EXCLUDED, {}
             else:
-                size, probs = self.classify(state)
+                size, probs = self._classify_fitting(state, file_stats)
         except SizingUnavailable:
             raise
         except Exception as e:
