@@ -138,6 +138,11 @@ class IncrementalUpdater:
         # Load exclusions
         self.exclusions = self.repo_lifecycle.load_exclusions()
 
+        # Billing sizes for new commits. None when disabled, dry-run, or the
+        # billing collection could not be ensured; never fails the run.
+        from .commit_sizing import sizer_from_config
+        self.sizer = None if dry_run else sizer_from_config(self.cb_client, config)
+
     def filter_supported_files(
         self,
         files: List[str],
@@ -395,6 +400,21 @@ class IncrementalUpdater:
 
 
     def execute_plan(self, plan: RepoPlan, repo_path: Path, loop=None) -> UpdateResult:
+        """Execute a plan, then size the commits it brought in for billing.
+
+        Sizing runs only once the corpus reflects `result.commit` (the same test
+        that banks the commit), and is best-effort: it never changes the result.
+        """
+        result = self._execute_plan(plan, repo_path, loop)
+        if self.sizer is not None and self._banks(result):
+            try:
+                self.sizer.size_repo(plan.repo_id, repo_path, result.commit,
+                                     base=plan.base_commit)
+            except Exception as e:
+                logger.warning(f"  Commit sizing failed for {plan.repo_id}: {e}")
+        return result
+
+    def _execute_plan(self, plan: RepoPlan, repo_path: Path, loop=None) -> UpdateResult:
         """Do what a plan says, touching only what it names.
 
         Deliberately does no git fetch and re-derives no decision: the plan is
@@ -1103,6 +1123,13 @@ class IncrementalUpdater:
     # has to advance or the same decision is re-made, and re-logged, every run.
     _CHECKPOINTABLE_SKIPS = ('no_file_changes', 'no_indexable_changes')
 
+    def _banks(self, result: UpdateResult) -> bool:
+        """Whether the corpus now reflects `result.commit`."""
+        return bool(result.commit) and (
+            result.status in self._CHECKPOINTABLE
+            or (result.status == STATUS_SKIPPED and result.reason in self._CHECKPOINTABLE_SKIPS)
+        )
+
     def _checkpoint_commit(self, result: UpdateResult) -> None:
         """
         Record one repo's new commit as soon as that repo finishes.
@@ -1121,13 +1148,7 @@ class IncrementalUpdater:
         is merely re-done next time, whereas an exception raised here would lose
         the whole remaining loop.
         """
-        if self.dry_run or not result.commit:
-            return
-        banks = (
-            result.status in self._CHECKPOINTABLE
-            or (result.status == STATUS_SKIPPED and result.reason in self._CHECKPOINTABLE_SKIPS)
-        )
-        if not banks:
+        if self.dry_run or not self._banks(result):
             return
         try:
             self.repo_lifecycle.update_commits_index({result.repo_id: result.commit})

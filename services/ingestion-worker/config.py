@@ -190,6 +190,21 @@ class WorkerConfig(BaseSettings):
     # paragraph above describes.
     llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "900"))
 
+    # Commit sizing for billing (v4/incremental/commit_sizing.py). Results go to
+    # code_kosha.billing.commit_size, never the _default collection.
+    commit_sizing_enabled: bool = os.getenv("COMMIT_SIZING_ENABLED", "true").lower() in ("1", "true", "yes")
+    commit_size_url: str = os.getenv("COMMIT_SIZE_URL", "http://macstudio.home.arpa:11434/v1/systemone")
+    commit_size_model: str = os.getenv("COMMIT_SIZE_MODEL", "d1:3b")
+    commit_size_timeout_seconds: float = float(os.getenv("COMMIT_SIZE_TIMEOUT_SECONDS", "120"))
+    # Retry window: commits this recent on the indexed tip are re-checked (a KV
+    # exists each) so a failed call is retried. Not a backfill — history older
+    # than this is loaded from the StrategicPlanning run.
+    commit_size_lookback_days: int = int(os.getenv("COMMIT_SIZE_LOOKBACK_DAYS", "14"))
+    # Which repos are sized: comma-separated globs over the full, lower-cased
+    # repo_id (owner/name). Empty sizes nothing. The real list names clients, so
+    # it lives in the gitignored .env, never here — this repository is public.
+    commit_size_repos: str = os.getenv("COMMIT_SIZE_REPOS", "")
+
     # How many requests ingestion may have in flight against each model, enforced
     # client-side by llm_gate.LLMGate. This is the ONLY lever for prioritising
     # interactive callers over ingestion: ollama has no request priority, no queue

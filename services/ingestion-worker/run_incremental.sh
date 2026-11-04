@@ -54,6 +54,7 @@ export TOKENIZERS_PARALLELISM=false
 # next scheduled run, not the typical runtime. Override in .env if needed.
 INGEST_TIMEOUT_SECS="${INGEST_TIMEOUT_SECS:-36000}"   # 10h
 KPI_TIMEOUT_SECS="${KPI_TIMEOUT_SECS:-900}"           # 15m
+SIZE_TIMEOUT_SECS="${SIZE_TIMEOUT_SECS:-3600}"         # 1h; billing commit-size retry sweep
 DIGEST_TIMEOUT_SECS="${DIGEST_TIMEOUT_SECS:-1800}"    # 30m
 ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m, per attempt
 
@@ -332,6 +333,23 @@ elif [[ $EXIT_CODE -ne 0 ]]; then
     post_cos_alert \
         "ingestion exited $EXIT_CODE" \
         "The ingestion step failed. No digest was posted for today because there is no fresh run to summarize."
+fi
+
+# --- Commit sizing retry sweep ----------------------------------------------
+# The tick sizes commits as repos are ingested; this re-checks the lookback
+# window of every allowlisted repo so a failed model call is retried even when
+# the repo stays quiet. Report stage only, and fail-soft: it never moves
+# EXIT_CODE, because a missed size is retried tomorrow.
+if [[ "$RUN_STAGE" == "report" ]]; then
+    echo "Sweeping unsized commits..." >> "$LOG_FILE"
+    set +e
+    run_with_timeout "$SIZE_TIMEOUT_SECS" size \
+        "$PYTHON" -u "$SCRIPT_DIR/scripts/size_commits.py"
+    SIZE_EXIT=$?
+    set -e
+    if [[ $SIZE_EXIT -ne 0 ]]; then
+        echo "Commit sizing sweep exited $SIZE_EXIT; continuing." >> "$LOG_FILE"
+    fi
 fi
 
 # --- KPI dashboard ---------------------------------------------------------

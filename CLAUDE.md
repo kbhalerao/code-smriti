@@ -574,6 +574,35 @@ launchctl bootout gui/$(id -u)/com.codesmriti.drain
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.codesmriti.drain.plist
 ```
 
+## Commit Sizing (billing)
+
+`v4/incremental/commit_sizing.py` classes each new commit S / M / L with
+`d1:3b` (`/v1/systemone` on :11434) for billing, after the repo's commit is
+banked. The fit from size to hours lives in the StrategicPlanning dashboard, not
+here. Three decisions that are easy to undo by accident:
+
+- **Storage is `code_kosha.billing.commit_size`, never `_default`.** Six paths
+  run `DELETE FROM code_kosha WHERE repo_id = ...`, the full rebuild among them,
+  and would erase billing history from `_default`. Every API, MCP, RAG and KPI
+  query reads `_default._default`, and `code_vector_index` maps only that
+  collection, so billing data is out of their reach structurally. Do not add a
+  read of it to any of them: people outside billing can hold code-smriti
+  tokens, and the API has no scopes — any valid JWT or PAT sees everything it exposes.
+- **Scope is every single-parent commit reachable from the indexed tip** — not
+  `--first-parent` (drops ~70% of merged work) and not all branches (rebased and
+  squashed copies would bill twice). Only allowlisted repos
+  (`COMMIT_SIZE_REPOS`, globs over owner/name). The list names clients, so it
+  is set in the gitignored `.env` and the default is empty — never commit it.
+- **`size` is counterfactual no-AI effort**; AI involvement is stored separately
+  as trailer evidence in `ai` (presence, not share). Rates for each are the
+  dashboard's job.
+
+Never re-sized: the write is an `insert`. A failed call stores nothing and is
+retried inside the `COMMIT_SIZE_LOOKBACK_DAYS` window, by the next ingest of that
+repo or the daily `scripts/size_commits.py` sweep. Older history is loaded from
+the StrategicPlanning backfill, not sized here. Park it with
+`COMMIT_SIZING_ENABLED=false`.
+
 ## Incremental vs Full Re-ingestion
 
 The goal is narrow: the corpus should match the repo at `origin/HEAD`, with no
