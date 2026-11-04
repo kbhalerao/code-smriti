@@ -222,6 +222,7 @@ def candidate_commits(
     target: str,
     base: Optional[str] = None,
     lookback_days: int = 14,
+    since: Optional[str] = None,
 ) -> List[str]:
     """Single-parent commits to consider sizing, oldest first.
 
@@ -234,7 +235,10 @@ def candidate_commits(
     shas: List[str] = []
     if base:
         shas += _git(repo_path, flags + [f"{base}..{target}"]).split()
-    if lookback_days > 0:
+    if since:
+        # An explicit window (a deliberate backfill) replaces the lookback.
+        shas += _git(repo_path, flags + [f"--since={since}", target]).split()
+    elif lookback_days > 0:
         shas += _git(repo_path, flags + [f"--since={lookback_days}.days.ago", target]).split()
     return list(dict.fromkeys(shas))  # de-duplicate, keep order
 
@@ -399,13 +403,13 @@ class CommitSizer:
             stats.by_class[size] = stats.by_class.get(size, 0) + 1
 
     def size_repo(self, repo_id: str, repo_path: Path, target: str,
-                  base: Optional[str] = None) -> SizingStats:
+                  base: Optional[str] = None, since: Optional[str] = None) -> SizingStats:
         """Size every unsized candidate commit for one repo. Never raises."""
         stats = SizingStats()
         if self.unavailable or not self.wants(repo_id):
             return stats
         try:
-            shas = candidate_commits(repo_path, target, base, self.lookback_days)
+            shas = candidate_commits(repo_path, target, base, self.lookback_days, since)
         except Exception as e:
             logger.warning(f"    Commit sizing skipped for {repo_id}: {e}")
             return stats

@@ -300,3 +300,12 @@ def test_document_records_ai(repo):
     s = _sizer(_ok("S"))
     s.size_repo("o/r", repo, sha)
     assert s.collection.docs[doc_key("o/r", sha)]["ai"] == {"assisted": True, "tools": ["claude"]}
+
+
+def test_candidates_explicit_since_replaces_lookback(repo):
+    _commit(repo, "a.py", "root")
+    old = _commit(repo, "b.py", "old")
+    tip = _commit(repo, "c.py", "new")
+    # lookback 0 alone would return nothing; an explicit since returns history.
+    assert candidate_commits(repo, tip, None, lookback_days=0) == []
+    assert candidate_commits(repo, tip, None, lookback_days=0, since="1970-01-01") == [old, tip]
