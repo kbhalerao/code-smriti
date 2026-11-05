@@ -8,13 +8,16 @@ allowlisted repo it re-checks the lookback window behind the commit the corpus
 holds (`repo_commits_index`) and sizes anything still missing. It is run by the
 daily report stage of run_incremental.sh.
 
-It is NOT a backfill. History older than the lookback window is loaded from the
-StrategicPlanning run, by insert, into the same collection.
+By default it is not a backfill. `--since` turns it into one, deliberately:
+it replaces the lookback window with an explicit start date, and since every
+write is an insert, a backfill can be stopped and rerun at any point.
 
 Usage:
     uv run python scripts/size_commits.py              # sweep all allowlisted repos
     uv run python scripts/size_commits.py --repo owner/name
     uv run python scripts/size_commits.py --dry-run    # list candidates; no model calls, no writes
+    uv run python scripts/size_commits.py --since 2025-01-01   # backfill from a date
+    uv run python scripts/size_commits.py --since 1970-01-01   # backfill all history
 """
 
 import argparse
@@ -34,6 +37,7 @@ from v4.incremental.repo_lifecycle import RepoLifecycle
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", help="only this owner/name")
+    ap.add_argument("--since", help="backfill from this date (YYYY-MM-DD) instead of the lookback window")
     ap.add_argument("--dry-run", action="store_true", help="list unsized candidates; no model calls, no writes")
     args = ap.parse_args()
 
@@ -48,7 +52,8 @@ def main() -> int:
                               github_token=config.github_token)
     tips = lifecycle.get_commits_index()
     repos = sorted(r for r in tips if sizer.wants(r) and (not args.repo or r == args.repo))
-    logger.info(f"Sweeping {len(repos)} repo(s), lookback {sizer.lookback_days} days")
+    window = f"since {args.since}" if args.since else f"lookback {sizer.lookback_days} days"
+    logger.info(f"Sweeping {len(repos)} repo(s), {window}")
 
     total = SizingStats()
     for repo_id in repos:
@@ -57,7 +62,7 @@ def main() -> int:
             continue
         if args.dry_run:
             try:
-                shas = candidate_commits(repo_path, tips[repo_id], None, sizer.lookback_days)
+                shas = candidate_commits(repo_path, tips[repo_id], None, sizer.lookback_days, args.since)
             except Exception as e:
                 logger.warning(f"{repo_id}: {e}")
                 continue
@@ -65,7 +70,7 @@ def main() -> int:
             if missing:
                 logger.info(f"{repo_id}: {len(missing)} unsized of {len(shas)}")
             continue
-        stats = sizer.size_repo(repo_id, repo_path, tips[repo_id])
+        stats = sizer.size_repo(repo_id, repo_path, tips[repo_id], since=args.since)
         for k in ("sized", "excluded", "existing", "failed"):
             setattr(total, k, getattr(total, k) + getattr(stats, k))
         for k, v in stats.by_class.items():

@@ -300,3 +300,38 @@ def test_document_records_ai(repo):
     s = _sizer(_ok("S"))
     s.size_repo("o/r", repo, sha)
     assert s.collection.docs[doc_key("o/r", sha)]["ai"] == {"assisted": True, "tools": ["claude"]}
+
+
+def test_candidates_explicit_since_replaces_lookback(repo):
+    _commit(repo, "a.py", "root")
+    old = _commit(repo, "b.py", "old")
+    tip = _commit(repo, "c.py", "new")
+    # lookback 0 alone would return nothing; an explicit since returns history.
+    assert candidate_commits(repo, tip, None, lookback_days=0) == []
+    assert candidate_commits(repo, tip, None, lookback_days=0, since="1970-01-01") == [old, tip]
+
+
+def test_context_overflow_shrinks_and_retries(repo):
+    _commit(repo, "a.py", "root")
+    sha = _commit(repo, "b.html", "<p>x</p>" * 3000)
+    seen = []
+
+    def handler(request):
+        import json
+        n = len(json.loads(request.content)["state"])
+        seen.append(n)
+        if len(seen) == 1:
+            return httpx.Response(400, json={"error": "request (16541 tokens) exceeds the available context size (16384 tokens), try increasing it"})
+        return _ok("S")(request)
+
+    s = _sizer(handler)
+    stats = s.size_repo("o/r", repo, sha)
+    assert stats.sized == 1 and len(seen) == 2 and seen[1] < seen[0] * 16384 / 16541
+    assert s.collection.docs[doc_key("o/r", sha)]["truncated"] is True
+
+
+def test_other_400_still_fails(repo):
+    _commit(repo, "a.py", "root")
+    sha = _commit(repo, "b.py", "x")
+    s = _sizer(lambda r: httpx.Response(400, json={"error": "bad model"}))
+    assert s.size_repo("o/r", repo, sha).failed == 1 and s.collection.docs == {}
