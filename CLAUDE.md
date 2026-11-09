@@ -743,3 +743,36 @@ gain, since one GPU means instances split bandwidth.
 Benchmark **only on an idle box**. A probe run during ingestion showed what looked
 like a 2.5x win from a config change; the idle A/B showed zero difference. It was
 measuring the queue.
+
+### Per-file budget, chunker bounds and dead-letter replay
+
+**The chunker's answer is bounded by its response schema**: at most
+`MAX_ITEMS_PER_PASS` (20) items per pass, and a `maxLength`/`maxItems` on every
+free-text field (`llm_chunker.py`, beside `MAX_OUTPUT_TOKENS`). List-shaped files
+(route tables, constant maps) used to answer with one item per entry: 57 items
+and 9,394 tokens for a 234-line `urls.py`, 85-183s per pass. Those calls were
+not loops, which is why lowering `MAX_OUTPUT_TOKENS` is the wrong fix (it was
+tried, and it cut legitimate answers). Asking for grouping *in the prompt* also
+shrank them, but cost 10-15% of chunks elsewhere and quadrupled empty passes, so
+the bound lives in the schema alone. Measured on ollama 0.40.15 with the same
+20 files run concurrently: baseline 206/224 chunks, schema-bounded 205/212,
+inside the run-to-run spread.
+
+**`FILE_TIMEOUT_SECONDS` (300) is a deadline, not a kill.** Each chunker pass,
+symbol summary, unit summary and the file summary runs against it. Steps that
+finished keep their LLM output, steps that run into it or start after it fall
+back to the no-LLM path, and the file records one `timeout` failure. It used to
+be one `wait_for` around the whole file that discarded everything, including
+time spent queued behind other ollama work. The `wait_for` survives only as a
+backstop at budget + `FILE_TIMEOUT_GRACE_SECONDS` (120).
+
+**The dead-letter queue replays itself.** Entries clear only when their file is
+reprocessed cleanly, and incremental ingestion reprocesses a file only when it
+changes, so nothing used to drain the queue. The daily report stage now runs
+`scripts/replay_dlq.py --auto` before the KPI step, under the ingestion lock
+(held lock = clean skip). Each entry carries `replay_attempts`; the replay
+advances it, an ordinary re-failure does not reset it, and the daily alert lists
+only entries that have used all `DLQ_MAX_REPLAY_ATTEMPTS` (3). `incremental_v4.py
+--dlq` shows pending entries as `~ kind: repo file (replay n/3)` and exits 1 only
+for exhausted ones. For a manual pass, `replay_dlq.py` is a dry run by default;
+`--apply` reprocesses without spending an automatic attempt.
