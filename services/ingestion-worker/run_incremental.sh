@@ -56,6 +56,7 @@ INGEST_TIMEOUT_SECS="${INGEST_TIMEOUT_SECS:-36000}"   # 10h
 KPI_TIMEOUT_SECS="${KPI_TIMEOUT_SECS:-900}"           # 15m
 SIZE_TIMEOUT_SECS="${SIZE_TIMEOUT_SECS:-3600}"         # 1h; billing commit-size retry sweep
 DIGEST_TIMEOUT_SECS="${DIGEST_TIMEOUT_SECS:-1800}"    # 30m
+REPLAY_TIMEOUT_SECS="${REPLAY_TIMEOUT_SECS:-3600}"    # 1h; automatic dead-letter replay
 ALERT_TIMEOUT_SECS="${ALERT_TIMEOUT_SECS:-120}"       # 2m, per attempt
 
 # The alert path gets more than one shot, because it is used at the exact
@@ -352,6 +353,30 @@ if [[ "$RUN_STAGE" == "report" ]]; then
     fi
 fi
 
+# --- Dead-letter replay ----------------------------------------------------
+# Give every entry with attempts left another try before anything is reported.
+# Most entries are not broken files: a plain re-run on 2026-11-09 recovered 13 of
+# the first 19 replayed. Daily, so the attempts (DLQ_MAX_REPLAY_ATTEMPTS, default
+# 3) are a day apart, and here rather than on the 5-minute drain because the
+# replay is GPU work and the report stage is the quietest point of the day.
+#
+# Exit 2 means the drain held the ingestion lock: a clean skip, and tomorrow's
+# run tries again. Nothing here alerts. The dead-letter check below reports
+# whatever is still exhausted after the replay, which is what a person needs.
+if [[ "$RUN_STAGE" == "report" ]]; then
+    echo "Replaying dead-letter entries..." >> "$LOG_FILE"
+    set +e
+    run_with_timeout "$REPLAY_TIMEOUT_SECS" replay \
+        "$PYTHON" -u "$SCRIPT_DIR/scripts/replay_dlq.py" --auto
+    REPLAY_EXIT=$?
+    set -e
+    if [[ $REPLAY_EXIT -eq 2 ]]; then
+        echo "Dead-letter replay skipped: an ingestion holds the lock." >> "$LOG_FILE"
+    elif [[ $REPLAY_EXIT -ne 0 ]]; then
+        echo "Dead-letter replay exited $REPLAY_EXIT; continuing." >> "$LOG_FILE"
+    fi
+fi
+
 # --- KPI dashboard ---------------------------------------------------------
 # Only meaningful off a completed ingestion; regenerating after a failed run
 # would refresh the page timestamp while the underlying data stayed stale.
@@ -398,8 +423,10 @@ else
 fi
 
 # --- Dead-letter queue -----------------------------------------------------
-# Files that failed and did not recover from their in-task retry. These are bugs
-# in the pipeline, not contention, and nothing retries them automatically.
+# Files that failed, did not recover from their in-task retry, and then failed
+# every automatic replay above. `--dlq` exits 1 only for those exhausted
+# entries; entries still being replayed are listed in its output on lines the
+# fingerprint ignores, and never trigger the notice on their own.
 #
 # ONE aggregated note, never one per file: `cos doc create` embeds every note for
 # vector search, and a hundred of them would be the same self-inflicted outage
@@ -431,8 +458,8 @@ if [[ $EXIT_CODE -eq 0 ]]; then
             echo "Dead-letter queue changed; posting notice." >> "$LOG_FILE"
             deliver_cos_alert "# ⚠️ Ingestion dead-letter queue — $(date '+%Y-%m-%d %H:%M %Z')
 
-Files that failed and did **not** recover from their retry. Nothing retries these
-automatically — they need a human.
+Files that failed and did **not** recover, including from their automatic
+replays (one a day). They need a person.
 
 \`\`\`
 $(head -c 3000 "$DLQ_OUT")

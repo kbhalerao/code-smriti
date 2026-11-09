@@ -305,6 +305,16 @@ class V4Pipeline:
         incremental is the path almost every run takes.
         """
         relative_path = str(file_path.relative_to(repo_path))
+        # Two bounds. The DEADLINE is the budget proper: every LLM step inside
+        # the file runs against what is left of it, and on expiry the remaining
+        # steps fall back while finished ones are kept (FileProcessor.
+        # _within_budget). The wait_for below is only a backstop for something
+        # that does not honour the deadline, such as a hang in parsing or IO, so
+        # it is set past the deadline by a grace period for the non-LLM work
+        # that still follows it.
+        budget = config.file_timeout_seconds
+        deadline = asyncio.get_running_loop().time() + budget
+        hard_limit = budget + config.file_timeout_grace_seconds
         try:
             return await asyncio.wait_for(
                 self.file_processor.process(
@@ -314,24 +324,26 @@ class V4Pipeline:
                     commit_hash=commit_hash,
                     parent_module_id="",  # Set during aggregation
                     use_llm=use_llm,
+                    deadline=deadline,
                 ),
-                timeout=config.file_timeout_seconds,
+                timeout=hard_limit,
             )
         except asyncio.TimeoutError:
-            # wait_for cancels the coroutine, so there are no partial documents
-            # to salvage — reprocess without the LLM instead. That is fast and
-            # network-free, and produces a COMPLETE basic document rather than
-            # half an enriched one. What must not happen is the file disappearing
-            # while the commits index advances and declares the repo current.
+            # The backstop fired, so the deadline was not honoured somewhere and
+            # wait_for has cancelled the coroutine: there is nothing to salvage.
+            # Reprocess without the LLM instead. That is fast and network-free,
+            # and produces a COMPLETE basic document rather than half an enriched
+            # one. What must not happen is the file disappearing while the
+            # commits index advances and declares the repo current.
             logger.error(
-                f"{relative_path}: exceeded the {config.file_timeout_seconds}s file budget; "
+                f"{relative_path}: exceeded the {hard_limit}s hard limit; "
                 f"reprocessing without the LLM"
             )
             degraded = await self._process_without_llm(file_path, repo_path, repo_id, commit_hash)
             degraded.failures.append(FileFailure(
                 file_path=relative_path,
                 kind=FailureKind.TIMEOUT,
-                detail=f"exceeded the {config.file_timeout_seconds}s file budget",
+                detail=f"exceeded the {hard_limit}s hard limit",
             ))
             return degraded
         except Exception as e:

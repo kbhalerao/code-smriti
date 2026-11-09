@@ -111,9 +111,9 @@ def main():
     parser.add_argument(
         "--dlq",
         action="store_true",
-        help="List files that failed and were not recovered, then exit. Nothing "
-             "drains this queue automatically — an entry means the pipeline could "
-             "not fix it by retrying and a human needs to look."
+        help="List files that failed and were not recovered, then exit. Entries "
+             "are replayed automatically each day (scripts/replay_dlq.py --auto); "
+             "exits 1 only when some have exhausted those replays and need a person."
     )
     parser.add_argument(
         "--trigger",
@@ -172,15 +172,31 @@ def main():
         logger.remove()
 
         from storage.couchbase_client import CouchbaseClient
-        from v4.dlq import DeadLetterQueue
+        from v4.dlq import MAX_REPLAY_ATTEMPTS, DeadLetterQueue, is_exhausted
 
         entries = DeadLetterQueue(CouchbaseClient()).open_entries(repo_id=args.repo)
         if not entries:
             print("Dead-letter queue is empty.")
             sys.exit(0)
 
-        print(f"{len(entries)} open dead-letter entry/entries:\n")
-        for e in entries:
+        # Entries with automatic replays left are listed, but on lines that do
+        # NOT start "  [" so the wrapper's fingerprint ignores them, and they do
+        # not make this exit 1. They alert only once exhausted.
+        exhausted = [e for e in entries if is_exhausted(e)]
+        pending = [e for e in entries if not is_exhausted(e)]
+        if pending:
+            print(f"{len(pending)} entry/entries still being retried automatically:")
+            for e in pending:
+                print(f"  ~ {e.get('kind')}: {e.get('repo_id')} {e.get('file_path')} "
+                      f"(replay {e.get('replay_attempts', 0)}/{MAX_REPLAY_ATTEMPTS})")
+            print()
+        if not exhausted:
+            print("No entries have exhausted their automatic replays.")
+            sys.exit(0)
+
+        print(f"{len(exhausted)} entry/entries failed {MAX_REPLAY_ATTEMPTS} automatic "
+              f"replays and need a person:\n")
+        for e in exhausted:
             # The "  [kind] repo file" line is the STABLE IDENTITY of an entry and
             # is what the wrapper fingerprints to decide whether anything actually
             # changed. Nothing that moves on its own — count, timestamps, run id —

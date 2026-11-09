@@ -157,6 +157,17 @@ class TestParseDiscrimination:
         chunker = FakeChunker([])
         assert chunker._parse_llm_response('```json\n[{"a": 1}]\n```') == [{"a": 1}]
 
+    def test_fences_inside_valid_json_are_content_not_wrappers(self):
+        """
+        A chunk quoting markdown carries ``` in its content. The fence regex
+        used to run before parsing and hand json.loads the text between those
+        backticks, failing replies that were valid JSON (agkit.io-doclet
+        tests/test_doclet.py, 2026-11-09).
+        """
+        chunker = FakeChunker([])
+        reply = '[{"name": "doc", "content": "x = \\"```json\\n{ ... }\\n```\\""}]'
+        assert chunker._parse_llm_response(reply)[0]["name"] == "doc"
+
     def test_unparseable_raises_rather_than_returning_empty(self):
         """
         Under constrained decoding the reply is valid JSON by construction, so

@@ -2,10 +2,17 @@
 Dead-letter queue for ingestion.
 
 **No silent failures.** Anything the pipeline could not complete and could not
-resolve by retrying lands here, and a human works out why. Nothing drains it
-automatically — an entry exists precisely because trying harder is not the
-answer. The file's in-task retry (`pipeline.process_file_bounded`, run at the
-end of the pass) has already happened by the time anything reaches this module.
+resolve by retrying lands here. The file's in-task retry
+(`pipeline.process_file_bounded`, run at the end of the pass) has already
+happened by the time anything reaches this module.
+
+Entries are replayed automatically before a human is asked. That was not always
+so: an entry used to wait for a person, but on 2026-11-09 a plain re-run
+recovered 13 of the first 19 entries replayed. Most had failed under contention
+or on a one-off bad response, not because the file was broken.
+`scripts/replay_dlq.py --auto` runs from the daily report stage and gives each
+entry `MAX_REPLAY_ATTEMPTS` tries, a day apart. An entry is *exhausted* once
+it has used them, and only exhausted entries are alerted on.
 
 Why this is a store and not an alert:
 
@@ -22,6 +29,7 @@ gone out by then, so nothing is lost by clearing, and the queue stays a "what is
 broken now" view rather than an append-only log that stops being read.
 """
 
+import os
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional
 
@@ -41,6 +49,14 @@ DLQ_TYPE = "ingestion_dlq"
 # you nothing the first ten did not, and writing them all is its own outage.
 DEFAULT_MAX_ENTRIES_PER_RUN = 200
 
+# Automatic replays an entry gets before it is reported to a human.
+MAX_REPLAY_ATTEMPTS = int(os.getenv("DLQ_MAX_REPLAY_ATTEMPTS", "3"))
+
+
+def is_exhausted(entry: dict) -> bool:
+    """Whether an entry has used its automatic replays and needs a person."""
+    return entry.get("replay_attempts", 0) >= MAX_REPLAY_ATTEMPTS
+
 
 class DeadLetterQueue:
     """Couchbase-backed record of files that failed and were not recovered."""
@@ -59,9 +75,14 @@ class DeadLetterQueue:
         failures: Iterable[FileFailure],
         run_id: str = "",
         commit: str = "",
+        replay_attempts: Optional[int] = None,
     ) -> int:
         """
         Record failures for one repo. Returns how many entries were written.
+
+        `replay_attempts` is set by the replay script; every other caller leaves
+        it None and the entry keeps the count it already had, so a file that
+        fails again in ordinary ingestion does not get its replays back.
 
         Best-effort by design: a DLQ write that raised would take down the repo
         whose failure it is describing, which is a worse outcome than a lost
@@ -90,6 +111,10 @@ class DeadLetterQueue:
                     "commit": commit,
                     "count": (existing or {}).get("count", 0) + 1,
                     "first_seen": (existing or {}).get("first_seen", now),
+                    "replay_attempts": (
+                        replay_attempts if replay_attempts is not None
+                        else (existing or {}).get("replay_attempts", 0)
+                    ),
                     "last_seen": now,
                 }
                 self.cb.collection.upsert(doc_id, doc)
@@ -105,7 +130,12 @@ class DeadLetterQueue:
             )
         return written
 
-    def clear(self, repo_id: str, file_paths: Iterable[str]) -> int:
+    def clear(
+        self,
+        repo_id: str,
+        file_paths: Iterable[str],
+        kinds: Iterable[str] = ("chunker", "summary", "timeout", "exception"),
+    ) -> int:
         """
         Drop every entry for files that have now processed cleanly.
 
@@ -115,7 +145,7 @@ class DeadLetterQueue:
         """
         removed = 0
         for file_path in file_paths:
-            for kind in ("chunker", "summary", "timeout", "exception"):
+            for kind in kinds:
                 doc_id = make_dlq_id(repo_id, file_path, kind)
                 try:
                     self.cb.collection.remove(doc_id)

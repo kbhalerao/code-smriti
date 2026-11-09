@@ -232,13 +232,20 @@ class WorkerConfig(BaseSettings):
     # no file_index at all, while the commits index advanced and declared the repo
     # current. A degraded summary is acceptable; a missing file is not.
     #
-    # On expiry the file is reprocessed with the LLM off, which is fast and
-    # network-free, and lands a complete BASIC document marked
+    # Since 2026-11-09 this is a deadline, not a kill. LLM steps run against what
+    # is left of it; at expiry the remaining steps fall back to their no-LLM
+    # form and every step that already finished is kept, with one TIMEOUT
+    # failure recorded. Only if the file overruns by a further
+    # `file_timeout_grace_seconds` is it cancelled and reprocessed with the LLM
+    # off, landing a complete BASIC document marked
     # `summary_source="timeout_fallback"`.
     #
     # 300s is roughly 25 symbol summaries at the ~12s the `structured`/`general`
     # pair average. Files far above that are the ones worth hearing about.
     file_timeout_seconds: float = float(os.getenv("FILE_TIMEOUT_SECONDS", "300"))
+    # Backstop past the budget, for work that does not honour the deadline
+    # (parsing, IO, a hung client). See pipeline.process_file_bounded.
+    file_timeout_grace_seconds: float = float(os.getenv("FILE_TIMEOUT_GRACE_SECONDS", "120"))
 
     # Second chance for files that failed, taken at the END of a repo's file pass
     # rather than in place. A file usually times out because its own batch

@@ -82,7 +82,9 @@ class ScriptedProcessor:
         self.attempts = {}
 
     async def process(self, file_path, repo_path, repo_id, commit_hash,
-                      parent_module_id, use_llm=None):
+                      parent_module_id, use_llm=None, deadline=None):
+        # `deadline` is ignored on purpose: a "hang" here stands for work that
+        # does NOT honour it, which is exactly what the wait_for backstop is for.
         rel = str(file_path.relative_to(repo_path))
         self.attempts[rel] = self.attempts.get(rel, 0) + 1
         outcomes = self.script.get(rel, ["ok"])
@@ -120,6 +122,12 @@ def _run(coro):
 
 
 REPO = Path("/repo")
+
+
+@pytest.fixture(autouse=True)
+def _no_grace(monkeypatch):
+    """Put the backstop at the budget, so a hang is caught in test time."""
+    monkeypatch.setattr(config, "file_timeout_grace_seconds", 0)
 
 
 class TestPerFileWallClock:

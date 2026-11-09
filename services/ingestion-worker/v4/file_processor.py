@@ -15,6 +15,7 @@ Flow:
 7. Return documents ready for embedding
 """
 
+import asyncio
 import subprocess
 from pathlib import Path
 from typing import List, Tuple, Optional
@@ -291,6 +292,7 @@ class FileProcessor:
         content: str,
         language: str,
         existing_symbols: List[SymbolRef],
+        deadline: Optional[float] = None,
     ) -> List[SemanticChunk]:
         """
         Invoke LLM chunker to find semantic chunks missed by tree-sitter.
@@ -320,6 +322,7 @@ class FileProcessor:
                 content=content,
                 language=language,
                 existing_chunks=existing_chunks,
+                deadline=deadline,
             )
 
             logger.info(
@@ -419,6 +422,30 @@ class FileProcessor:
 
             summary = self._fallback_symbol_summary(symbol, file_path)
             return summary, EnrichmentLevel.BASIC, f"{symbol.name}: {type(e).__name__}: {e}"
+
+    @staticmethod
+    async def _within_budget(deadline: Optional[float], llm_call, fallback_call):
+        """
+        Run one LLM step inside what is left of the file's budget.
+
+        `llm_call` and `fallback_call` are zero-argument coroutine factories for
+        the same step with the LLM on and off. Past the deadline, or if the step
+        runs into it, the fallback answers instead. Returns (result, timed_out).
+
+        This is what lets a slow file keep the work it already finished. The old
+        bound was one `wait_for` around the whole file, which on expiry cancelled
+        everything, including chunker passes and summaries that had completed,
+        and rebuilt the file without the LLM.
+        """
+        if deadline is None:
+            return await llm_call(), False
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            return await fallback_call(), True
+        try:
+            return await asyncio.wait_for(llm_call(), timeout=remaining), False
+        except asyncio.TimeoutError:
+            return await fallback_call(), True
 
     def _fallback_symbol_summary(self, symbol: SymbolRef, file_path: str) -> str:
         """Generate fallback summary from docstring + structure."""
@@ -525,6 +552,7 @@ class FileProcessor:
         commit_hash: str,
         parent_module_id: str,
         use_llm: Optional[bool] = None,
+        deadline: Optional[float] = None,
     ) -> ProcessedFile:
         """
         Process a single file into V4 documents.
@@ -550,6 +578,9 @@ class FileProcessor:
         # state cannot express that: files are processed concurrently and share
         # this FileProcessor.
         llm_on = self.enable_llm if use_llm is None else use_llm
+        # Set when the file's budget cut LLM work short. Reported once, as a
+        # TIMEOUT, after the file is assembled from whatever did finish.
+        budget_hit = False
 
         # Read content at specific commit
         content = self.get_file_at_commit(repo_path, relative_path, commit_hash)
@@ -591,6 +622,7 @@ class FileProcessor:
                     content=content,
                     language=language or "unknown",
                     existing_symbols=symbols,
+                    deadline=deadline,
                 )
             except ChunkerCallFailed as e:
                 # Keep what earlier passes produced — a failure in one pass must
@@ -599,11 +631,14 @@ class FileProcessor:
                 # so it is the difference between a thin document and an empty one.
                 llm_chunks = e.partial_chunks
                 logger.error(f"[LLM-CHUNK] {relative_path}: {e}")
-                failures.append(FileFailure(
-                    file_path=relative_path,
-                    kind=FailureKind.CHUNKER,
-                    detail=str(e),
-                ))
+                if e.budget_exhausted:
+                    budget_hit = True
+                else:
+                    failures.append(FileFailure(
+                        file_path=relative_path,
+                        kind=FailureKind.CHUNKER,
+                        detail=str(e),
+                    ))
 
             # LLM chunks deliberately do NOT join `symbols`. They become their own
             # semantic_unit documents further down: the chunker names regions it
@@ -647,9 +682,14 @@ class FileProcessor:
             )
 
             # Generate summary
-            summary, enrichment_level, summary_failure = await self.generate_symbol_summary_checked(
-                symbol, code_snippet, relative_path, language, use_llm=llm_on
+            (summary, enrichment_level, summary_failure), timed_out = await self._within_budget(
+                deadline,
+                lambda: self.generate_symbol_summary_checked(
+                    symbol, code_snippet, relative_path, language, use_llm=llm_on),
+                lambda: self.generate_symbol_summary_checked(
+                    symbol, code_snippet, relative_path, language, use_llm=False),
             )
+            budget_hit = budget_hit or timed_out
             if summary_failure:
                 failures.append(FileFailure(
                     file_path=relative_path,
@@ -709,13 +749,15 @@ class FileProcessor:
         semantic_docs = []
         for chunk in llm_chunks:
             code_snippet = self.get_code_snippet(content, chunk.start_line, chunk.end_line)
-            summary, enrichment_level, summary_failure = await self.generate_symbol_summary_checked(
-                self.semantic_chunk_to_symbol_ref(chunk),
-                code_snippet,
-                relative_path,
-                language,
-                use_llm=llm_on,
+            unit_ref = self.semantic_chunk_to_symbol_ref(chunk)
+            (summary, enrichment_level, summary_failure), timed_out = await self._within_budget(
+                deadline,
+                lambda: self.generate_symbol_summary_checked(
+                    unit_ref, code_snippet, relative_path, language, use_llm=llm_on),
+                lambda: self.generate_symbol_summary_checked(
+                    unit_ref, code_snippet, relative_path, language, use_llm=False),
             )
+            budget_hit = budget_hit or timed_out
             if summary_failure:
                 failures.append(FileFailure(
                     file_path=relative_path,
@@ -758,9 +800,20 @@ class FileProcessor:
             semantic_docs.append(unit_doc)
 
         # Generate file summary from symbol summaries
-        file_summary, file_enrichment, file_summary_failure = await self.generate_file_summary(
-            relative_path, content, language, symbols, symbol_summaries, use_llm=llm_on
+        (file_summary, file_enrichment, file_summary_failure), timed_out = await self._within_budget(
+            deadline,
+            lambda: self.generate_file_summary(
+                relative_path, content, language, symbols, symbol_summaries, use_llm=llm_on),
+            lambda: self.generate_file_summary(
+                relative_path, content, language, symbols, symbol_summaries, use_llm=False),
         )
+        budget_hit = budget_hit or timed_out
+        if budget_hit:
+            failures.append(FileFailure(
+                file_path=relative_path,
+                kind=FailureKind.TIMEOUT,
+                detail="ran past the file budget; finished LLM work kept, the rest fell back",
+            ))
         if file_summary_failure:
             failures.append(FileFailure(
                 file_path=relative_path,

@@ -51,9 +51,17 @@ class ChunkerCallFailed(Exception):
     one, so raising costs nothing that was already earned.
     """
 
-    def __init__(self, message: str, partial_chunks: Optional[List["SemanticChunk"]] = None):
+    def __init__(
+        self,
+        message: str,
+        partial_chunks: Optional[List["SemanticChunk"]] = None,
+        budget_exhausted: bool = False,
+    ):
         super().__init__(message)
         self.partial_chunks: List["SemanticChunk"] = partial_chunks or []
+        # True when passes were cut short by the file's wall-clock budget rather
+        # than by a bad response, so the caller can file it as a timeout.
+        self.budget_exhausted = budget_exhausted
 
 
 @dataclass
@@ -74,6 +82,37 @@ class SemanticChunk:
 # an allocation, and typical calls finish around 900 tokens. Hitting it is a
 # silent corruption, not a soft limit — see _call_llm's truncation check.
 MAX_OUTPUT_TOKENS = 8000
+
+# Bounds on one pass's answer, enforced by the response schema because
+# list-shaped files otherwise have no natural limit. Probed
+# 2026-11-09 at an 11,000-token cap: labcore clients/urls.py (234 lines) answered
+# api_contracts with 57 items, one per route, in 9,394 tokens, and embedded_code
+# was still emitting its 73rd "regex" item — one per URL pattern — at 11,000.
+# Neither was looping; every item was distinct. Those calls took 85-183s each,
+# which is what blew the 300s file budget behind most open DLQ timeouts. Twenty
+# grouped regions of one file are more than retrieval can use, and fifty
+# one-line chunks of a route table are worth less than one chunk describing it.
+#
+# Schema only, deliberately. A prompt asking the model to group repeated
+# entries did shrink route tables (57 items to 9), but on the 20-file chunker
+# harness it also cost 10-15% of chunks everywhere else and quadrupled empty
+# passes (4 to 13-18 of 60), against 4% run-to-run noise. The schema bounds the
+# answer without changing what the model looks for.
+#
+# Every free-text field is bounded, not just `content`. With only items and
+# content bounded, the same-sample harness (ollama 0.40.15) still lost one pass
+# to the 8000 ceiling: labcore common/magic_signing.py, a file that normally
+# answers embedded_code with one item in ~180 tokens. One unbounded field is
+# enough for a runaway. The other limits sit well above what answers use
+# (169 saved items: name p99 60 chars, purpose 198, tags 6 x 17, related_symbols
+# 57 at most, on a route table), so they cut only runaways. Ollama's grammar
+# enforces maxLength and maxItems on nested fields; checked the same day.
+MAX_ITEMS_PER_PASS = 20
+MAX_CONTENT_CHARS = 400
+MAX_NAME_CHARS = 120
+MAX_PURPOSE_CHARS = 400
+MAX_TAGS, MAX_TAG_CHARS = 10, 40
+MAX_RELATED_SYMBOLS, MAX_SYMBOL_CHARS = 30, 80
 
 # ollama's MLX runner gained constrained decoding in 0.33.1. Until then only the
 # GGUF engine enforced a json_schema and MLX silently ignored it.
@@ -128,17 +167,24 @@ def response_schema(types: List[str]) -> dict:
     """
     return {
         "type": "array",
+        "maxItems": MAX_ITEMS_PER_PASS,
         "items": {
             "type": "object",
             "properties": {
                 "type": {"type": "string", "enum": types},
-                "name": {"type": "string"},
-                "content": {"type": "string"},
+                "name": {"type": "string", "maxLength": MAX_NAME_CHARS},
+                "content": {"type": "string", "maxLength": MAX_CONTENT_CHARS},
                 "start_line": {"type": "integer"},
                 "end_line": {"type": "integer"},
-                "purpose": {"type": "string"},
-                "related_symbols": {"type": "array", "items": {"type": "string"}},
-                "tags": {"type": "array", "items": {"type": "string"}},
+                "purpose": {"type": "string", "maxLength": MAX_PURPOSE_CHARS},
+                "related_symbols": {
+                    "type": "array", "maxItems": MAX_RELATED_SYMBOLS,
+                    "items": {"type": "string", "maxLength": MAX_SYMBOL_CHARS},
+                },
+                "tags": {
+                    "type": "array", "maxItems": MAX_TAGS,
+                    "items": {"type": "string", "maxLength": MAX_TAG_CHARS},
+                },
                 "confidence": {"type": "number"},
             },
             "required": [
@@ -593,12 +639,23 @@ class LLMChunker:
         the fence-stripping and escape-repair below are the boundary guard for a
         server that ignores or mis-implements the response format.
         """
-        # Extract JSON from markdown code blocks if present
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
-        if json_match:
-            response = json_match.group(1)
-
+        # Parse as-is first; strip a fence only if that fails. The fence regex
+        # used to run first, and it matches fences *inside* the JSON: a chunk
+        # whose content quotes markdown (```...```) had the text between its
+        # backticks parsed in place of the whole reply. agkit.io-doclet
+        # tests/test_doclet.py lost two of three passes per run this way, on
+        # replies that were valid JSON (captured 2026-11-09).
         response = response.strip()
+        try:
+            result = json.loads(response)
+        except json.JSONDecodeError:
+            result = None
+        if isinstance(result, list):
+            return result
+
+        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
+        if result is None and json_match:
+            response = json_match.group(1).strip()
 
         try:
             result = json.loads(response)
@@ -633,7 +690,8 @@ class LLMChunker:
         content: str,
         language: str,
         existing_chunks: List[Dict],
-        passes: List[EnrichmentPass] = None
+        passes: List[EnrichmentPass] = None,
+        deadline: Optional[float] = None,
     ) -> List[SemanticChunk]:
         """
         Analyze a file and extract semantic chunks.
@@ -644,6 +702,11 @@ class LLMChunker:
             language: Programming language
             existing_chunks: Already extracted chunks (from tree-sitter)
             passes: Which enrichment passes to run (default: all applicable)
+            deadline: `loop.time()` by which the file's LLM work must end. A pass
+                still running at the deadline is abandoned and any pass not yet
+                started is skipped, but every pass that already finished keeps
+                its chunks. They used to be lost: the file-level timeout
+                cancelled the whole coroutine and rebuilt the file with no LLM.
 
         Returns:
             List of semantic chunks found
@@ -659,6 +722,8 @@ class LLMChunker:
 
         all_chunks = []
         failures = []
+        budget_exhausted = False
+        loop = asyncio.get_running_loop()
 
         for pass_config in passes:
             # Skip if pass doesn't apply to this language
@@ -676,11 +741,25 @@ class LLMChunker:
                 existing_chunks=json.dumps([c.get("symbol_name", c.get("name", "")) for c in existing_chunks[:20]])
             )
 
+            remaining = None if deadline is None else deadline - loop.time()
+            if remaining is not None and remaining <= 0:
+                budget_exhausted = True
+                failures.append(f"{pass_config.name}: skipped, file budget exhausted")
+                continue
+
             # Call LLM, constrained to this pass's response shape and type vocabulary
             logger.debug(f"Running {pass_config.name} pass on {file_path}")
             try:
-                response = await self._call_llm(prompt, schema=response_schema(pass_config.types))
+                response = await asyncio.wait_for(
+                    self._call_llm(prompt, schema=response_schema(pass_config.types)),
+                    timeout=remaining,
+                )
                 items = self._parse_llm_response(response)
+            except asyncio.TimeoutError:
+                budget_exhausted = True
+                logger.error(f"Chunker pass {pass_config.name!r} on {file_path} ran past the file budget")
+                failures.append(f"{pass_config.name}: ran past the file budget")
+                continue
             except ChunkerCallFailed as e:
                 logger.error(f"Chunker pass {pass_config.name!r} failed on {file_path}: {e}")
                 failures.append(f"{pass_config.name}: {e}")
@@ -709,6 +788,7 @@ class LLMChunker:
                 f"{len(failures)} of {len(passes)} chunker pass(es) failed on {file_path}: "
                 + "; ".join(failures),
                 partial_chunks=all_chunks,
+                budget_exhausted=budget_exhausted,
             )
 
         return all_chunks
