@@ -328,47 +328,73 @@ curl -H 'X-Forwarded-For: 192.168.11.29' http://localhost/llm/v1/models
 
 Ollama has no authentication of its own, so the gateway is the only access
 control on the inference endpoints. A caller passes if it is **on a trusted
-network OR presents the shared secret** — `$llm_pass`, the combination of the
-`geo $llm_allowed` and `map $llm_key_ok` blocks. The LAN needs no key, so local
+network OR presents a valid per-client key**. The LAN needs no key, so local
 tooling and the curl recipes above are unaffected.
 
-Off-LAN callers should use the **shared secret**, not an IP entry:
+Keys are checked by cos-api, not by nginx. Every `/llm/` and `/llm/rerank`
+request makes an `auth_request` subrequest to the internal `/_llm_auth`
+location:
+- Trusted addresses (`geo $llm_allowed`) are admitted there without a round
+  trip.
+- Anything else goes to cos-api's `/internal/llm-auth`, which answers 204 with
+  the key's client name in `X-LLM-Client`, or 401.
+- That path is mounted outside `/api`, and the public vhosts forward only
+  `/api/cos/`, so it cannot be used from outside to test guessed keys.
+
+Keys are minted and revoked in cos-web, on `/llm-usage` under **Keys**
+(admins only). They are stored only as SHA-256 hashes in
+`chief_of_staff.llm.keys`, and the raw key is shown once. A revoke takes
+effect within 30s, which is cos-api's verify cache. To rotate without
+downtime, issue a new key under the same name, move the client over, then
+revoke the old one.
 
 ```bash
-curl -H 'X-Smriti-Key: <secret>' https://smriti.agsci.com/llm/v1/models
+curl -H 'X-Smriti-Key: <key>' https://smriti.agsci.com/llm/v1/models
+# or, for OpenAI-SDK clients:  Authorization: Bearer <key>
 ```
 
-The secret lives in `services/api-gateway/llm-allowlist.d/llm-key.conf`
-(gitignored, mode 600; copy `llm-key.conf.example`). Rotation is zero-downtime:
-add the new line, deploy, move callers over, delete the old line — every listed
-value is accepted while present.
+The old single shared secret lives on as the client `legacy-shared` until it
+is revoked. `llm-key.conf` is no longer read.
+
+While cos-api is down (a deploy), keyed callers get errors. The LAN does not.
 
 The IP allowlist in `allowlist.conf` still works and is currently carrying the
-ListingsAISearch backend, but it is the **legacy path**. It is brittle: it
-breaks silently if an egress address moves, and it puts third-party production
-IPs a `git add` away from a public repo. Remove entries once the caller sends a
-key.
+ListingsAISearch backend, but it is the **legacy path**. It breaks silently if
+an egress address moves, and it puts third-party production IPs a `git add`
+away from a public repo. Remove entries once the caller has a key.
 
-Both files are bind-mounted as a *directory* at `/etc/nginx/llm-allowlist.d/`,
-which sidesteps the stale-inode problem single-file bind mounts have under
-Colima. Editing either still needs `docker-compose restart api-gateway`.
+**Metering.** The `llm` upstream is llm-meter on `:11434` (llm-infra repo),
+with Ollama itself on `:11437` as a `backup`, so external traffic keeps
+flowing, unmetered, if the meter is down. nginx always sets `X-Meter-Gate`
+(how the caller was admitted) and `X-LLM-Client` (the key's client name), so
+callers cannot supply their own. It strips the key headers before proxying, so
+neither Ollama nor the meter sees a key.
 
-Four traps:
+Three traps:
 
-- The filenames in both `include`s are **fixed, not globs**. `include` inside a
-  `geo` or `map` block is handled by that module's own parser, which opens the
-  path literally and does not expand wildcards — `*.conf` fails startup with
-  `open() ".../*.conf" failed (2: No such file or directory)`.
-- A **missing** `allowlist.conf` or `llm-key.conf` is fatal to nginx startup,
-  deliberately. It takes every vhost on this gateway down, not just `/llm`, so
-  check `docker logs codesmriti_nginx` for `[emerg]` after any recreate.
-- `map_hash_bucket_size 128` is load-bearing. A 64-char hex secret plus map
-  overhead exceeds the 64-byte default and nginx refuses to start with
-  `could not build map_hash`. Raise it (powers of two) before lengthening the
-  secret.
-- Never add `$http_x_smriti_key` to `log_format`. It would write the secret
-  into a log with a far wider readership than the config. The gateway also
-  strips the header before proxying upstream, so Ollama never sees it.
+- The filename in the geo `include` is **fixed, not a glob**. `include`
+  inside a `geo` block is handled by that module's own parser, which opens
+  the path literally. `*.conf` fails startup with
+  `open() ".../*.conf" failed (2: No such file or directory)`. A **missing**
+  `allowlist.conf` is fatal to nginx startup, deliberately, and takes every
+  vhost down. Check `docker logs codesmriti_nginx` for `[emerg]` after any
+  recreate.
+- `nginx.conf` is a single-file bind mount. Under Colima a running container
+  sees it at its old size after it grows, and `nginx -t` fails with
+  "unexpected end of file". Validate in a throwaway container on the same
+  network, then `docker-compose up -d --force-recreate --no-deps
+  api-gateway`. A reload alone is not enough.
+- Never add `$http_x_smriti_key` or `$http_authorization` to a `log_format`.
+  That would write keys into a log with a far wider readership than the
+  config.
+
+### Filtered vector search (Couchbase 8.0.3)
+
+Put the filter **inside** the knn clause (`knn[0].filter`), which pre-filters.
+Never use a top-level `query` plus `knn_operator: "and"`: it still
+post-filters on 8.0.3. It takes a global top-k and intersects it, so a
+selective filter starves and scores come back flat. Build every request with
+`services/api-server/app/rag/fts.py:knn_request`.
 
 ## Landing Page and the KPI Dashboard
 
