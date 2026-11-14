@@ -1,7 +1,7 @@
 services:
   # Couchbase Database - stores code chunks with embeddings and metadata
   couchbase:
-    image: couchbase/server:enterprise-7.6.2
+    image: couchbase/server:enterprise-8.0.3
     container_name: codesmriti_couchbase
     restart: unless-stopped
     ports:
@@ -58,7 +58,7 @@ services:
       - RAG_RERANK_ENABLED=${RAG_RERANK_ENABLED:-0}
       - LLM_MODEL_NAME=${LLM_MODEL_NAME:-general}
       - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-none}
-      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-Qwen/Qwen3-Embedding-0.6B}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-google/embeddinggemma-2}
       - JWT_SECRET=${JWT_SECRET}
       - AES_ENCRYPTION_KEY=${AES_ENCRYPTION_KEY}
       - API_USERNAME=${API_USERNAME}
@@ -99,7 +99,7 @@ services:
       - COUCHBASE_USERNAME=${COUCHBASE_USERNAME:-Administrator}
       - COUCHBASE_PASSWORD=${COUCHBASE_PASSWORD}
       - COUCHBASE_BUCKET=${COUCHBASE_BUCKET:-code_memory}
-      - EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
+      - EMBEDDING_MODEL=google/embeddinggemma-2
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_REPOS=${GITHUB_REPOS}  # Comma-separated list
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

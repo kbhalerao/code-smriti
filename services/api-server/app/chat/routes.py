@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from loguru import logger
 
+from app.rag.fts import knn_request
 from app.dependencies import get_current_user, get_db
 from app.database.couchbase_client import CouchbaseClient
 from app.config import settings
@@ -677,19 +678,12 @@ Output only the keywords, one per line. Include:
     fts_url = f"http://{couchbase_host}:8094/api/index/code_vector_index/query"
 
     for doc_type in ["repo_bdr", "document"]:
-        # NOTE: Pre-filter inside knn requires Couchbase 7.6.4+
-        # We have 7.6.2, so use query + knn_operator: "and" approach
-        fts_request = {
-            "query": {"term": doc_type, "field": "type"},
-            "knn": [{
-                "field": "embedding",
-                "vector": query_embedding,
-                "k": request.limit,
-            }],
-            "knn_operator": "and",
-            "fields": ["content", "repo_id", "file_path", "type"],
-            "size": request.limit
-        }
+        fts_request = knn_request(
+            query_embedding,
+            request.limit,
+            {"term": doc_type, "field": "type"},
+            ["content", "repo_id", "file_path", "type"],
+        )
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:

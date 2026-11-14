@@ -12,6 +12,8 @@ from .embedding import QueryEmbedder, embed_query
 from typing import Optional
 
 import httpx
+
+from app.rag.fts import knn_request
 from loguru import logger
 
 from app.database.couchbase_client import CouchbaseClient
@@ -327,8 +329,8 @@ class RetrievalOrchestrator:
     ) -> list[SearchResult]:
         """Execute FTS search at a specific level.
 
-        Note: With Couchbase 7.6.2, we use query+knn_operator which gives
-        flat BM25 scores. We re-rank results using actual embedding similarity.
+        The filter goes inside the knn clause, which pre-filters (see app/rag/fts.py).
+        Results are still re-ranked by cosine from the stored embedding below.
         """
         import numpy as np
         from app.rag.models import doc_types_for_level
@@ -339,10 +341,12 @@ class RetrievalOrchestrator:
         else:
             doc_types = doc_types_for_level(level)
 
-        # One query per document type — never a disjunct over `type`.
+        # One query per document type, so each type gets its own top-k rather
+        # than competing for slots in one pool.
         #
-        # A `disjuncts` type filter combined with knn_operator "and" silently
-        # returns hits from only ONE clause. Measured: 'document' alone returns
+        # Historically also a bug workaround: on 7.6.2 a `disjuncts` type filter
+        # combined with knn_operator "and" silently returned hits from only ONE
+        # clause. Measured: 'document' alone returns
         # 30/30 documents and 'spec' alone 30/30 specs, but the two as disjuncts
         # return 30/30 specs and zero documents at any k. The multi-type levels
         # here (SALES/REPO over repo_bdr + repo_summary, DOC over document +
@@ -378,24 +382,11 @@ class RetrievalOrchestrator:
 
             return conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
 
-        # NOTE: Pre-filter inside knn requires Couchbase 7.6.4+
-        # We have 7.6.2, so use query + knn_operator: "and" approach instead
-        # KNOWN BUG: On 7.6.2, large k values (>~100) break the filter
-        # Workaround: use smaller k and post-filter results in application code
-        oversample = min(limit * 5, 100)  # Keep k <= 100 to avoid 7.6.2 bug
+        # Oversampled so the cosine re-rank has a candidate pool.
+        oversample = min(limit * 5, 100)
 
         def build_request(doc_type: str) -> dict:
-            return {
-                "query": build_filter(doc_type),
-                "knn": [{
-                    "field": "embedding",
-                    "vector": query_embedding,
-                    "k": oversample,
-                }],
-                "knn_operator": "and",
-                "size": oversample,
-                "fields": ["*"],
-            }
+            return knn_request(query_embedding, oversample, build_filter(doc_type), ["*"])
 
         fts_url = f"http://{self.couchbase_host}:8094/api/index/code_vector_index/query"
 

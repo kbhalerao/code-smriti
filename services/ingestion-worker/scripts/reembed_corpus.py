@@ -100,7 +100,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--execute", action="store_true")
-    ap.add_argument("--after", help="resume from this document_id")
+    ap.add_argument("--after", help="resume after this document key")
+    ap.add_argument("--types", nargs="+", choices=EMBEDDED_TYPES, default=EMBEDDED_TYPES,
+                    help="re-embed only these types (default: all embedded types)")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--page", type=int, default=2000)
     args = ap.parse_args()
@@ -111,7 +113,7 @@ def main() -> int:
 
     total = list(cb.cluster.query(
         f"SELECT RAW COUNT(*) FROM `{BUCKET}` d WHERE d.type IN $t",
-        QueryOptions(named_parameters={"t": EMBEDDED_TYPES}, timeout=timedelta(minutes=10)),
+        QueryOptions(named_parameters={"t": args.types}, timeout=timedelta(minutes=10)),
     ))[0]
     logger.info(
         f"{'RE-EMBEDDING' if args.execute else 'DRY RUN over'} {total:,} documents "
@@ -125,14 +127,19 @@ def main() -> int:
     while True:
         rows = list(cb.cluster.query(
             f"""
-            SELECT d.document_id, d.type, d.content, d.repo_id, d.file_path,
+            SELECT META(d).id AS document_id, d.type, d.content, d.repo_id, d.file_path,
                    d.metadata.start_line AS s, d.metadata.end_line AS e
             FROM `{BUCKET}` d
-            WHERE d.type IN $t AND d.document_id > $after
-            ORDER BY d.document_id
+            WHERE d.type IN $t AND META(d).id > $after
+            ORDER BY META(d).id
             LIMIT $page
             """,
-            QueryOptions(named_parameters={"t": EMBEDDED_TYPES, "after": cursor,
+            # Keyed on the document key, not the `document_id` field: `document`
+            # and `spec` rows have no document_id, and `document_id > $after` is
+            # never true for a missing field, so every run before 2026-11-14
+            # silently skipped all 3,592 of them. For every type that has the
+            # field it equals the key, so cursors from older logs still resume.
+            QueryOptions(named_parameters={"t": args.types, "after": cursor,
                                            "page": args.page},
                          timeout=timedelta(minutes=10)),
         ))
@@ -162,8 +169,14 @@ def main() -> int:
                     f"cursor {cursor[:16]}")
 
     if args.execute and not stats["write_failed"]:
-        # Written last, so a missing manifest means the run did not finish.
-        manifest = convention.manifest(document_count=stats["written"])
+        # Written last, so a missing manifest means the run did not finish. The
+        # count is the corpus's, not this run's: a resumed or --types run writes
+        # only part of it, and the manifest describes the whole.
+        corpus = list(cb.cluster.query(
+            f"SELECT RAW COUNT(*) FROM `{BUCKET}` d WHERE d.type IN $t AND d.embedding IS VALUED",
+            QueryOptions(named_parameters={"t": EMBEDDED_TYPES}, timeout=timedelta(minutes=10)),
+        ))[0]
+        manifest = convention.manifest(document_count=corpus)
         manifest["completed_at"] = datetime.now().isoformat()
         cb.collection.upsert("embedding_manifest", manifest)
         logger.info("wrote embedding_manifest")

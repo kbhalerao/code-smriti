@@ -26,6 +26,27 @@ Prefixing is asymmetric and model-specific. nomic is trained with literal
 `search_query:` / `search_document:` prefixes; Qwen3-Embedding takes an
 instruction on the query side only and documents bare. This is not cosmetic —
 nomic scored 0.729 AUC with its prefix and 0.615 without.
+
+Replaced 2026-11-14 by EmbeddingGemma 2 (740M, served by Ollama as
+`embeddinggemma-2:740m-nvfp4`), re-measured on the same benchmark at 768 dims:
+
+    config              Qwen3-0.6B q8_0     EmbeddingGemma 2
+    prod / lead         0.939 / 0.907       0.933 / 0.887    (MRR / R@1)
+    prod / keywords     0.932 / 0.890       0.940 / 0.903
+    code / lead         0.853 / 0.790       0.824 / 0.760    (code-retrieval prompt)
+    code / keywords     0.863 / 0.803       0.843 / 0.777
+
+A tie on the production configuration, within one standard error (~0.015),
+with Qwen ahead by 0.02-0.03 on code alone. Taken for what Qwen cannot do: one
+space for text and images, so screenshots and diagrams become searchable
+against the same queries. Also ~18% faster to embed and 0.5 GB smaller resident.
+
+Its query prompt is the model card's `search result` task rather than
+`code retrieval`: the stored documents lead with a prose summary, and on them
+`search result` scored higher (0.933 vs 0.928 lead, 0.940 vs 0.928 keywords).
+Documents take `title: none | text: `. Ollama applies neither — its template is
+a bare `{{ .Prompt }}` — and the prefix moves the vector (cosine 0.875 to the
+bare text), so they are not optional.
 """
 
 import os
@@ -35,9 +56,10 @@ import numpy as np
 from loguru import logger
 
 # The model every producer must agree on.
-EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+EMBEDDING_MODEL = "google/embeddinggemma-2"
 
-# Matryoshka target. The model emits 1024; the index stores 768.
+# The width the index stores. EmbeddingGemma 2 emits 768 natively, so nothing is
+# truncated; a model that emits more is Matryoshka-truncated to this.
 EMBEDDING_DIMS = 768
 
 # How much of a symbol's source reaches the embedding.
@@ -58,8 +80,17 @@ CODE_CHARS_FOR_EMBEDDING = 8000
 
 # Per-model conventions. `query_prompt_name` uses the prompt the model ships in
 # its sentence-transformers config; `*_prefix` is for models trained on literal
-# string prefixes instead.
+# string prefixes instead. `ollama_model`, when set, means the model is served
+# by Ollama under that tag rather than loaded in-process. The tag is part of the
+# space (quantization moves vectors), so it is pinned here, not in settings.
 _CONVENTIONS = {
+    "google/embeddinggemma-2": {
+        "query_prompt_name": None,
+        "query_prefix": "task: search result | query: ",
+        "document_prefix": "title: none | text: ",
+        "native_dims": 768,
+        "ollama_model": "embeddinggemma-2:740m-nvfp4",
+    },
     "Qwen/Qwen3-Embedding-0.6B": {
         "query_prompt_name": "query",
         "query_prefix": "",
@@ -243,6 +274,7 @@ def manifest(document_count: Optional[int] = None) -> dict:
         "type": "embedding_manifest",
         "document_id": "embedding_manifest",
         "model": EMBEDDING_MODEL,
+        "ollama_model": convention().get("ollama_model"),
         "dims": EMBEDDING_DIMS,
         "native_dims": convention()["native_dims"],
         "code_chars": CODE_CHARS_FOR_EMBEDDING,
