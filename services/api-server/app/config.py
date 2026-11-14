@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # ingestion share one resident model. Supports tools + thinking; we send
     # reasoning_effort=none for clean output.
     llm_model_name: str = "general"
-    embedding_model_name: str = "Qwen/Qwen3-Embedding-0.6B"
+    embedding_model_name: str = "google/embeddinggemma-2"
 
     # Application
     app_name: str = "CodeSmriti API"

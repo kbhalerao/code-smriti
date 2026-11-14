@@ -166,6 +166,10 @@ def prefixed(model: str, text: str, is_query: bool) -> str:
         return f"{'search_query' if is_query else 'search_document'}: {text}"
     if model.startswith("qwen3-embedding") and is_query:
         return INSTRUCTION + text
+    if model.startswith("embeddinggemma"):
+        # Model-card prefixes; Ollama applies none (TEMPLATE is bare {{ .Prompt }}).
+        task = os.environ.get("EMBGEMMA_QUERY_TASK", "search result")
+        return f"task: {task} | query: {text}" if is_query else f"title: none | text: {text}"
     return text
 
 

@@ -25,13 +25,12 @@ from app.rag.embedding import (
     probe_embedder,
 )
 
-QUERY_INSTRUCTION = (
-    "Instruct: Given a web search query, retrieve relevant passages "
-    "that answer the query\nQuery:"
-)
+# The model card's retrieval prompt, as literal text: Ollama applies none.
+QUERY_INSTRUCTION = "task: search result | query: "
+NATIVE_DIMS = embedding.convention()["native_dims"]
 
 
-def _vector(dims: int = 1024) -> list:
+def _vector(dims: int = NATIVE_DIMS) -> list:
     rng = np.random.default_rng(0)
     v = rng.normal(size=dims).astype(np.float32)
     return (v / np.linalg.norm(v)).tolist()
@@ -43,7 +42,7 @@ def _embedder(handler) -> QueryEmbedder:
     return QueryEmbedder("http://ollama:11434/", client=client)
 
 
-def _ok(dims: int = 1024):
+def _ok(dims: int = NATIVE_DIMS):
     return lambda request: httpx.Response(200, json={"embeddings": [_vector(dims)]})
 
 
@@ -58,7 +57,7 @@ def test_query_is_sent_with_the_instruction_and_pinned(monkeypatch):
     asyncio.run(embed_query(_embedder(handler), "where is auth"))
 
     assert seen["url"] == "http://ollama:11434/api/embed"
-    assert seen["body"]["model"] == "qwen3-embedding:0.6b-q8_0"
+    assert seen["body"]["model"] == "embeddinggemma-2:740m-nvfp4"
     assert seen["body"]["input"] == QUERY_INSTRUCTION + "where is auth"
     assert seen["body"]["keep_alive"] == -1
 
@@ -76,7 +75,7 @@ def test_query_vector_is_truncated_and_unit_length(monkeypatch):
 def test_wrong_width_is_rejected_not_truncated(monkeypatch):
     # A 4B model answers with 2560 dims. Truncating that to 768 would "work" and
     # land in a different space, so the width is checked before truncation.
-    with pytest.raises(EmbeddingServiceError, match="expected 1 of 1024"):
+    with pytest.raises(EmbeddingServiceError, match=f"expected 1 of {NATIVE_DIMS}"):
         asyncio.run(embed_query(_embedder(_ok(2560)), "q"))
 
 
@@ -128,7 +127,7 @@ def _serve(monkeypatch, handler) -> None:
 
 def _on_anchor(request):
     anchor = embedding.convention()["probe_anchor"]
-    return httpx.Response(200, json={"embeddings": [anchor + [0.0] * (1024 - len(anchor))]})
+    return httpx.Response(200, json={"embeddings": [anchor + [0.0] * (NATIVE_DIMS - len(anchor))]})
 
 
 def test_probe_passes_when_the_host_serves_the_model(monkeypatch):

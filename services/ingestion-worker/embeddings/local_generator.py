@@ -1,6 +1,9 @@
 """
-Local Embedding Generator using sentence-transformers
-Provides fast batch processing with GPU/MPS acceleration
+Embedding generator for the ingestion worker.
+
+Loads the model in-process with sentence-transformers, or, when the convention
+names an `ollama_model`, talks to that Ollama tag through an object with the
+same `encode()` interface (`embeddings.ollama_model`).
 
 Which model, which prefixes and which dimensionality are not decided here —
 `embeddings.convention` owns all three, because the query side lives in another
@@ -13,6 +16,8 @@ import os
 import numpy as np
 from loguru import logger
 from sentence_transformers import SentenceTransformer
+
+from embeddings.ollama_model import OllamaEmbeddingModel
 
 from config import WorkerConfig
 from embeddings import convention
@@ -37,20 +42,20 @@ class LocalEmbeddingGenerator:
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
         model_name = convention.EMBEDDING_MODEL
+        conv = convention.convention()
+        # Match the sequence limit to the character cap we actually feed it, so
+        # one pathological document cannot dominate a batch.
+        seq_cap = convention.CODE_CHARS_FOR_EMBEDDING // 4 + 512
 
         try:
-            self.model = SentenceTransformer(
-                model_name,
-                trust_remote_code=True
-            )
-
-            # Match the model's sequence limit to the character cap we actually
-            # feed it. Leaving it at 32,768 lets one pathological document
-            # dominate a batch and blow out attention memory.
-            self.model.max_seq_length = min(
-                self.model.max_seq_length,
-                convention.CODE_CHARS_FOR_EMBEDDING // 4 + 512,
-            )
+            if conv.get("ollama_model"):
+                self.model = OllamaEmbeddingModel(
+                    config.llm_base_url, conv["ollama_model"],
+                    max_seq_length=seq_cap, native_dims=conv["native_dims"],
+                )
+            else:
+                self.model = SentenceTransformer(model_name, trust_remote_code=True)
+                self.model.max_seq_length = min(self.model.max_seq_length, seq_cap)
 
             # Log device being used (CPU, CUDA, or MPS for Apple Silicon)
             device = self.model.device

@@ -19,6 +19,10 @@ MRR 0.886 / recall@1 0.817, a 7.7-sigma difference. Larger Qwen variants add
 nothing measurable. Truncating to 768 costs nothing (0.884 vs 0.886) and keeps
 both FTS indexes their current shape.
 
+Since 2026-11-14 the model is EmbeddingGemma 2 (`embeddinggemma-2:740m-nvfp4`),
+served by Ollama for documents and queries alike; the Qwen figures below are
+kept as the record of the previous convention.
+
 Queries are embedded by Ollama over HTTP, not by an in-process model. Loading
 Qwen3-Embedding-0.6B through sentence-transformers cost 2.7 GB resident in the
 API container, and on an 8 GB Docker VM shared with Couchbase that was enough to
@@ -45,7 +49,7 @@ import numpy as np
 
 from app.http_client import get_http_client
 
-EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+EMBEDDING_MODEL = "google/embeddinggemma-2"
 EMBEDDING_DIMS = 768
 
 # `ollama_model` is the tag that serves the model's vectors; None means this
@@ -56,6 +60,23 @@ EMBEDDING_DIMS = 768
 # prompt registry. The text is the `query` prompt in the model's
 # config_sentence_transformers.json, concatenated with no separator.
 _CONVENTIONS = {
+    # Documents are embedded through the same Ollama tag by the ingestion worker,
+    # so queries and corpus come from one build and there is no cross-build drift
+    # to measure. Prompt choice and the benchmark are in the worker's
+    # embeddings/convention.py.
+    "google/embeddinggemma-2": {
+        "query_prefix": "task: search result | query: ",
+        "native_dims": 768,
+        "ollama_model": "embeddinggemma-2:740m-nvfp4",
+        # Leading dims of the served vector for PROBE_TEXT, taken 2026-11-14 from
+        # the tag above. Catches the tag being repointed at another model.
+        "probe_anchor": [
+            -0.0244, 0.01, 0.0101, -0.0208, -0.0311, 0.0277, -0.0056, 0.0241,
+            0.0069, -0.1269, -0.0167, 0.0404, -0.0332, 0.0327, 0.0041, 0.0361,
+            0.0602, 0.0645, -0.0196, 0.0117, -0.0209, -0.0653, -0.0278, 0.0369,
+            -0.0321, 0.0488, 0.0132, -0.0078, -0.0516, 0.2553, 0.0036, -0.0117,
+        ],
+    },
     "Qwen/Qwen3-Embedding-0.6B": {
         "query_prefix": (
             "Instruct: Given a web search query, retrieve relevant passages "
