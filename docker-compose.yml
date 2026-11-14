@@ -1,7 +1,7 @@
 services:
   # Couchbase Database - stores code chunks with embeddings and metadata
   couchbase:
-    image: couchbase/server:enterprise-7.6.2
+    image: couchbase/server:enterprise-8.0.3
     container_name: codesmriti_couchbase
     restart: unless-stopped
     ports:
