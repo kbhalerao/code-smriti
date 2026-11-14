@@ -13,6 +13,7 @@ from typing import List, Optional
 from loguru import logger
 from couchbase.options import QueryOptions
 
+from app.rag.fts import knn_request
 from app.database.couchbase_client import CouchbaseClient
 from app.rag.reranker import CrossEncoderReranker
 from app.rag.models import (
@@ -307,7 +308,6 @@ async def search_code(
         query_embedding = await embed_query(embedding_model, query)
 
         # Oversample so the cosine re-rank below has a real candidate pool.
-        # Kept <= 100: on 7.6.2 larger k values break the type filter.
         oversample = min(limit * 5, 100)
 
         couchbase_host = os.getenv('COUCHBASE_HOST', 'localhost')
@@ -323,19 +323,8 @@ async def search_code(
                 conjuncts.append({"term": repo_filter.lower(), "field": "repo_id"})
             filter_query = conjuncts[0] if len(conjuncts) == 1 else {"conjuncts": conjuncts}
 
-            request = {
-                "query": filter_query,
-                # KNN alone doesn't pre-filter on this version — the term query
-                # plus knn_operator "and" is what restricts it to the type.
-                "knn": [{
-                    "field": "embedding",
-                    "vector": query_embedding,
-                    "k": oversample,
-                }],
-                "knn_operator": "and",
-                "size": oversample,
-                "fields": ["*"],
-            }
+            # Pre-filtered: the type (and repo) restrict candidates before ranking.
+            request = knn_request(query_embedding, oversample, filter_query, ["*"])
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     fts_url, json=request, auth=(couchbase_user, couchbase_pass), timeout=30.0
@@ -346,9 +335,10 @@ async def search_code(
                 return []
             return resp.json().get('hits', [])
 
-        # One query per type, never a disjunct.
+        # One query per type, so each type gets its own top-k.
         #
-        # A `disjuncts` filter combined with knn_operator "and" silently returns
+        # Historically also a bug workaround: on 7.6.2 a `disjuncts` filter
+        # combined with knn_operator "and" silently returned
         # hits from only ONE of its clauses. Measured against this index: the
         # term 'document' alone returns 30/30 documents and 'spec' alone 30/30
         # specs, but the two as disjuncts return 30/30 specs and no documents at

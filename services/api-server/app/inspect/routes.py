@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Annotated, Dict, List, Optional
 
 import httpx
+
+from app.rag.fts import knn_request
 from couchbase.options import QueryOptions
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -553,13 +555,10 @@ async def nearest_neighbors(
     No embedding model is involved: the document already holds a unit-norm
     768-float vector, so this is a lookup and a search rather than an inference.
 
-    Two things are inherited from `rag.tools`, both learned the hard way against
-    this index. One KNN query per type, never a `disjuncts` filter — combined
-    with knn_operator "and" a disjunction silently returns hits from only one of
-    its clauses. And ranking is recomputed here rather than taken from FTS: in
-    query+knn mode the scores arrive flat and whole result sets tie exactly, so
-    the returned order is arbitrary. Vectors are unit-norm, so a dot product is
-    the cosine.
+    The filter sits inside the knn clause, which pre-filters (app/rag/fts.py).
+    Ranking is still recomputed here from the stored vectors, a holdover from
+    7.6.2 where filtered scores arrived flat; it is harmless now. Vectors are
+    unit-norm, so a dot product is the cosine.
     """
     bucket = _bucket(current_user)
     doc = await db.get_doc(bucket, document_id)
@@ -576,16 +575,9 @@ async def nearest_neighbors(
     fts_url = f"http://{host}:8094/api/index/code_vector_index/query"
 
     # Oversampled because the candidate set is re-ranked below and the document
-    # itself is dropped from it. Kept <= 100: on 7.6.2 larger k breaks the type
-    # filter outright.
+    # itself is dropped from it. Pre-filtered to the document's own type.
     oversample = min(max(k * 5, 20), 100)
-    request = {
-        "query": {"term": doc_type, "field": "type"},
-        "knn": [{"field": "embedding", "vector": vector, "k": oversample}],
-        "knn_operator": "and",
-        "size": oversample,
-        "fields": ["type"],
-    }
+    request = knn_request(vector, oversample, {"term": doc_type, "field": "type"}, ["type"])
     async with httpx.AsyncClient() as client:
         resp = await client.post(fts_url, json=request, auth=(user, password), timeout=30.0)
     if resp.status_code != 200:
