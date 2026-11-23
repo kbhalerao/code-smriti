@@ -23,14 +23,25 @@ Credentials are in `.env` at project root. The bucket is `code_kosha` (not `code
 
 ## Embedding Pipeline
 
-The model is **`Qwen/Qwen3-Embedding-0.6B`**, stored **Matryoshka-truncated to 768
-dimensions**. Documents are embedded in-process via sentence-transformers. Queries
-are embedded by Ollama, as `qwen3-embedding:0.6b-q8_0`, because the in-process model
-cost 2.7 GB resident and OOM-killed the API on the 8 GB Docker VM. The model
-replaced `nomic-embed-text-v1.5` on 2026-08-19 on measured retrieval: over 5,000
-documents and 300 natural-language queries, nomic scored MRR 0.752 / recall@1
-0.667 against 0.886 / 0.817 — a 7.7-sigma difference. Larger Qwen variants add
-nothing measurable (4B 0.885, 8B 0.888, under one sigma), so the smallest is used.
+The model is **`google/embeddinggemma-2`** (740M, **768 dimensions native**, no
+truncation), served by Ollama as **`embeddinggemma-2:740m-nvfp4` for documents and
+queries alike**. It replaced Qwen3-Embedding-0.6B on 2026-11-14 (`72cb3d91`); the
+corpus was fully re-embedded that day (222,303 documents, per the
+`embedding_manifest`). On the retrieval benchmark (5,000 documents, 300 queries,
+768d) it ties Qwen on the production configuration — MRR 0.933 vs 0.939 on
+natural-language queries, 0.940 vs 0.932 on keyword queries, within one standard
+error — and trails by 0.02-0.03 on code alone. It was taken for one shared space
+for text and images, ~18% faster embedding and 0.5 GB less resident. The full
+lineage (nomic → Qwen → EmbeddingGemma) and its numbers are in the
+`convention.py` docstring.
+
+Both sides go through Ollama because neither can load it in-process: it is a
+Gemma 4 architecture the pinned transformers (4.57) cannot load, and an
+in-process model already OOM-killed the API on the 8 GB Docker VM once (Qwen,
+2.7 GB resident). Documents use `embeddings/ollama_model.py`
+(`OllamaEmbeddingModel`), which offers the `encode()`/`max_seq_length` slice of
+SentenceTransformer that the convention calls. Throughput is GPU-bound at ~48
+docs/s regardless of batch size or concurrency.
 
 **Do not hand-write prefixes.** Model, prefixing, dimensionality and batching all
 live in one module, and every producer must go through it:
@@ -40,44 +51,48 @@ live in one module, and every producer must go through it:
 
 They are separate files because the services cannot share code. The agreement
 between them is enforced at runtime by `assert_corpus_matches()`, which reads an
-`embedding_manifest` document the re-embed writes into the corpus and logs loudly
-on mismatch.
+`embedding_manifest` document the re-embed writes into the corpus (it records
+the model, dims and Ollama tag) and logs loudly on mismatch.
 
 That check exists because **the obvious guard does not work**: a dimension check
-passes while the space changes underneath it, since 768 truncated from Qwen is
-the same shape nomic produced and a completely different space. Vectors from two
+passes while the space changes underneath it — nomic, truncated Qwen and
+EmbeddingGemma are all 768 wide and all different spaces. Vectors from two
 models still yield a dot product — a number, not a measurement — and nothing
-raises. Prefixing is asymmetric and model-specific: nomic took literal
-`search_query:` / `search_document:` on both sides; Qwen3-Embedding takes an
-instruction on the query side only. Getting it wrong cost 0.11 AUC when measured.
+raises. Prefixing is asymmetric and model-specific. EmbeddingGemma uses the
+model card's prompts, `task: search result | query: ` and
+`title: none | text: `, and **Ollama applies neither** (its template is a bare
+`{{ .Prompt }}`), so the convention module must; the prefix moves the vector to
+cosine 0.875 from the bare text. Getting prefixing wrong cost nomic 0.11 AUC
+when measured.
+
+**The Ollama tag is part of the space**, so it is pinned in the convention, not
+in settings: a different quantization moves vectors. Because one tag serves
+both sides, queries and documents come from the same build, and the
+Hugging Face-versus-served drift that `scripts/measure_query_serving.py` had to
+measure for Qwen does not arise. It also means changing `ollama_model` changes
+the documents' space, so it is a re-embed, not a config tweak. At startup
+`probe_embedder()` compares the served vector to an anchor taken from that tag,
+which catches a repointed or wrong model. If Ollama is down, searches return
+**503** (`EmbeddingServiceError`), not empty results — and ingestion cannot
+embed either.
 
 All embeddings are **normalized to unit length** (L2 norm = 1.0) for the FTS
 vector index, which uses `dot_product` — that is the cosine only for unit
-vectors, and Matryoshka truncation denormalises, so truncation always
-renormalises.
-
-Queries and documents therefore come from different builds of the same weights,
-which is safe because it is measured, not because it is obvious.
-`services/ingestion-worker/scripts/measure_query_serving.py` retrieves against
-vectors stored in the corpus: over 300 queries and 5,000 documents, R@1 is 0.940
-served against 0.943 from Hugging Face, one rank-1 hit lost and none gained,
-minimum query cosine 0.9987. **Re-run it before changing `ollama_model`**; a
-different quantization needs no re-embed if that holds. At startup
-`probe_embedder()` compares the served vector to an anchor from the Hugging Face
-model, which catches the wrong model but not a small quantization shift. If Ollama
-is down, searches return **503** (`EmbeddingServiceError`), not empty results.
+vectors. Matryoshka truncation denormalises, so any model that is truncated
+must be renormalised; the current one emits 768 natively.
 
 Symbol embeddings carry the summary plus up to `CODE_CHARS_FOR_EMBEDDING` (8,000)
-characters of source. Batching is bounded by both a token budget and an
-**attention** budget (`B x L^2`), because attention is quadratic and a single
-token budget once asked for a 182 GiB buffer. Budgets are tunable via
+characters of source. Batching is bounded by a token budget, an **attention**
+budget (`B x L^2`, from when documents were embedded in-process and a token
+budget alone once asked for a 182 GiB buffer) and an item cap, tunable via
 `EMBED_MAX_TOKENS_PER_BATCH`, `EMBED_MAX_ATTENTION_PER_BATCH`,
-`EMBED_MAX_ITEMS_PER_BATCH`.
+`EMBED_MAX_ITEMS_PER_BATCH`. Under Ollama, batching saves only round trips.
 
 Changing any of this means re-embedding the whole corpus
-(`scripts/reembed_corpus.py`, ~3.5h for 180K documents) **and** CoS, whose
-`cos_vector_index` runs on the same model. Park the incremental LaunchAgent while
-that runs or it writes vectors in the new space into a corpus still in the old one.
+(`scripts/reembed_corpus.py`; at ~48 docs/s, on the order of 1.5h for the
+current ~222K documents) **and** CoS, whose `cos_vector_index` runs on the same
+model. Park the drain LaunchAgent (`com.codesmriti.drain`) while that runs or it
+writes vectors in the new space into a corpus still in the old one.
 
 ## Couchbase FTS Testing
 
