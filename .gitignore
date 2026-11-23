@@ -83,6 +83,9 @@ config/repos_to_ingest.txt
 evals/results/
 evals/v4_eval_questions.json
 services/api-server/tests/search_eval_questions.json
+# Chunker eval output quotes client source (chunk content, judge packets) and
+# names client repos. Never commit it; this repo is public.
+services/ingestion-worker/scripts/eval_chunker_models_results/
 
 # Ingestion config (contains private repo names)
 services/ingestion-worker/ingestion_config.yaml

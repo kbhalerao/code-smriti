@@ -785,6 +785,46 @@ Benchmark **only on an idle box**. A probe run during ingestion showed what look
 like a 2.5x win from a config change; the idle A/B showed zero difference. It was
 measuring the queue.
 
+### Chunker line numbers, windows and gating (2026-11-23)
+
+A blind-graded harness (`scripts/eval_chunker_models.py` then
+`scripts/grade_chunker_eval.py`, 20 seeded files, Claude judges) found two bugs
+that had decided every earlier model comparison:
+
+- **No line numbers in the prompt.** The schema asks for `start_line`/`end_line`
+  and the model had to count, so ranges landed 4-25 lines off. 45-53% of chunks
+  were judged correct. Every line is now prefixed with its number, and
+  `snap_line_range` moves a range onto the content it quotes when they disagree.
+  Correctness went to 94-97%, and snapping fired only 4 times, so the numbering
+  is doing the work.
+- **`content[:15000]`.** Big files were read to about line 400. They are now
+  split into overlapping windows (`WINDOW_CHARS`, `WINDOW_OVERLAP_LINES`),
+  de-duplicated across windows.
+
+With the bugs fixed, `structured` (qwen3.8) clearly beats `general` (gemma): 87 vs
+49 chunks judged most useful, 17 of 20 files won. Before the fix the two
+**looked tied**, because qwen's extra chunks pointed at the wrong lines.
+`structured` stays the chunker.
+
+Gating, from the same grades:
+- **`api_contracts` is no longer a default pass** (`DEFAULT_PASSES`). It mostly
+  restated routes tree-sitter already indexes. Dropping it cost ~10% of top-rated
+  chunks for a third of the calls.
+- **`embedded_code` runs only when `has_embedded_code` sees code in a string**
+  (SQL, regex, shell, GraphQL, JSON schema, markup outside markup languages, or
+  ORM `.annotate`/`.aggregate`).
+- **`is_underchunked` no longer fires on a long docstring alone, or on the markup
+  of `.svelte`/`.tsx`/`.html` files.** Re-applied to 61,615 logged calls, that
+  stops about 35% of files from triggering the chunker.
+
+Net: on the 20 files, `structured` at production concurrency went 743s -> 380s
+per run with much better chunks.
+
+`general` has a whitespace runaway under `json_schema`: it closes a string and
+emits inter-token whitespace until `MAX_OUTPUT_TOKENS`. ollama 0.40.17 exposes
+no grammar whitespace limit, so keep batch extraction on `structured`. The
+chunker already treats a reply at the ceiling as a failed call.
+
 ### Per-file budget, chunker bounds and dead-letter replay
 
 **The chunker's answer is bounded by its response schema**: at most

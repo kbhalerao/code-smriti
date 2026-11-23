@@ -28,7 +28,7 @@ import random
 import sys
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import httpx
 
 from config import WorkerConfig
-from llm_chunker import ENRICHMENT_PASSES, LLMChunker, schema_enforced
+from llm_chunker import DEFAULT_PASSES, ENRICHMENT_PASSES, ChunkerCallFailed, LLMChunker, schema_enforced
 
 config = WorkerConfig()
 
@@ -56,6 +56,7 @@ KNOWN_BASELINES = {
 # are gated to python/js/ts), so restricting the sample keeps the per-file
 # workload identical across models and comparable to the baseline.
 SAMPLE_SUFFIXES = {".py"}
+PASSES = ENRICHMENT_PASSES  # set from --passes in main()
 MIN_BYTES = 1_500
 MAX_BYTES = 60_000
 
@@ -75,6 +76,9 @@ class ModelResult:
     errors: int = 0
     seconds: float = 0.0
     per_file: dict = field(default_factory=dict)
+    chunks: dict = field(default_factory=dict)
+    failed_passes: dict = field(default_factory=dict)
+    output_tokens: int = 0
 
     @property
     def clean(self) -> int:
@@ -156,6 +160,23 @@ class ResponseTap:
             return resp
         self.chunker._call_llm = tapped
 
+        result = self.result
+        orig_post = httpx.AsyncClient.post
+
+        async def counting_post(client, url, *a, **kw):
+            resp = await orig_post(client, url, *a, **kw)
+            if str(url).endswith("/v1/responses"):
+                try:
+                    result.output_tokens += resp.json().get("usage", {}).get("output_tokens") or 0
+                except Exception:
+                    pass
+            return resp
+        httpx.AsyncClient.post = counting_post
+        self._orig_post = orig_post
+
+    def uninstall(self) -> None:
+        httpx.AsyncClient.post = self._orig_post
+
     def _classify(self, resp: str) -> None:
         r = self.result
         text = (resp or "").strip()
@@ -188,7 +209,7 @@ class ResponseTap:
             r.empty += 1
 
 
-async def run_model(model: str, files: list[Path], repos_root: Path) -> ModelResult:
+async def run_model(model: str, files: list[Path], repos_root: Path, concurrency: int) -> ModelResult:
     result = ModelResult(model=model)
     result.fmt = await model_format(model)
     version = await server_version()
@@ -204,44 +225,60 @@ async def run_model(model: str, files: list[Path], repos_root: Path) -> ModelRes
               f"ALIAS can still break it (name-dependent rendering) — call the alias you ship")
 
     chunker = LLMChunker(model=model)
-    ResponseTap(chunker, result).install()
+    tap = ResponseTap(chunker, result)
+    tap.install()
 
-    t0 = time.perf_counter()
-    for i, path in enumerate(files, 1):
+    # Files run concurrently, as in ingestion (max_concurrent_files), so the
+    # chunker's own llm_gate (LLM_CHUNKER_MAX_INFLIGHT) is what bounds in-flight
+    # calls -- the production shape. --concurrency 1 reproduces the old serial run.
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(i: int, path: Path) -> None:
         try:
             content = path.read_text(errors="replace")
         except OSError:
-            continue
-        try:
-            chunks = await chunker.analyze_file(
-                file_path=str(path),
-                content=content,
-                language="python",
-                existing_chunks=[],
-                passes=ENRICHMENT_PASSES,
-            )
-        except Exception as e:
-            print(f"  [{i}/{len(files)}] {path.name}: ERROR {type(e).__name__}: {e}")
-            continue
+            return
+        rel = str(path.relative_to(repos_root))
+        async with sem:
+            try:
+                chunks = await chunker.analyze_file(
+                    file_path=str(path),
+                    content=content,
+                    language="python",
+                    existing_chunks=[],
+                    passes=PASSES,
+                )
+            except ChunkerCallFailed as e:
+                chunks = list(getattr(e, "partial_chunks", []) or [])
+                result.failed_passes[rel] = str(e)
+                print(f"  [{i}/{len(files)}] {path.name}: PARTIAL {e}")
+            except Exception as e:
+                print(f"  [{i}/{len(files)}] {path.name}: ERROR {type(e).__name__}: {e}")
+                return
         result.kept += len(chunks)
-        result.per_file[str(path.relative_to(repos_root))] = len(chunks)
+        result.per_file[rel] = len(chunks)
+        result.chunks[rel] = [asdict(c) if is_dataclass(c) else dict(vars(c)) for c in chunks]
         print(f"  [{i}/{len(files)}] {path.name}: {len(chunks)} kept (running {result.kept})")
+
+    t0 = time.perf_counter()
+    await asyncio.gather(*(one(i, p) for i, p in enumerate(files, 1)))
     result.seconds = time.perf_counter() - t0
+    tap.uninstall()
     await chunker.close()
     return result
 
 
 def print_table(results: list[ModelResult], n_files: int) -> None:
     print("\n" + "=" * 100)
-    print(f"CHUNKER MODEL COMPARISON — {n_files} files x {len(ENRICHMENT_PASSES)} passes")
+    print(f"CHUNKER MODEL COMPARISON — {n_files} files x {len(PASSES)} passes")
     print("=" * 100)
-    hdr = f"{'model':<28} {'fmt':<6} {'kept':>6} {'raw':>6} {'parse!':>7} {'shape!':>7} {'fence':>6} {'trunc':>6} {'empty':>6} {'sec':>8}"
+    hdr = f"{'model':<28} {'fmt':<6} {'kept':>6} {'raw':>6} {'parse!':>7} {'shape!':>7} {'fence':>6} {'trunc':>6} {'empty':>6} {'sec':>8} {'tok/s':>7}"
     print(hdr)
     print("-" * len(hdr))
     for r in results:
         print(
             f"{r.model:<28} {r.fmt:<6} {r.kept:>6} {r.raw:>6} {r.parse_failures:>7} "
-            f"{r.wrong_shape:>7} {r.fenced:>6} {r.truncated:>6} {r.empty:>6} {r.seconds:>8.1f}"
+            f"{r.wrong_shape:>7} {r.fenced:>6} {r.truncated:>6} {r.empty:>6} {r.seconds:>8.1f} {r.output_tokens / max(r.seconds, 1e-9):>7.1f}"
         )
     print("\nRecorded baselines — DIFFERENT file sample, scale reference only:")
     for label, val in KNOWN_BASELINES.items():
@@ -261,10 +298,18 @@ async def main() -> None:
                     default=["structured", "lfm2.5:8b-a1b-q8_0"])
     ap.add_argument("--files", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--passes", choices=["all", "default"], default="all",
+                    help="all = every defined pass (comparable to old runs); "
+                         "default = what ingestion runs (DEFAULT_PASSES)")
+    ap.add_argument("--concurrency", type=int, default=config.max_concurrent_files,
+                    help="files in flight (ingestion's max_concurrent_files); calls are "
+                         "further bounded by LLM_CHUNKER_MAX_INFLIGHT")
     ap.add_argument("--out", default="scripts/eval_chunker_models_results/results.json")
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.ERROR)
+    global PASSES
+    PASSES = DEFAULT_PASSES if args.passes == "default" else ENRICHMENT_PASSES
 
     repos_root = Path(config.repos_path)
     if not repos_root.is_dir():
@@ -278,7 +323,7 @@ async def main() -> None:
     results = []
     for model in args.models:
         print(f"\n--- {model} ---")
-        results.append(await run_model(model, files, repos_root))
+        results.append(await run_model(model, files, repos_root, args.concurrency))
 
     print_table(results, len(files))
 
@@ -286,8 +331,11 @@ async def main() -> None:
     out.write_text(json.dumps(
         {
             "seed": args.seed,
+            "concurrency": args.concurrency,
+            "max_inflight": config.llm_chunker_max_inflight,
+            "server_version": await server_version(),
             "files": [str(f.relative_to(repos_root)) for f in files],
-            "passes": [p.name for p in ENRICHMENT_PASSES],
+            "passes": [p.name for p in PASSES],
             "results": [
                 {k: v for k, v in vars(r).items()} for r in results
             ],
