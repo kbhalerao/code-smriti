@@ -1,13 +1,14 @@
 # FastAPI and ASGI server
 fastapi
-uvicorn[standard]==0.32.1
-pydantic
+uvicorn[standard]>=0.32.1
+pydantic[email]
 pydantic-settings==2.6.1
 
 # Authentication and security
-python-jose[cryptography]==3.3.0
+pyjwt>=2.14.0
+cryptography
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.19
+python-multipart==0.0.30
 
 # Database
 couchbase
@@ -25,6 +26,6 @@ loguru==0.7.3
 python-dotenv
 
 # PydanticAI for tool calling
-pydantic-ai
+pydantic-ai-slim[openai]>=1.107.4,<2
 
 # Python 3.11, matching the image and requirements.lock

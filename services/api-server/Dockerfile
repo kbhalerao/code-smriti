@@ -10,8 +10,10 @@ RUN apt-get update && apt-get install -y \
 # Copy the resolved requirements (see the header of requirements.lock)
 COPY ./services/api-server/requirements.lock .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.lock
+# Install Python dependencies. The base image's own pip/setuptools/wheel are
+# upgraded too: their vendored jaraco.context and wheel carry advisories.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.lock
 
 # Copy shared lib (code-fetcher is now in lib/)
 COPY ./lib/code-fetcher /app/lib/code-fetcher
