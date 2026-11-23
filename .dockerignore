@@ -1,0 +1,12 @@
+# Build context for services/api-server/Dockerfile (context: repo root).
+# Allowlist: send only what that Dockerfile copies, so secrets (.env),
+# git history, logs, venvs and client data never reach a build or an image.
+*
+!services/api-server/requirements.lock
+!services/api-server/app/
+!lib/code-fetcher/
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+**/logs
