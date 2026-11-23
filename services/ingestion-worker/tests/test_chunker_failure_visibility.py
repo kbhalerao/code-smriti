@@ -168,6 +168,16 @@ class TestParseDiscrimination:
         reply = '[{"name": "doc", "content": "x = \\"```json\\n{ ... }\\n```\\""}]'
         assert chunker._parse_llm_response(reply)[0]["name"] == "doc"
 
+    def test_raw_tab_inside_a_string_is_content_not_a_failure(self):
+        """
+        Ollama's MLX grammar admits raw control characters in strings, and the
+        model copies indented SQL with a literal tab. Strict parsing rejected
+        agkit.io-services field_summary.py 3 of 3 times (2026-11-23).
+        """
+        chunker = FakeChunker([])
+        reply = '[{"name": "q", "content": "SELECT a\tFROM b"}]'
+        assert chunker._parse_llm_response(reply)[0]["content"] == "SELECT a\tFROM b"
+
     def test_unparseable_raises_rather_than_returning_empty(self):
         """
         Under constrained decoding the reply is valid JSON by construction, so

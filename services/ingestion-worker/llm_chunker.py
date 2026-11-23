@@ -16,7 +16,7 @@ import json
 import re
 import hashlib
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any, Callable, Dict, List, Optional
 from pathlib import Path
 
 import httpx
@@ -153,6 +153,9 @@ class EnrichmentPass:
     types: List[str] = field(default_factory=list)
     min_file_size: int = 500  # Only analyze files larger than this
     languages: List[str] = field(default_factory=list)  # Empty = all languages
+    # Optional content gate, (content, language) -> bool. A pass whose subject
+    # is visibly absent from the file is not worth a call: see has_embedded_code.
+    applies: Optional[Callable[[str, str], bool]] = None
 
 
 def response_schema(types: List[str]) -> dict:
@@ -194,6 +197,142 @@ def response_schema(types: List[str]) -> dict:
             "additionalProperties": False,
         },
     }
+
+
+# --- Line numbers and windows -------------------------------------------------
+#
+# The prompt used to carry the raw file, and the schema asks for start_line and
+# end_line, so the model had to count lines. It counted badly: on the 20-file
+# graded harness (2026-11-23, ollama 0.40.17) judges marked 47-73% of chunks
+# incorrect, mostly because the cited range was 4-25 lines from the code the
+# chunk quoted. Every line now carries its number, and the model copies it.
+#
+# It also used to send content[:15000] and drop the rest, so a 1,420-line file
+# was analysed to about line 400 and its core logic never seen. The file is now
+# split into overlapping windows, each small enough that prompt + the
+# MAX_OUTPUT_TOKENS ceiling stays inside OLLAMA_CONTEXT_LENGTH (16384).
+WINDOW_CHARS = 16_000          # numbered text per call (~4.5-5.5K tokens)
+WINDOW_OVERLAP_LINES = 20      # so a region straddling a boundary is seen whole
+NUMBERED_PREAMBLE = (
+    "Each source line below is prefixed with its 1-based line number and '| '. "
+    "Use those numbers for start_line and end_line, and do not include the "
+    "prefixes in `content`.{window_note}\n\n"
+)
+
+
+def numbered_windows(content: str) -> List[tuple]:
+    """Split content into (first_line, last_line, total_lines, numbered_text) windows."""
+    lines = content.splitlines()
+    total = len(lines)
+    width = len(str(max(total, 1)))
+    numbered = [f"{i:>{width}}| {line}" for i, line in enumerate(lines, 1)]
+    windows, start = [], 0
+    while start < total:
+        size, end = 0, start
+        while end < total and (size + len(numbered[end]) + 1 <= WINDOW_CHARS or end == start):
+            size += len(numbered[end]) + 1
+            end += 1
+        windows.append((start + 1, end, total, "\n".join(numbered[start:end])))
+        if end >= total:
+            break
+        start = max(end - WINDOW_OVERLAP_LINES, start + 1)
+    return windows or [(1, 0, 0, "")]
+
+
+_SNAP_MIN = 12  # shorter lines (`return x`, `}`) are too common to locate by
+
+
+def snap_line_range(item: Dict, lines: List[str]) -> bool:
+    """Move an item's line range to where its quoted content actually is.
+
+    The safety net under numbered prompts: if no line of `content` appears in
+    the cited range (+/-2), find the occurrence nearest the claimed start and
+    move the range there, keeping its length. Content the model paraphrased
+    rather than quoted matches nothing and is left alone. Returns True if moved.
+    """
+    try:
+        s, e = int(item.get("start_line") or 0), int(item.get("end_line") or 0)
+    except (TypeError, ValueError):
+        return False
+    total = len(lines)
+    if total == 0:
+        return False
+    if e < s:
+        s, e = e, s
+    anchors = []
+    for part in re.split(r"\n|;\s+", item.get("content") or ""):
+        part = part.strip()
+        if len(part) >= _SNAP_MIN:
+            anchors.append(part)
+        if len(anchors) >= 4:
+            break
+    if not anchors:
+        return False
+    hits = [i for i, line in enumerate(lines, 1)
+            if any(a in line or (len(line.strip()) >= _SNAP_MIN and line.strip() in a) for a in anchors)]
+    if not hits or any(s - 2 <= h <= e + 2 for h in hits):
+        return False
+    target = min(hits, key=lambda h: abs(h - s))
+    span = max(0, e - s)
+    item["start_line"] = target
+    item["end_line"] = min(total, target + span)
+    return True
+
+
+def _span_overlap(a: "SemanticChunk", b: "SemanticChunk") -> float:
+    inter = max(0, min(a.end_line, b.end_line) - max(a.start_line, b.start_line) + 1)
+    shorter = min(a.end_line - a.start_line + 1, b.end_line - b.start_line + 1)
+    return inter / shorter if shorter > 0 else 0.0
+
+
+# --- Gating ---------------------------------------------------------------------
+#
+# The graded harness also showed where the value is. Chunks the judges marked
+# most useful (2 of 2), by pass, general / structured:
+#   business_logic  22 / 22      embedded_code  3 / 7      api_contracts  2 / 3
+# api_contracts produced 44 / 89 chunks, mostly restating route handlers that
+# tree-sitter already indexes by name (15 / 42 judged useless), so it is no longer
+# a default pass. Re-graded after numbering and windowing landed, the split held:
+#   business_logic  38 / 73      embedded_code  8 / 5      api_contracts  3 / 9
+# so dropping api_contracts costs ~10% of structured's top-rated chunks for a
+# third of its calls (20 files: 743s -> 380s at production concurrency). embedded_code runs only when there is visibly code inside a
+# string; otherwise it is a call that can only return [] or invent something.
+_SQL_IN_TEXT = re.compile(
+    r"\b(?:SELECT\b[\s\S]{1,300}?\bFROM\b|INSERT\s+INTO\b|UPDATE\s+[\w.\"`]+\s+SET\b|"
+    r"DELETE\s+FROM\b|CREATE\s+(?:TABLE|INDEX|VIEW|FUNCTION)\b|WITH\s+\w+\s+AS\s*\()"
+)
+_SQL_CALL = re.compile(r"\.(?:execute|executemany|raw|query)\s*\(|\btext\s*\(\s*[fr]?[\"']", re.I)
+_HTML_BLOB = re.compile(r"<[a-z][a-z0-9]*[^>]*>[\s\S]{50,}?</[a-z][a-z0-9]*>", re.I)
+_REGEX_CALL = re.compile(
+    r"\bre\.(?:compile|match|search|sub|subn|findall|finditer|fullmatch|split)\(\s*r?[\"'][^\"'\n]{8,}"
+    r"|new\s+RegExp\(|(?<![\w)\]])/(?:[^/\n\\]|\\.){25,}/[gimsuy]*"
+)
+_SHELL_CALL = re.compile(
+    r"\bsubprocess\.(?:run|call|check_call|check_output|Popen)\(\s*f?[\"']|\bos\.system\(|"
+    r"\bshell\s*=\s*True|\bexecSync\(|\bspawn\("
+)
+# Not strings, but the judges rated ORM aggregations as highly as raw SQL
+# (labcore apiviews_composition.py: 4 of 4 at useful=2), and they are the same
+# question a searcher asks ("where do we count fields by type?").
+_ORM_AGG = re.compile(r"\.(?:annotate|aggregate)\s*\(")
+_GQL = re.compile(r"\bgql\s*[`(]|\b(?:query|mutation|subscription)\s+\w*\s*[({]")
+_JSON_SCHEMA = re.compile(r"[\"']\$schema[\"']|[\"']properties[\"']\s*:\s*\{")
+MARKUP_EXTENSIONS = (".svelte", ".vue", ".html", ".htm", ".jsx", ".tsx", ".astro")
+
+
+def has_embedded_code(content: str, language: str) -> bool:
+    """Whether a file visibly contains code inside strings, worth an embedded_code pass."""
+    if _SQL_IN_TEXT.search(content) or _REGEX_CALL.search(content) or _SHELL_CALL.search(content):
+        return True
+    if _GQL.search(content) or _JSON_SCHEMA.search(content):
+        return True
+    if _SQL_CALL.search(content) or _ORM_AGG.search(content):
+        return True
+    # HTML only counts when it is *inside* code. In a markup-first language it is
+    # the code, and tree-sitter / the component parser already sees it.
+    if language not in ("html", "svelte", "vue") and _HTML_BLOB.search(content):
+        return True
+    return False
 
 
 # Enrichment pass configurations
@@ -243,7 +382,8 @@ Respond with JSON array of found items:
 
 Return empty array [] if no embedded code found. Only include items with confidence > 0.7.""",
         types=["sql", "html", "regex", "shell", "graphql", "json_schema"],
-        languages=["python", "javascript", "typescript"]
+        languages=["python", "javascript", "typescript"],
+        applies=has_embedded_code,
     ),
 
     EnrichmentPass(
@@ -344,6 +484,12 @@ Return empty array [] if no API patterns found.""",
 ]
 
 
+# What ingestion runs. ENRICHMENT_PASSES keeps every defined pass so the eval
+# harness can still measure the dropped one; see "Gating" above for why
+# api_contracts is not here.
+DEFAULT_PASSES = [p for p in ENRICHMENT_PASSES if p.name != "api_contracts"]
+
+
 def is_underchunked(file_path: str, content: str, chunks: List[Dict], language: str) -> tuple[bool, str]:
     """
     Detect if a file is inadequately chunked and needs LLM analysis.
@@ -368,8 +514,20 @@ def is_underchunked(file_path: str, content: str, chunks: List[Dict], language: 
             reasons.append(f"high_density ({lines_per_chunk:.0f} lines/chunk)")
 
     # 3. Contains patterns that suggest embedded code
+    #
+    # A long triple-quoted string used to count on its own ("long_docstring_or_sql"),
+    # which is any well-documented Python file: it was a reason on 2,460 of 5,145
+    # chunker calls in the run logs, and the only reason on 852. It now counts
+    # only when the string holds SQL or markup. Likewise embedded_html fired on
+    # the markup of .svelte/.tsx/.html files themselves (1,806 calls, 975 sole
+    # reason); in those languages HTML is the code, not something hidden in it.
+    for block in re.findall(r'"""[\s\S]{200,}?"""|\'\'\'[\s\S]{200,}?\'\'\'', content):
+        if _SQL_IN_TEXT.search(block) or _HTML_BLOB.search(block):
+            reasons.append("sql_or_markup_in_long_string")
+            break
+
+    markup_file = file_path.lower().endswith(MARKUP_EXTENSIONS)
     embedded_patterns = [
-        (r'"""[\s\S]{200,}?"""', "long_docstring_or_sql"),  # Long triple-quoted strings
         (r"f'''[\s\S]{100,}?'''", "f_string_multiline"),
         (r'f"[^"]{100,}"', "long_f_string"),
         (r'SELECT\s+.+FROM', "embedded_sql"),
@@ -383,6 +541,10 @@ def is_underchunked(file_path: str, content: str, chunks: List[Dict], language: 
     ]
 
     for pattern, name in embedded_patterns:
+        if name == "embedded_html" and markup_file:
+            continue
+        if name in reasons:
+            continue
         if re.search(pattern, content, re.IGNORECASE):
             reasons.append(name)
 
@@ -638,6 +800,13 @@ class LLMChunker:
         With schema-constrained decoding the response is already valid JSON;
         the fence-stripping and escape-repair below are the boundary guard for a
         server that ignores or mis-implements the response format.
+
+        Parsed with strict=False, which admits raw control characters inside
+        strings. Ollama's MLX grammar allows them, and `structured` emits a
+        literal tab when copying indented SQL: agkit.io-services
+        app/legacy_ssurgo/field_summary.py failed its embedded_code pass 3 of 3
+        times on strict parsing and parsed to 7 items each time without it
+        (2026-11-23). It had exhausted its DLQ replays on this alone.
         """
         # Parse as-is first; strip a fence only if that fails. The fence regex
         # used to run first, and it matches fences *inside* the JSON: a chunk
@@ -647,7 +816,7 @@ class LLMChunker:
         # replies that were valid JSON (captured 2026-11-09).
         response = response.strip()
         try:
-            result = json.loads(response)
+            result = json.loads(response, strict=False)
         except json.JSONDecodeError:
             result = None
         if isinstance(result, list):
@@ -658,13 +827,13 @@ class LLMChunker:
             response = json_match.group(1).strip()
 
         try:
-            result = json.loads(response)
+            result = json.loads(response, strict=False)
         except json.JSONDecodeError as e:
             # Try fixing invalid escape sequences (common LLM issue)
             try:
                 # Fix invalid escapes by replacing single backslashes not followed by valid escape chars
                 fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', response)
-                result = json.loads(fixed)
+                result = json.loads(fixed, strict=False)
             except json.JSONDecodeError:
                 # Not "no chunks". Under schema-constrained decoding the reply is
                 # valid JSON by construction, so landing here means the server did
@@ -718,12 +887,15 @@ class LLMChunker:
                 discard the work of the others, and must not be silent either.
         """
         if passes is None:
-            passes = ENRICHMENT_PASSES
+            passes = DEFAULT_PASSES
 
         all_chunks = []
         failures = []
         budget_exhausted = False
         loop = asyncio.get_running_loop()
+
+        file_lines = content.splitlines()
+        windows = numbered_windows(content)
 
         for pass_config in passes:
             # Skip if pass doesn't apply to this language
@@ -734,54 +906,74 @@ class LLMChunker:
             if len(content) < pass_config.min_file_size:
                 continue
 
-            # Build prompt
-            prompt = pass_config.prompt_template.format(
-                language=language,
-                content=content[:15000],  # Limit content size
-                existing_chunks=json.dumps([c.get("symbol_name", c.get("name", "")) for c in existing_chunks[:20]])
-            )
-
-            remaining = None if deadline is None else deadline - loop.time()
-            if remaining is not None and remaining <= 0:
-                budget_exhausted = True
-                failures.append(f"{pass_config.name}: skipped, file budget exhausted")
+            # Skip when the pass's subject is visibly absent (see has_embedded_code)
+            if pass_config.applies is not None and not pass_config.applies(content, language):
+                logger.debug(f"Skipping {pass_config.name} on {file_path}: nothing it looks for")
                 continue
 
-            # Call LLM, constrained to this pass's response shape and type vocabulary
-            logger.debug(f"Running {pass_config.name} pass on {file_path}")
-            try:
-                response = await asyncio.wait_for(
-                    self._call_llm(prompt, schema=response_schema(pass_config.types)),
-                    timeout=remaining,
+            pass_chunks: List[SemanticChunk] = []
+            for first, last, total, numbered in windows:
+                window_note = (
+                    f" This excerpt is lines {first}-{last} of {total}; report only regions "
+                    f"that start inside it." if len(windows) > 1 else ""
                 )
-                items = self._parse_llm_response(response)
-            except asyncio.TimeoutError:
-                budget_exhausted = True
-                logger.error(f"Chunker pass {pass_config.name!r} on {file_path} ran past the file budget")
-                failures.append(f"{pass_config.name}: ran past the file budget")
-                continue
-            except ChunkerCallFailed as e:
-                logger.error(f"Chunker pass {pass_config.name!r} failed on {file_path}: {e}")
-                failures.append(f"{pass_config.name}: {e}")
-                continue
+                prompt = NUMBERED_PREAMBLE.format(window_note=window_note) + pass_config.prompt_template.format(
+                    language=language,
+                    content=numbered,
+                    existing_chunks=json.dumps([c.get("symbol_name", c.get("name", "")) for c in existing_chunks[:20]])
+                )
 
-            for item in items:
-                if item.get("confidence", 0) < 0.7:
+                remaining = None if deadline is None else deadline - loop.time()
+                if remaining is not None and remaining <= 0:
+                    budget_exhausted = True
+                    failures.append(f"{pass_config.name}: skipped, file budget exhausted")
+                    break
+
+                # Call LLM, constrained to this pass's response shape and type vocabulary
+                logger.debug(f"Running {pass_config.name} pass on {file_path} (lines {first}-{last})")
+                try:
+                    response = await asyncio.wait_for(
+                        self._call_llm(prompt, schema=response_schema(pass_config.types)),
+                        timeout=remaining,
+                    )
+                    items = self._parse_llm_response(response)
+                except asyncio.TimeoutError:
+                    budget_exhausted = True
+                    logger.error(f"Chunker pass {pass_config.name!r} on {file_path} ran past the file budget")
+                    failures.append(f"{pass_config.name}: ran past the file budget")
+                    break
+                except ChunkerCallFailed as e:
+                    logger.error(f"Chunker pass {pass_config.name!r} failed on {file_path} (lines {first}-{last}): {e}")
+                    failures.append(f"{pass_config.name}: {e}")
                     continue
 
-                chunk = SemanticChunk(
-                    chunk_type=item.get("type", "unknown"),
-                    name=item.get("name", "unnamed"),
-                    content=item.get("content", ""),
-                    start_line=item.get("start_line", 0),
-                    end_line=item.get("end_line", 0),
-                    purpose=item.get("purpose", ""),
-                    related_symbols=item.get("related_symbols", []),
-                    tags=item.get("tags", []),
-                    confidence=item.get("confidence", 0.0)
-                )
-                all_chunks.append(chunk)
-                logger.debug(f"Found {chunk.chunk_type}: {chunk.name} (confidence={chunk.confidence})")
+                for item in items:
+                    if item.get("confidence", 0) < 0.7:
+                        continue
+                    if snap_line_range(item, file_lines):
+                        logger.debug(f"Snapped {item.get('name')!r} in {file_path} to line {item['start_line']}")
+
+                    chunk = SemanticChunk(
+                        chunk_type=item.get("type", "unknown"),
+                        name=item.get("name", "unnamed"),
+                        content=item.get("content", ""),
+                        start_line=item.get("start_line", 0),
+                        end_line=item.get("end_line", 0),
+                        purpose=item.get("purpose", ""),
+                        related_symbols=item.get("related_symbols", []),
+                        tags=item.get("tags", []),
+                        confidence=item.get("confidence", 0.0)
+                    )
+                    # Windows overlap, so the same region can be reported twice.
+                    dup = next((c for c in pass_chunks
+                                if c.chunk_type == chunk.chunk_type and _span_overlap(c, chunk) >= 0.8), None)
+                    if dup is not None:
+                        if chunk.confidence > dup.confidence:
+                            pass_chunks[pass_chunks.index(dup)] = chunk
+                        continue
+                    pass_chunks.append(chunk)
+                    logger.debug(f"Found {chunk.chunk_type}: {chunk.name} (confidence={chunk.confidence})")
+            all_chunks.extend(pass_chunks)
 
         if failures:
             raise ChunkerCallFailed(
