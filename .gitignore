@@ -60,7 +60,7 @@ logs/
 couchbase_data/
 
 # Repositories (cloned during ingestion)
-repos/
+/repos/
 
 # Model cache
 .cache/

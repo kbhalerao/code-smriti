@@ -11,7 +11,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import bcrypt
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from loguru import logger
 
 from ..config import settings
@@ -125,10 +126,13 @@ def verify_token(token: str) -> Optional[dict]:
         payload = jwt.decode(
             token,
             settings.jwt_secret,
-            algorithms=[settings.jwt_algorithm]
+            algorithms=[settings.jwt_algorithm],
+            # python-jose did not type-check sub/jti; PyJWT >= 2.10 does.
+            # Tokens minted elsewhere (cos) must keep verifying as before.
+            options={"verify_sub": False, "verify_jti": False},
         )
         return payload
-    except JWTError:
+    except PyJWTError:
         return None
 
 
