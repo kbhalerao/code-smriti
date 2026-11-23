@@ -638,6 +638,13 @@ class LLMChunker:
         With schema-constrained decoding the response is already valid JSON;
         the fence-stripping and escape-repair below are the boundary guard for a
         server that ignores or mis-implements the response format.
+
+        Parsed with strict=False, which admits raw control characters inside
+        strings. Ollama's MLX grammar allows them, and `structured` emits a
+        literal tab when copying indented SQL: agkit.io-services
+        app/legacy_ssurgo/field_summary.py failed its embedded_code pass 3 of 3
+        times on strict parsing and parsed to 7 items each time without it
+        (2026-11-23). It had exhausted its DLQ replays on this alone.
         """
         # Parse as-is first; strip a fence only if that fails. The fence regex
         # used to run first, and it matches fences *inside* the JSON: a chunk
@@ -647,7 +654,7 @@ class LLMChunker:
         # replies that were valid JSON (captured 2026-11-09).
         response = response.strip()
         try:
-            result = json.loads(response)
+            result = json.loads(response, strict=False)
         except json.JSONDecodeError:
             result = None
         if isinstance(result, list):
@@ -658,13 +665,13 @@ class LLMChunker:
             response = json_match.group(1).strip()
 
         try:
-            result = json.loads(response)
+            result = json.loads(response, strict=False)
         except json.JSONDecodeError as e:
             # Try fixing invalid escape sequences (common LLM issue)
             try:
                 # Fix invalid escapes by replacing single backslashes not followed by valid escape chars
                 fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', response)
-                result = json.loads(fixed)
+                result = json.loads(fixed, strict=False)
             except json.JSONDecodeError:
                 # Not "no chunks". Under schema-constrained decoding the reply is
                 # valid JSON by construction, so landing here means the server did
